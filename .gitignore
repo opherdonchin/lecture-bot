@@ -7,6 +7,10 @@ __pycache__/
 dist/
 build/
 *.egg
+*.pyc
+
+# Testing
+.pytest_cache/
 
 # Virtual environments
 .venv/
@@ -25,3 +29,11 @@ Thumbs.db
 
 # Environment variables
 .env
+.env.*
+
+# Data and logs
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+exports/
+logs/

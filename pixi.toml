@@ -1,0 +1,27 @@
+[workspace]
+name = "lecture-bot"
+version = "0.1.0"
+description = "Lecture-specific educational bot"
+authors = ["Opher Donchin"]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.12,<3.13"
+pip = ">=24.0"
+
+[pypi-dependencies]
+fastapi = ">=0.115,<1"
+uvicorn = { version = ">=0.30,<1", extras = ["standard"] }
+sqlalchemy = ">=2.0,<3"
+pydantic = ">=2.8,<3"
+pydantic-settings = ">=2.4,<3"
+python-dotenv = ">=1.0,<2"
+openai = ">=1.40,<2"
+pytest = ">=8.3,<9"
+httpx = ">=0.27,<1"
+
+[tasks]
+dev = "uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
+test = "pytest -q"
+init-db = "python scripts/init_db.py"
