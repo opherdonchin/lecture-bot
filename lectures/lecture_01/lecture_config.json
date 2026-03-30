@@ -1,0 +1,25 @@
+{
+  "lecture_id": "lecture_01",
+  "title": "Lecture 1: Probabilities",
+  "course": "Statistics 367-1-4361",
+  "active": true,
+
+  "files": {
+    "slides": {
+      "source": "Lecture 1 Probabilities.pptx",
+      "target": "slides.md"
+    },
+    "handout": {
+      "source": "Lecture 1 handout.qmd",
+      "target": "handout.md"
+    },
+    "notebook": {
+      "source": "Lecture01_Probabilities.ipynb",
+      "target": "notebook.md"
+    },
+    "rubric": {
+      "source": "mastery_rubric.md",
+      "target": "rubric.md"
+    }
+  }
+}
