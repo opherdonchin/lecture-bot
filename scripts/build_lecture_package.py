@@ -1,0 +1,184 @@
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.convert_ipynb_to_md import convert_ipynb_to_md
+from scripts.convert_pptx_to_md import convert_pptx_to_md
+from scripts.convert_qmd_to_md import convert_qmd_to_md
+
+
+SUPPORTED_FILE_KEYS = ("slides", "handout", "notebook", "rubric")
+
+
+@dataclass(frozen=True)
+class BuildJob:
+    logical_key: str
+    source: Path
+    target: Path
+
+
+def resolve_lecture_dir(lecture_ref: str | Path, lectures_root: Path | None = None) -> Path:
+    lectures_root = lectures_root or REPO_ROOT / "lectures"
+    candidate = Path(lecture_ref)
+
+    if candidate.is_dir():
+        return candidate.resolve()
+
+    lecture_dir = lectures_root / str(lecture_ref)
+    if lecture_dir.is_dir():
+        return lecture_dir.resolve()
+
+    raise FileNotFoundError(f"Lecture directory not found for: {lecture_ref}")
+
+
+def load_lecture_config(lecture_dir: Path) -> dict:
+    config_path = lecture_dir / "lecture_config.json"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Lecture config not found: {config_path}")
+
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    files = config.get("files")
+    if not isinstance(files, dict):
+        raise ValueError(f"Lecture config is missing a valid 'files' section: {config_path}")
+
+    missing_keys = [key for key in SUPPORTED_FILE_KEYS if key not in files]
+    if missing_keys:
+        missing_text = ", ".join(missing_keys)
+        raise ValueError(f"Lecture config is missing file definitions for: {missing_text}")
+
+    unsupported_keys = [key for key in files if key not in SUPPORTED_FILE_KEYS]
+    if unsupported_keys:
+        unsupported_text = ", ".join(unsupported_keys)
+        raise ValueError(f"Unsupported lecture file keys in config: {unsupported_text}")
+
+    return config
+
+
+def plan_build_jobs(lecture_dir: Path, config: dict) -> list[BuildJob]:
+    jobs: list[BuildJob] = []
+
+    for logical_key, file_config in config["files"].items():
+        if not isinstance(file_config, dict):
+            raise ValueError(f"Invalid file definition for '{logical_key}'")
+
+        source_name = file_config.get("source")
+        target_name = file_config.get("target")
+        if not source_name or not target_name:
+            raise ValueError(f"File definition for '{logical_key}' must include source and target")
+
+        jobs.append(
+            BuildJob(
+                logical_key=logical_key,
+                source=lecture_dir / source_name,
+                target=lecture_dir / target_name,
+            )
+        )
+
+    return jobs
+
+
+def validate_jobs(jobs: list[BuildJob], force: bool) -> None:
+    missing_sources = [str(job.source.name) for job in jobs if not job.source.exists()]
+    if missing_sources:
+        raise FileNotFoundError(
+            f"Missing source files: {', '.join(sorted(missing_sources))}"
+        )
+
+    if force:
+        return
+
+    existing_targets = [
+        str(job.target.name)
+        for job in jobs
+        if not (job.logical_key == "rubric" and job.source == job.target) and job.target.exists()
+    ]
+    if existing_targets:
+        raise FileExistsError(
+            "Refusing to overwrite existing target files without --force: "
+            + ", ".join(sorted(existing_targets))
+        )
+
+
+def run_job(job: BuildJob) -> None:
+    print(f"[{job.logical_key}] {job.source.name} -> {job.target.name}")
+
+    if job.logical_key == "slides":
+        convert_pptx_to_md(job.source, job.target)
+        return
+
+    if job.logical_key == "handout":
+        convert_qmd_to_md(job.source, job.target)
+        return
+
+    if job.logical_key == "notebook":
+        convert_ipynb_to_md(job.source, job.target)
+        return
+
+    if job.logical_key == "rubric":
+        if job.source == job.target:
+            return
+
+        job.target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(job.source, job.target)
+        return
+
+    raise ValueError(f"Unsupported lecture file key: {job.logical_key}")
+
+
+def build_lecture_package(
+    lecture_ref: str | Path,
+    force: bool = False,
+    lectures_root: Path | None = None,
+) -> list[BuildJob]:
+    lecture_dir = resolve_lecture_dir(lecture_ref, lectures_root=lectures_root)
+    config = load_lecture_config(lecture_dir)
+    jobs = plan_build_jobs(lecture_dir, config)
+    validate_jobs(jobs, force=force)
+
+    lecture_label = config.get("lecture_id", lecture_dir.name)
+    print(f"Building lecture package for {lecture_label}")
+
+    for job in jobs:
+        run_job(job)
+
+    print("Build complete")
+    return jobs
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Build processed markdown files for a lecture package."
+    )
+    parser.add_argument(
+        "lecture",
+        help="Lecture id (for example lecture_01) or a lecture directory path",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing target files",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        build_lecture_package(args.lecture, force=args.force)
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
