@@ -5,6 +5,90 @@ All implementation should follow this specification.
 
 ---
 
+## 0. Technologies and implementation conventions
+
+### Core stack
+- Python 3.12
+- FastAPI for the web application
+- SQLAlchemy 2.x for ORM/database access
+- SQLite for v1 persistence
+- Pixi for environment and task management
+- Uvicorn as the ASGI server
+- Nginx + systemd for deployment on the Fedora server
+
+### API style
+- Use a simple RPC-style API for v1.
+- Primary workflow endpoints:
+  - `POST /start_session`
+  - `POST /send_message`
+- Internal data model should still remain resource-oriented.
+
+### UI conventions
+- Main interaction is a chat UI.
+- Minimal control buttons are preferred for:
+  - Get current grade
+  - Generate final report
+  - Restart session
+- Avoid quiz-style UI elements.
+
+### Persistence conventions
+- Store sessions, messages, session state, and optional grade events in SQLite.
+- The database is runtime state for the current semester, not long-term archival storage.
+- Logs, exports, databases, roster files, and secrets remain local and are never committed.
+
+### LLM integration conventions
+- Use real OpenAI API calls from the beginning.
+- Separate:
+  - dialogue prompt path for ordinary tutoring turns
+  - grading/report prompt path for current-grade and final-report actions
+- Pass the full rubric and full concatenated lecture text to the model in v1.
+
+### Grading conventions
+- Use weighted best-topic scoring:
+  - 55
+  - 25
+  - 13
+  - 4
+  - 3
+- Grade is the sum of the best demonstrated five topic scores, rounded down.
+- The stored grade field is the current grade.
+- Grade/report requests may be logged as grade events.
+
+### Lecture package conventions
+Each lecture package should ultimately contain:
+- `lecture_config.json`
+- `rubric.md`
+- `slides.md`
+- `handout.md`
+- `notebook.md`
+- optional `bot_notes.md`
+
+Source files such as `.pptx`, `.qmd`, and `.ipynb` may also be present.  
+The app reads only processed markdown/text outputs.
+
+### File conversion conventions
+- `lecture_config.json` defines source/target file mappings under `files`.
+- Conversion/build logic lives in `scripts/`.
+- A master build script should generate processed lecture files from raw sources.
+- v1 conversion is text-only and does not attempt figure understanding.
+
+### Repository conventions
+- Repository code/spec may remain public.
+- Never commit:
+  - `.env`
+  - API keys
+  - OAuth secrets
+  - student roster / ID files
+  - local databases
+  - runtime logs
+  - exports
+
+### Coding conventions
+- Prefer simple modules and explicit code over abstraction.
+- Keep prototype velocity high.
+- Add tests where they materially help implementation stay aligned with the spec.
+- If behavior is unclear, update the spec before implementing.
+
 ## 1. API (RPC-style)
 
 ### 1.1 Start Session
