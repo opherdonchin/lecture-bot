@@ -1,21 +1,21 @@
 from __future__ import annotations
 
-import argparse
-import json
-import shutil
-import sys
+import argparse as ap_module
+import json as j
+import shutil as shutil_module
+import sys as sys_module
 from dataclasses import dataclass
-from pathlib import Path
+import pathlib as pathlib_
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = pathlib_.Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+if str(REPO_ROOT) not in sys_module.path:
+    sys_module.path.insert(0, str(REPO_ROOT))
 
-from scripts.convert_ipynb_to_md import convert_ipynb_to_md
-from scripts.convert_pptx_to_md import convert_pptx_to_md
-from scripts.convert_qmd_to_md import convert_qmd_to_md
+import scripts.convert_ipynb_to_md as convert_ipynb
+import scripts.convert_pptx_to_md as convert_pptx
+import scripts.convert_qmd_to_md as convert_qmd
 
 
 SUPPORTED_FILE_KEYS = ("slides", "handout", "notebook", "rubric")
@@ -24,13 +24,13 @@ SUPPORTED_FILE_KEYS = ("slides", "handout", "notebook", "rubric")
 @dataclass(frozen=True)
 class BuildJob:
     logical_key: str
-    source: Path
-    target: Path
+    source: pathlib_.Path
+    target: pathlib_.Path
 
 
-def resolve_lecture_dir(lecture_ref: str | Path, lectures_root: Path | None = None) -> Path:
+def resolve_lecture_dir(lecture_ref: str | pathlib_.Path, lectures_root: pathlib_.Path | None = None) -> pathlib_.Path:
     lectures_root = lectures_root or REPO_ROOT / "lectures"
-    candidate = Path(lecture_ref)
+    candidate = pathlib_.Path(lecture_ref)
 
     if candidate.is_dir():
         return candidate.resolve()
@@ -42,12 +42,12 @@ def resolve_lecture_dir(lecture_ref: str | Path, lectures_root: Path | None = No
     raise FileNotFoundError(f"Lecture directory not found for: {lecture_ref}")
 
 
-def load_lecture_config(lecture_dir: Path) -> dict:
+def load_lecture_config(lecture_dir: pathlib_.Path) -> dict:
     config_path = lecture_dir / "lecture_config.json"
     if not config_path.exists():
         raise FileNotFoundError(f"Lecture config not found: {config_path}")
 
-    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config = j.loads(config_path.read_text(encoding="utf-8"))
     files = config.get("files")
     if not isinstance(files, dict):
         raise ValueError(f"Lecture config is missing a valid 'files' section: {config_path}")
@@ -65,7 +65,7 @@ def load_lecture_config(lecture_dir: Path) -> dict:
     return config
 
 
-def plan_build_jobs(lecture_dir: Path, config: dict) -> list[BuildJob]:
+def plan_build_jobs(lecture_dir: pathlib_.Path, config: dict) -> list[BuildJob]:
     jobs: list[BuildJob] = []
 
     for logical_key, file_config in config["files"].items():
@@ -114,15 +114,15 @@ def run_job(job: BuildJob) -> None:
     print(f"[{job.logical_key}] {job.source.name} -> {job.target.name}")
 
     if job.logical_key == "slides":
-        convert_pptx_to_md(job.source, job.target)
+        convert_pptx.convert_pptx_to_md(job.source, job.target)
         return
 
     if job.logical_key == "handout":
-        convert_qmd_to_md(job.source, job.target)
+        convert_qmd.convert_qmd_to_md(job.source, job.target)
         return
 
     if job.logical_key == "notebook":
-        convert_ipynb_to_md(job.source, job.target)
+        convert_ipynb.convert_ipynb_to_md(job.source, job.target)
         return
 
     if job.logical_key == "rubric":
@@ -130,16 +130,16 @@ def run_job(job: BuildJob) -> None:
             return
 
         job.target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(job.source, job.target)
+        shutil_module.copyfile(job.source, job.target)
         return
 
     raise ValueError(f"Unsupported lecture file key: {job.logical_key}")
 
 
 def build_lecture_package(
-    lecture_ref: str | Path,
+    lecture_ref: str | pathlib_.Path,
     force: bool = False,
-    lectures_root: Path | None = None,
+    lectures_root: pathlib_.Path | None = None,
 ) -> list[BuildJob]:
     lecture_dir = resolve_lecture_dir(lecture_ref, lectures_root=lectures_root)
     config = load_lecture_config(lecture_dir)
@@ -157,7 +157,7 @@ def build_lecture_package(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
+    parser = ap_module.ArgumentParser(
         description="Build processed markdown files for a lecture package."
     )
     parser.add_argument(
@@ -174,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         build_lecture_package(args.lecture, force=args.force)
     except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys_module.stderr)
         return 1
 
     return 0

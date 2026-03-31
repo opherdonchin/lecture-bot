@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import argparse
-import sys
-from pathlib import Path
+import argparse as ap_module
+import sys as sys_module
+import pathlib as pathlib_
 
 
 def strip_front_matter(text: str) -> str:
@@ -20,9 +20,9 @@ def strip_front_matter(text: str) -> str:
     return text
 
 
-def convert_qmd_to_md(source: str | Path, target: str | Path) -> Path:
-    source_path = Path(source)
-    target_path = Path(target)
+def convert_qmd_to_md(source: str | pathlib_.Path, target: str | pathlib_.Path) -> pathlib_.Path:
+    source_path = pathlib_.Path(source)
+    target_path = pathlib_.Path(target)
 
     if not source_path.exists():
         raise FileNotFoundError(f"Quarto source file not found: {source_path}")
@@ -38,7 +38,7 @@ def convert_qmd_to_md(source: str | Path, target: str | Path) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Convert a Quarto markdown file to markdown.")
+    parser = ap_module.ArgumentParser(description="Convert a Quarto markdown file to markdown.")
     parser.add_argument("source", help="Path to the source .qmd file")
     parser.add_argument("target", help="Path to the target .md file")
     args = parser.parse_args(argv)
@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         convert_qmd_to_md(args.source, args.target)
     except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys_module.stderr)
         return 1
 
     return 0

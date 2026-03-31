@@ -1,24 +1,24 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+import sqlalchemy as sa
+import sqlalchemy.orm as sqlalchemy_orm
 
-from app.config import get_settings
+import app.config as config_module
 
 
-class Base(DeclarativeBase):
+class Base(sqlalchemy_orm.DeclarativeBase):
     pass
 
 
-settings = get_settings()
+settings = config_module.get_settings()
 
 connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
 
-engine = create_engine(
+engine = sa.create_engine(
     settings.database_url,
     future=True,
     connect_args=connect_args,
 )
 
-SessionLocal = sessionmaker(
+SessionLocal = sqlalchemy_orm.sessionmaker(
     bind=engine,
     autoflush=False,
     autocommit=False,

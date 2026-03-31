@@ -1,12 +1,12 @@
-import json
-from pathlib import Path
+import json as j
+import pathlib as pathlib_
 
 
 class LectureNotFoundError(FileNotFoundError):
     pass
 
 
-def load_lecture_package(lectures_dir: Path, lecture_id: str) -> dict:
+def load_lecture_package(lectures_dir: pathlib_.Path, lecture_id: str) -> dict:
     lecture_path = lectures_dir / lecture_id
     if not lecture_path.exists() or not lecture_path.is_dir():
         raise LectureNotFoundError(f"Lecture package not found: {lecture_id}")
@@ -26,9 +26,9 @@ def load_lecture_package(lectures_dir: Path, lecture_id: str) -> dict:
         )
 
     with config_path.open("r", encoding="utf-8") as f:
-        lecture_config = json.load(f)
+        lecture_config = j.load(f)
 
-    def read_text(path: Path) -> str:
+    def read_text(path: pathlib_.Path) -> str:
         return path.read_text(encoding="utf-8")
 
     return {
