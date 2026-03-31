@@ -69,6 +69,9 @@ async function startSession() {
     sessionId = data.session_id;
     sessionInfo.textContent = "Active session: " + sessionId;
 
+    // Clear any previous transcript before starting fresh
+    transcript.innerHTML = "";
+
     messageInput.disabled = false;
     sendBtn.disabled = false;
     messageInput.focus();
@@ -92,8 +95,9 @@ async function sendMessage() {
   const message = messageInput.value.trim();
   if (!message) return;
 
-  appendMessage("user", message);
+  // Clear input immediately for UX, but only append to transcript after success
   messageInput.value = "";
+  sendBtn.disabled = true;
 
   try {
     const res = await fetch("/send_message", {
@@ -104,14 +108,102 @@ async function sendMessage() {
 
     if (!res.ok) {
       const body = await res.text();
+      messageInput.value = message; // restore on failure
       showError("Failed to send message (" + res.status + "): " + body);
       return;
     }
 
     const data = await res.json();
+    appendMessage("user", message);
     appendMessage("assistant", data.message || "[no reply]");
   } catch (err) {
+    messageInput.value = message; // restore on failure
     showError("Network error while sending message: " + err.message);
+  } finally {
+    sendBtn.disabled = false;
+    messageInput.focus();
+  }
+}
+
+async function getGrade() {
+  clearError();
+  if (!sessionId) { showError("Start a session first."); return; }
+
+  try {
+    const res = await fetch("/get_grade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      showError("Failed to get grade (" + res.status + "): " + body);
+      return;
+    }
+    const data = await res.json();
+    const lines = [
+      "Current grade: " + data.grade + "/100",
+      data.explanation,
+      data.missing_topics && data.missing_topics.length
+        ? "Missing topics: " + data.missing_topics.join(", ")
+        : "No missing topics identified.",
+    ];
+    appendMessage("assistant", lines.join(" | "));
+  } catch (err) {
+    showError("Network error: " + err.message);
+  }
+}
+
+async function generateReport() {
+  clearError();
+  if (!sessionId) { showError("Start a session first."); return; }
+
+  try {
+    const res = await fetch("/generate_report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      showError("Failed to generate report (" + res.status + "): " + body);
+      return;
+    }
+    const data = await res.json();
+    appendMessage("assistant", data.report_text || "[No report text returned]");
+  } catch (err) {
+    showError("Network error: " + err.message);
+  }
+}
+
+async function restartSession() {
+  clearError();
+  if (!sessionId) { showError("No active session to restart."); return; }
+
+  try {
+    const res = await fetch("/restart_session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        student_id: studentIdInput.value.trim(),
+        lecture_id: lectureIdInput.value.trim() || "lecture_01",
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      showError("Failed to restart session (" + res.status + "): " + body);
+      return;
+    }
+    const data = await res.json();
+    sessionId = data.session_id;
+    sessionInfo.textContent = "Active session: " + sessionId;
+
+    // Clear transcript for fresh start
+    transcript.innerHTML = "";
+    if (data.message) appendMessage("assistant", data.message);
+  } catch (err) {
+    showError("Network error: " + err.message);
   }
 }
 
@@ -120,13 +212,6 @@ sendBtn.addEventListener("click", sendMessage);
 messageInput.addEventListener("keydown", function (e) {
   if (e.key === "Enter") sendMessage();
 });
-
-gradeBtn.addEventListener("click", function () {
-  alert("Get current grade is not implemented yet.");
-});
-reportBtn.addEventListener("click", function () {
-  alert("Generate final report is not implemented yet.");
-});
-restartBtn.addEventListener("click", function () {
-  alert("Restart session is not implemented yet.");
-});
+gradeBtn.addEventListener("click", getGrade);
+reportBtn.addEventListener("click", generateReport);
+restartBtn.addEventListener("click", restartSession);

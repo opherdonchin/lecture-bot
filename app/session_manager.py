@@ -32,8 +32,7 @@ def create_session(db: sqlalchemy_orm.Session, student_id: str, lecture_id: str,
         state_json=j.dumps(build_initial_state(lecture_package), ensure_ascii=False),
     )
     db.add(state)
-    db.commit()
-    db.refresh(session)
+    db.flush()
     return session
 
 
