@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Lecture Bot</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Lecture Bot</h1>
+
+      <section class="card">
+        <h2>Session</h2>
+        <div class="row">
+          <label for="studentId">Student ID</label>
+          <input id="studentId" type="text" placeholder="student_001" />
+        </div>
+        <div class="row">
+          <label for="lectureId">Lecture ID</label>
+          <input id="lectureId" type="text" value="lecture_01" />
+        </div>
+        <button id="startSessionBtn">Start Session</button>
+        <p id="sessionInfo" class="muted">No active session</p>
+      </section>
+
+      <section class="card">
+        <h2>Chat</h2>
+        <div id="errorBox" class="error hidden"></div>
+        <div id="transcript" class="transcript" aria-live="polite"></div>
+        <div class="chat-input-row">
+          <input id="messageInput" type="text" placeholder="Type a message..." disabled />
+          <button id="sendBtn" disabled>Send</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Controls</h2>
+        <div class="controls">
+          <button id="gradeBtn" type="button">Get current grade</button>
+          <button id="reportBtn" type="button">Generate final report</button>
+          <button id="restartBtn" type="button">Restart session</button>
+        </div>
+        <p class="muted">Placeholders — backend support coming soon.</p>
+      </section>
+    </main>
+
+    <script src="/static/chat.js"></script>
+  </body>
+</html>

@@ -39,4 +39,17 @@ def create_session(db: sqlalchemy_orm.Session, student_id: str, lecture_id: str,
 
 def append_message(db: sqlalchemy_orm.Session, session_id: str, role: str, content: str) -> None:
     db.add(models.MessageModel(session_id=session_id, role=role, content=content))
-    db.commit()
+
+
+def load_state(db: sqlalchemy_orm.Session, session_id: str) -> dict:
+    row = db.query(models.SessionStateModel).filter(models.SessionStateModel.session_id == session_id).first()
+    if not row:
+        raise ValueError(f"No state found for session {session_id}")
+    return j.loads(row.state_json)
+
+
+def save_state(db: sqlalchemy_orm.Session, session_id: str, state: dict) -> None:
+    row = db.query(models.SessionStateModel).filter(models.SessionStateModel.session_id == session_id).first()
+    if not row:
+        raise ValueError(f"No state found for session {session_id}")
+    row.state_json = j.dumps(state, ensure_ascii=False)

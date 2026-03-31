@@ -1,8 +1,9 @@
-import json as j
-
 import fastapi as fa
 import pydantic as pd
 import sqlalchemy.orm as sqlalchemy_orm
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 import app.bot_engine as bot_engine
 import app.config as config_module
@@ -13,11 +14,14 @@ import app.session_manager as session_manager
 
 app = fa.FastAPI(title="Lecture Bot")
 
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+templates = Jinja2Templates(directory="app/templates")
 
-@app.get("/")
-def root():
-    """Root endpoint."""
-    return {"message": "Lecture Bot API", "version": "0.1.0"}
+
+@app.get("/", response_class=HTMLResponse)
+def root(request: fa.Request):
+    """Serve the chat UI."""
+    return templates.TemplateResponse(request, "chat.html")
 
 
 @app.get("/health")
@@ -74,33 +78,21 @@ def start_session(request: StartSessionRequest, db: sqlalchemy_orm.Session = fa.
 @app.post("/send_message", response_model=SendMessageResponse)
 def send_message(request: SendMessageRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
     """Send a message in an active session."""
-    # Get the session
     session = db.query(models.SessionModel).filter(models.SessionModel.session_id == request.session_id).first()
     if not session:
         raise fa.HTTPException(status_code=404, detail="Session not found")
-    
+
     if session.ended_at is not None:
         raise fa.HTTPException(status_code=400, detail="Session has ended")
-    
-    # Get the session state
-    session_state = db.query(models.SessionStateModel).filter(models.SessionStateModel.session_id == request.session_id).first()
-    if not session_state:
-        raise fa.HTTPException(status_code=404, detail="Session state not found")
-    
-    # Parse the state
-    state = j.loads(session_state.state_json)
-    
-    # Generate a reply
+
+    state = session_manager.load_state(db, request.session_id)
+
     bot_reply, updated_state = bot_engine.generate_reply(request.message, state)
-    
-    # Save user message
+
     session_manager.append_message(db, request.session_id, "user", request.message)
-    
-    # Save bot reply
     session_manager.append_message(db, request.session_id, "assistant", bot_reply)
-    
-    # Update session state
-    session_state.state_json = j.dumps(updated_state, ensure_ascii=False)
+    session_manager.save_state(db, request.session_id, updated_state)
+
     db.commit()
-    
+
     return SendMessageResponse(message=bot_reply, session_active=True)

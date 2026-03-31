@@ -124,9 +124,9 @@ def test_loads_config_and_dispatches_correctly(tmp_path: Path, monkeypatch: pyte
         calls.append(("notebook", source.name, target.name))
         target.write_text("notebook output\n", encoding="utf-8")
 
-    monkeypatch.setattr(build_lecture_package, "convert_pptx_to_md", fake_slides)
-    monkeypatch.setattr(build_lecture_package, "convert_qmd_to_md", fake_handout)
-    monkeypatch.setattr(build_lecture_package, "convert_ipynb_to_md", fake_notebook)
+    monkeypatch.setattr(build_lecture_package.convert_pptx, "convert_pptx_to_md", fake_slides)
+    monkeypatch.setattr(build_lecture_package.convert_qmd, "convert_qmd_to_md", fake_handout)
+    monkeypatch.setattr(build_lecture_package.convert_ipynb, "convert_ipynb_to_md", fake_notebook)
 
     build_lecture_package.build_lecture_package(
         "lecture_fixture",
