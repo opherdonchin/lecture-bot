@@ -33,6 +33,18 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/lectures", response_model=list[str])
+def list_lectures():
+    """List available lecture IDs."""
+    lectures_dir = config_module.get_settings().lectures_dir
+    if not lectures_dir.exists():
+        return []
+    return sorted(
+        d.name for d in lectures_dir.iterdir()
+        if d.is_dir() and (d / "lecture_config.json").exists()
+    )
+
+
 # API endpoints
 @app.post("/start_session", response_model=schema.StartSessionResponse)
 def start_session(request: schema.StartSessionRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
@@ -309,6 +321,8 @@ def generate_report(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session
         report_json=schema.ReportJson(
             session_id=session.session_id,
             student_id=session.student_id,
+            lecture_id=session.lecture_id,
+            started_at=session.started_at.isoformat(),
             timestamp=timestamp_iso,
             final_grade=auth_grade,
         ),

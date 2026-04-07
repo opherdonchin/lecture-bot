@@ -1,0 +1,61 @@
+{
+  "lecture_id": "lecture_02",
+  "title": "Lecture 1: Models",
+  "course": "Statistics 367-1-4361",
+  "active": true,
+  "files": {
+    "slides": {
+      "source": "Lecture 2 Models.pptx",
+      "target": "slides.md"
+    },
+    "handout": {
+      "source": "Lecture 2 handout.qmd",
+      "target": "handout.md"
+    },
+    "notebook": {
+      "source": "Lecture02_Models.ipynb",
+      "target": "notebook.md"
+    },
+    "rubric": {
+      "source": "mastery_rubric.md",
+      "target": "rubric.md"
+    }
+  },
+  "topics": [
+    {
+      "topic_id": "T1",
+      "label": "Models, parameters, and conditioning",
+      "importance": "core"
+    },
+    {
+      "topic_id": "T2",
+      "label": "Bayes rule and the roles of its parts",
+      "importance": "core"
+    },
+    {
+      "topic_id": "T3",
+      "label": "Building the posterior on a grid",
+      "importance": "core"
+    },
+    {
+      "topic_id": "T4",
+      "label": "Priors and Beta distributions",
+      "importance": "core"
+    },
+    {
+      "topic_id": "T5",
+      "label": "Conjugacy and pseudo-count updating",
+      "importance": "core"
+    },
+    {
+      "topic_id": "T6",
+      "label": "Prior sensitivity, elicitation, and practical prior choice",
+      "importance": "important"
+    },
+    {
+      "topic_id": "T7",
+      "label": "Limits of grid methods and transition to sampling",
+      "importance": "brief"
+    }
+  ]
+}

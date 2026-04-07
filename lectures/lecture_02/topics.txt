@@ -1,0 +1,8 @@
+# Lecture 02 topics — one per line, optionally: name | importance (core/important/brief)
+Models, parameters, and conditioning | core
+Bayes rule and the roles of its parts | core
+Building the posterior on a grid | core
+Priors and Beta distributions | core
+Conjugacy and pseudo-count updating | core
+Prior sensitivity, elicitation, and practical prior choice | important
+Limits of grid methods and transition to sampling | brief

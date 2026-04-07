@@ -34,6 +34,7 @@ def load_lecture_package(lectures_dir: pathlib_.Path, lecture_id: str) -> dict:
     return {
         "lecture_id": lecture_id,
         "config": lecture_config,
+        "topics": lecture_config.get("topics", []),
         "rubric": read_text(rubric_path),
         "slides": read_text(slides_path),
         "handout": read_text(handout_path),

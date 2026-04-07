@@ -1,7 +1,38 @@
 let sessionId = null;
 
+function renderMath(el) {
+  if (typeof renderMathInElement !== "undefined") {
+    renderMathInElement(el, {
+      delimiters: [
+        { left: "\\(", right: "\\)", display: false },
+        { left: "\\[", right: "\\]", display: true },
+        { left: "$$", right: "$$", display: true },
+      ],
+      throwOnError: false,
+    });
+  }
+}
+
 const studentIdInput = document.getElementById("studentId");
 const lectureIdInput = document.getElementById("lectureId");
+
+// Populate lecture dropdown on load
+fetch("/lectures")
+  .then(r => r.json())
+  .then(lectures => {
+    lectures.forEach(id => {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = id.replace(/_/g, " ");
+      lectureIdInput.appendChild(opt);
+    });
+  })
+  .catch(() => {
+    const opt = document.createElement("option");
+    opt.value = "lecture_01";
+    opt.textContent = "lecture 01";
+    lectureIdInput.appendChild(opt);
+  });
 const startSessionBtn = document.getElementById("startSessionBtn");
 
 const messageInput = document.getElementById("messageInput");
@@ -46,7 +77,32 @@ function appendMessage(role, content) {
   row.appendChild(who);
   row.appendChild(text);
   transcript.appendChild(row);
+  renderMath(row);
   transcript.scrollTop = transcript.scrollHeight;
+  return row;
+}
+
+function appendThinking() {
+  const row = document.createElement("div");
+  row.className = "msg assistant thinking";
+  const who = document.createElement("strong");
+  who.textContent = "Assistant";
+  const text = document.createElement("span");
+  const dots = ["", ".", "..", "..."];
+  let i = 0;
+  text.textContent = ": thinking";
+  const timer = setInterval(() => {
+    i = (i + 1) % dots.length;
+    text.textContent = ": thinking" + dots[i];
+  }, 400);
+  row._thinkingTimer = timer;
+  row.appendChild(who);
+  row.appendChild(text);
+  transcript.appendChild(row);
+  transcript.scrollTop = transcript.scrollHeight;
+  const origRemove = row.remove.bind(row);
+  row.remove = () => { clearInterval(timer); origRemove(); };
+  return row;
 }
 
 async function startSession() {
@@ -103,9 +159,11 @@ async function sendMessage() {
   const message = messageInput.value.trim();
   if (!message) return;
 
-  // Clear input immediately for UX, but only append to transcript after success
+  // Show user message immediately before waiting for the response
   messageInput.value = "";
   sendBtn.disabled = true;
+  const userRow = appendMessage("user", message);
+  const thinkingRow = appendThinking();
 
   try {
     const res = await fetch("/send_message", {
@@ -116,15 +174,19 @@ async function sendMessage() {
 
     if (!res.ok) {
       const body = await res.text();
+      thinkingRow.remove();
+      userRow.remove();
       messageInput.value = message; // restore on failure
       showError("Failed to send message (" + res.status + "): " + body);
       return;
     }
 
     const data = await res.json();
-    appendMessage("user", message);
+    thinkingRow.remove();
     appendMessage("assistant", data.message || "[no reply]");
   } catch (err) {
+    thinkingRow.remove();
+    userRow.remove();
     messageInput.value = message; // restore on failure
     showError("Network error while sending message: " + err.message);
   } finally {
@@ -137,6 +199,9 @@ async function getGrade() {
   clearError();
   if (!sessionId) { showError("Start a session first."); return; }
 
+  appendMessage("user", "Get current grade");
+  const thinkingRow = appendThinking();
+
   try {
     const res = await fetch("/get_grade", {
       method: "POST",
@@ -145,12 +210,15 @@ async function getGrade() {
     });
     if (!res.ok) {
       const body = await res.text();
+      thinkingRow.remove();
       showError("Failed to get grade (" + res.status + "): " + body);
       return;
     }
     const data = await res.json();
+    thinkingRow.remove();
     appendGradeMessage(data);
   } catch (err) {
+    thinkingRow.remove();
     showError("Network error: " + err.message);
   }
 }
@@ -184,12 +252,16 @@ function appendGradeMessage(data) {
   }
 
   transcript.appendChild(row);
+  renderMath(row);
   transcript.scrollTop = transcript.scrollHeight;
 }
 
 async function generateReport() {
   clearError();
   if (!sessionId) { showError("Start a session first."); return; }
+
+  appendMessage("user", "Generate final report");
+  const thinkingRow = appendThinking();
 
   try {
     const res = await fetch("/generate_report", {
@@ -199,12 +271,15 @@ async function generateReport() {
     });
     if (!res.ok) {
       const body = await res.text();
+      thinkingRow.remove();
       showError("Failed to generate report (" + res.status + "): " + body);
       return;
     }
     const data = await res.json();
+    thinkingRow.remove();
     appendReportMessage(data);
   } catch (err) {
+    thinkingRow.remove();
     showError("Network error: " + err.message);
   }
 }
@@ -229,7 +304,50 @@ function appendReportMessage(data) {
     }
   }
 
+  // Download button
+  const dl = document.createElement("button");
+  dl.className = "download-btn";
+  dl.textContent = "Download report";
+  dl.addEventListener("click", function () {
+    const rj = data.report_json || {};
+    const grade = rj.final_grade != null ? rj.final_grade : "?";
+    const student = rj.student_id || studentIdInput.value.trim() || "student";
+    const lecture = rj.lecture_id || lectureIdInput.value || "lecture";
+    const startedAt = rj.started_at || "";
+    const generatedAt = rj.timestamp || new Date().toISOString();
+    let durationStr = "";
+    if (startedAt) {
+      const mins = Math.round((new Date(generatedAt) - new Date(startedAt)) / 60000);
+      durationStr = "Duration: " + mins + " minutes";
+    }
+    const lines = [
+      "=== Lecture Bot Session Report ===",
+      "Session ID: " + (rj.session_id || sessionId || "unknown"),
+      "Student ID: " + student,
+      "Lecture: " + lecture,
+      "Grade: " + grade + " / 100",
+      "Session started: " + startedAt,
+      "Report generated: " + generatedAt,
+    ];
+    if (durationStr) lines.push(durationStr);
+    lines.push("--- Report ---", "", reportText);
+    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = student + "_" + lecture + "_report.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  row.appendChild(dl);
+
+  const notice = document.createElement("p");
+  notice.className = "report-upload-notice";
+  notice.textContent = "Please upload this file to the appropriate assignment in Moodle. If you do not upload the file, you will not be able to get credit for the assignment.";
+  row.appendChild(notice);
+
   transcript.appendChild(row);
+  renderMath(row);
   transcript.scrollTop = transcript.scrollHeight;
 }
 

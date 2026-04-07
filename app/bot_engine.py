@@ -54,7 +54,7 @@ def generate_reply(
     Falls back to a generic message if OpenAI fails or returns malformed output.
     """
     settings = config_module.get_settings()
-    topic_defs = parse_rubric_topics(lecture_package["rubric"])
+    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
     allowed_topic_ids = {t["topic_id"] for t in topic_defs}
     context = build_dialogue_context(lecture_package, settings.max_dialogue_context_chars)
 
@@ -281,7 +281,7 @@ def generate_topic_scores(
     Falls back to empty scores on any failure.
     """
     settings = config_module.get_settings()
-    topic_defs = parse_rubric_topics(lecture_package["rubric"])
+    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
     context = build_dialogue_context(lecture_package, settings.max_grading_context_chars)
     rubric_text = lecture_package["rubric"]
 

@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys_module.path:
 import scripts.convert_ipynb_to_md as convert_ipynb
 import scripts.convert_pptx_to_md as convert_pptx
 import scripts.convert_qmd_to_md as convert_qmd
+import app.bot_engine as bot_engine
 
 
 SUPPORTED_FILE_KEYS = ("slides", "handout", "notebook", "rubric")
@@ -136,6 +137,37 @@ def run_job(job: BuildJob) -> None:
     raise ValueError(f"Unsupported lecture file key: {job.logical_key}")
 
 
+def parse_topics_file(topics_path: pathlib_.Path) -> list[dict]:
+    """Parse a topics.txt file into topic_defs.
+
+    Each non-blank, non-comment line is one topic:
+        <name>            (importance defaults to "core")
+        <name> | <importance>
+
+    Importance must be one of: core, important, brief.
+    Topics are assigned IDs T1, T2, ... in file order.
+    """
+    valid_importance = {"core", "important", "brief"}
+    topics = []
+    for raw in topics_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "|" in line:
+            name, _, imp = line.partition("|")
+            name = name.strip()
+            imp = imp.strip().lower()
+        else:
+            name = line
+            imp = "core"
+        if imp not in valid_importance:
+            imp = "core"
+        if name:
+            tid = f"T{len(topics) + 1}"
+            topics.append({"topic_id": tid, "label": name, "importance": imp})
+    return topics
+
+
 def build_lecture_package(
     lecture_ref: str | pathlib_.Path,
     force: bool = False,
@@ -151,6 +183,32 @@ def build_lecture_package(
 
     for job in jobs:
         run_job(job)
+
+    # Resolve topics: topics.txt takes priority, then fall back to rubric parsing
+    topics_txt = lecture_dir / "topics.txt"
+    config_path = lecture_dir / "lecture_config.json"
+
+    if topics_txt.exists():
+        topic_defs = parse_topics_file(topics_txt)
+        if topic_defs:
+            config["topics"] = topic_defs
+            config_path.write_text(j.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"Wrote {len(topic_defs)} topics from topics.txt to lecture_config.json")
+        else:
+            print("Warning: topics.txt exists but contains no valid topics.")
+    else:
+        # Fall back: parse the built rubric for ### T1. headings
+        rubric_job = next((jb for jb in jobs if jb.logical_key == "rubric"), None)
+        rubric_path = rubric_job.target if rubric_job else lecture_dir / "rubric.md"
+        if rubric_path.exists():
+            topic_defs = bot_engine.parse_rubric_topics(rubric_path.read_text(encoding="utf-8"))
+            if topic_defs:
+                config["topics"] = topic_defs
+                config_path.write_text(j.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+                print(f"Wrote {len(topic_defs)} topics from rubric to lecture_config.json")
+            else:
+                print("Warning: no topics found. Add a topics.txt file to the lecture directory.")
+                print("  Format: one topic per line, optionally 'name | importance'")
 
     print("Build complete")
     return jobs

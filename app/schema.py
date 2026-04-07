@@ -44,6 +44,8 @@ class GradeResponse(pd.BaseModel):
 class ReportJson(pd.BaseModel):
     session_id: str
     student_id: str
+    lecture_id: str
+    started_at: str
     timestamp: str
     final_grade: float
 

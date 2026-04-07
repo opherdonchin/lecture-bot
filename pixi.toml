@@ -24,7 +24,9 @@ python-pptx = ">=0.6.23,<2"
 jinja2 = ">=3.1,<4"
 
 [tasks]
-dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8080"
+dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 test = "pytest -q"
 init-db = "python scripts/init_db.py"
-stop = "fuser -k 8080/tcp 2>/dev/null && echo 'App stopped.' || echo 'App is not running.'"
+stop = "fuser -k 8000/tcp 2>/dev/null && echo 'App stopped.' || echo 'App is not running.'"
+tunnel = "ngrok http 8000"
+grade-moodle = "python scripts/grade_moodle.py"
