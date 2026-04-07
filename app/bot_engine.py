@@ -110,17 +110,29 @@ def generate_reply(
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
         assistant_message = str(parsed["assistant_message"])
-        updated_state = sanitize_state_update(
-            state, parsed.get("updated_state", {}), allowed_topic_ids
-        )
-        return assistant_message, updated_state
+        raw_updated_state = parsed.get("updated_state", {})
     except openai_.AuthenticationError:
         _log.exception("generate_reply failed: OpenAI authentication error")
+        fallback_state = dict(state)
+        fallback_state["turn_count"] = state.get("turn_count", 0) + 1
+        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
+    except openai_.APIError:
+        # Rate limits, timeouts, connection errors from the OpenAI API.
+        _log.exception("generate_reply failed: OpenAI API error")
+        fallback_state = dict(state)
+        fallback_state["turn_count"] = state.get("turn_count", 0) + 1
+        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
     except Exception:
+        # Catches malformed JSON, missing model output keys, and other unexpected
+        # response-parsing failures. sanitize_state_update (our code) is deliberately
+        # outside this block so bugs there propagate as 500 instead of hiding as fallback.
         _log.exception("generate_reply failed")
-    fallback_state = dict(state)
-    fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-    return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
+        fallback_state = dict(state)
+        fallback_state["turn_count"] = state.get("turn_count", 0) + 1
+        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
+    # sanitize_state_update is our own code — bugs here propagate as 500, not masked
+    updated_state = sanitize_state_update(state, raw_updated_state, allowed_topic_ids)
+    return assistant_message, updated_state
 
 
 # ---------------------------------------------------------------------------
@@ -314,36 +326,52 @@ def generate_topic_scores(
         )
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
-        allowed_topic_ids = {t["topic_id"] for t in topic_defs}
-        # Validate: only canonical IDs, clamped scores, dedup by keeping highest score
-        seen: dict = {}
-        for ts in parsed.get("topic_scores", []):
-            if not isinstance(ts, dict):
-                continue
-            tid = str(ts.get("topic_id", ""))
-            if tid not in allowed_topic_ids:
-                continue
-            try:
-                score = max(0, min(100, int(ts["score"])))
-            except (KeyError, ValueError, TypeError):
-                continue
-            if tid not in seen or score > seen[tid]["score"]:
-                seen[tid] = {
-                    "topic_id": tid,
-                    "score": score,
-                    "rationale": str(ts.get("rationale", "")),
-                }
-        topic_scores = list(seen.values())
-        return {
-            "topic_scores": topic_scores,
-            "explanation": str(parsed.get("explanation", "")),
-            "missing_topics": [str(t) for t in parsed.get("missing_topics", []) if isinstance(t, str)],
-        }
+        raw_topic_scores = parsed.get("topic_scores", [])
+        explanation = str(parsed.get("explanation", ""))
+        raw_missing = [str(t) for t in parsed.get("missing_topics", []) if isinstance(t, str)]
     except openai_.AuthenticationError:
         _log.exception("generate_topic_scores failed: OpenAI authentication error")
+        return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
+    except openai_.APIError:
+        # Rate limits, timeouts, connection errors from the OpenAI API.
+        _log.exception("generate_topic_scores failed: OpenAI API error")
+        return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
     except Exception:
+        # Catches malformed JSON, missing model output keys, and other unexpected
+        # response-parsing failures. Our own validation code below is deliberately
+        # outside this block so bugs there propagate as 500 instead of hiding as fallback.
         _log.exception("generate_topic_scores failed")
-    return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
+        return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
+    # Our own validation logic — bugs here propagate as 500, not masked as fallback
+    allowed_topic_ids = {t["topic_id"] for t in topic_defs}
+    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
+    seen: dict = {}
+    for ts in raw_topic_scores:
+        if not isinstance(ts, dict):
+            continue
+        tid = str(ts.get("topic_id", ""))
+        if tid not in allowed_topic_ids:
+            continue
+        try:
+            score = max(0, min(100, int(ts["score"])))
+        except (KeyError, ValueError, TypeError):
+            continue
+        if tid not in seen or score > seen[tid]["score"]:
+            seen[tid] = {
+                "topic_id": tid,
+                "score": score,
+                "rationale": str(ts.get("rationale", "")),
+            }
+    labelled_missing = [
+        topic_id_to_label.get(tid, tid)
+        for tid in raw_missing
+        if tid in allowed_topic_ids
+    ]
+    return {
+        "topic_scores": list(seen.values()),
+        "explanation": explanation,
+        "missing_topics": labelled_missing,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +423,12 @@ def generate_report(
         f"[{msg['role'].upper()}]: {msg['content']}" for msg in messages
     )
 
+    fallback_report_text = (
+        f"Session report for {student_id}. "
+        f"Final grade: {final_grade}/100. "
+        f"{explanation}"
+    )
+
     try:
         client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
         response = client.chat.completions.create(
@@ -411,18 +445,16 @@ def generate_report(
         report_text = str(parsed["report_text"])
     except openai_.AuthenticationError:
         _log.exception("generate_report failed: OpenAI authentication error")
-        report_text = (
-            f"Session report for {student_id}. "
-            f"Final grade: {final_grade}/100. "
-            f"{explanation}"
-        )
+        report_text = fallback_report_text
+    except openai_.APIError:
+        # Rate limits, timeouts, connection errors from the OpenAI API.
+        _log.exception("generate_report failed: OpenAI API error")
+        report_text = fallback_report_text
     except Exception:
+        # Catches malformed JSON, missing model output keys, and other unexpected
+        # response-parsing failures.
         _log.exception("generate_report failed")
-        report_text = (
-            f"Session report for {student_id}. "
-            f"Final grade: {final_grade}/100. "
-            f"{explanation}"
-        )
+        report_text = fallback_report_text
 
     return {
         "report_text": report_text,

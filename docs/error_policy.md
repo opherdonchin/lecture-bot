@@ -98,7 +98,7 @@ This document defines the error-handling approach for lecture-bot.
 | User experience | Dialogue: generic tutoring fallback. Grade: 0 or prior grade retained. |
 | Fallback | Allowed |
 | State mutation | Dialogue: turn_count incremented. Grade: no update on empty parse. |
-| Logging | `log.exception(...)` at WARNING level |
+| Logging | `log.exception(...)` |
 | Notes | Validation/sanitisation is the primary defence; fallback only for complete parse failure |
 
 ---
@@ -124,24 +124,32 @@ This document defines the error-handling approach for lecture-bot.
 
 Three call sites exist: `generate_reply`, `generate_topic_scores`, `generate_report`.
 
-Each wraps the OpenAI call with two structured catches:
+Each wraps the OpenAI call with three structured catches:
 
 ```python
 except openai_.AuthenticationError:
     _log.exception("<function> failed: authentication error")
     <fallback>
+except openai_.APIError:
+    # Rate limits, timeouts, connection errors from the OpenAI API.
+    _log.exception("<function> failed: OpenAI API error")
+    <fallback>
 except Exception:
-    _log.exception("<function> failed: <brief reason>")
+    # Catches malformed JSON, missing model output keys, and other
+    # unexpected response-parsing failures.
+    _log.exception("<function> failed")
     <fallback>
 ```
 
-Using `openai_.AuthenticationError` as a named first catch makes auth failures
-distinguishable in logs from transient or parse failures, without adding a
-multi-level exception hierarchy.
+`openai_.AuthenticationError` is caught first for a clearly labelled log entry.
+`openai_.APIError` covers remaining vendor errors (rate limits, timeouts, connection issues).
+`except Exception` is retained and justified for the API call and response-parsing lines only —
+it catches malformed model output (`JSONDecodeError`, unexpected key structure, etc.).
 
-`json.JSONDecodeError` and `KeyError`/`ValueError` from malformed model output
-are caught by the broad `except Exception` — sufficient given that
-`_log.exception` includes the traceback which identifies the exact failure type.
+**Crucially, our own code is placed outside the try block.**
+In `generate_reply`, `sanitize_state_update(...)` is called after the except clauses.
+In `generate_topic_scores`, the validation/deduplication loop is after the except clauses.
+Bugs in that code propagate as 500, not silently masked as apparent tutoring fallback behaviour.
 
 ### Grade fallback
 

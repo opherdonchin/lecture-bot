@@ -7,9 +7,9 @@ const startSessionBtn = document.getElementById("startSessionBtn");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 
-// Ctrl+Enter submits the message from the textarea
+// Enter submits; Shift+Enter or Ctrl+Enter inserts a newline
 messageInput.addEventListener("keydown", function (e) {
-  if (e.ctrlKey && e.key === "Enter") {
+  if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) {
     e.preventDefault();
     sendMessage();
   }
@@ -266,9 +266,6 @@ async function restartSession() {
 
 startSessionBtn.addEventListener("click", startSession);
 sendBtn.addEventListener("click", sendMessage);
-messageInput.addEventListener("keydown", function (e) {
-  if (e.key === "Enter") sendMessage();
-});
 gradeBtn.addEventListener("click", getGrade);
 reportBtn.addEventListener("click", generateReport);
 restartBtn.addEventListener("click", restartSession);

@@ -24,7 +24,7 @@ python-pptx = ">=0.6.23,<2"
 jinja2 = ">=3.1,<4"
 
 [tasks]
-dev = "uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
+dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8080"
 test = "pytest -q"
 init-db = "python scripts/init_db.py"
-stop = "pgrep -f 'uvicorn app\\.main:app' > /dev/null && pkill -SIGTERM -f 'uvicorn app\\.main:app' && echo 'App stopped.' || echo 'App is not running.'"
+stop = "fuser -k 8080/tcp 2>/dev/null && echo 'App stopped.' || echo 'App is not running.'"
