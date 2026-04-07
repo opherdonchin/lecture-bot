@@ -4,6 +4,7 @@ import uuid as uuid_module
 import sqlalchemy.orm as sqlalchemy_orm
 
 import app.bot_engine as bot_engine
+import app.config as config_module
 import app.models as models
 
 
@@ -30,7 +31,8 @@ def create_session(db: sqlalchemy_orm.Session, student_id: str, lecture_id: str,
 
     # Parse rubric topics and sample deterministically using session_id
     topic_defs = bot_engine.parse_rubric_topics(lecture_package["rubric"])
-    topics_sampled = bot_engine.sample_session_topics(topic_defs, session.session_id)
+    count = config_module.get_settings().sampled_topic_count
+    topics_sampled = bot_engine.sample_session_topics(topic_defs, session.session_id, count=count)
 
     state = models.SessionStateModel(
         session_id=session.session_id,

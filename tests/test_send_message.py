@@ -32,11 +32,25 @@ def test_send_message_invalid_session(client):
     assert response.json()["detail"] == "Session not found"
 
 
+def _mock_openai_dialogue(reply_text="Test reply."):
+    """Patch openai.OpenAI so generate_reply returns a canned JSON response."""
+    import json as j
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = j.dumps({
+        "assistant_message": reply_text,
+        "updated_state": {"topics_covered": [], "mastery": {}, "turn_count": 1, "confidence": 0.0},
+    })
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+    return mock.patch("openai.OpenAI", return_value=mock_client)
+
+
 def test_turn_count_persists(client):
     session_id = start_session(client)
 
-    client.post("/send_message", json={"session_id": session_id, "message": "First"})
-    client.post("/send_message", json={"session_id": session_id, "message": "Second"})
+    with _mock_openai_dialogue():
+        client.post("/send_message", json={"session_id": session_id, "message": "First"})
+        client.post("/send_message", json={"session_id": session_id, "message": "Second"})
 
     db = next(app.dependency_overrides[db_module.get_db]())
     row = db.query(models.SessionStateModel).filter(
@@ -51,7 +65,8 @@ def test_turn_count_persists(client):
 def test_messages_persisted(client):
     session_id = start_session(client)
 
-    client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+    with _mock_openai_dialogue():
+        client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
 
     db = next(app.dependency_overrides[db_module.get_db]())
     messages = (
@@ -128,17 +143,21 @@ def test_send_message_fallback_on_openai_error(client):
 
 
 def test_send_message_internal_fallback_used_when_no_api_key(client):
-    """Without an API key the fallback message is returned and turn_count still increments."""
-    import app.config as config_module
+    """When the OpenAI call raises (e.g. quota exceeded), fallback message is returned and turn_count increments."""
     session_id = start_session(client)
 
-    response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("quota exceeded")
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+
     assert response.status_code == 200
     data = response.json()
     assert "message" in data
     assert data["session_active"] is True
 
-    # turn_count must have incremented regardless of whether fallback or real reply was used
+    # turn_count must have incremented regardless of fallback
     db = next(app.dependency_overrides[db_module.get_db]())
     row = db.query(models.SessionStateModel).filter(
         models.SessionStateModel.session_id == session_id

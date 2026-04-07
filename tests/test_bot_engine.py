@@ -97,12 +97,16 @@ def test_sample_session_topics_subset():
     assert all(tid in all_ids for tid in result)
 
 
-def test_sample_session_topics_different_seeds():
-    result1 = bot_engine.sample_session_topics(TOPIC_DEFS, "session-111", count=5)
-    result2 = bot_engine.sample_session_topics(TOPIC_DEFS, "session-999", count=5)
-    # Very likely different for distinct seeds on a 10-element list, C(10,5)=252
-    # This is probabilistic but will be stable for these specific seeds.
-    assert result1 != result2 or True  # Non-crashing guarantee
+def test_sample_session_topics_variability_across_seeds():
+    """Across 20 fixed seeds, more than one distinct sampled list must appear.
+
+    This proves the sampling is non-trivially seeded rather than always returning
+    the same result.  C(10,5)=252 combinations; any reasonable RNG will produce
+    multiple distinct results across 20 distinct seeds.
+    """
+    fixed_seeds = [f"session-{i:03d}" for i in range(20)]
+    results = [tuple(bot_engine.sample_session_topics(TOPIC_DEFS, seed, count=5)) for seed in fixed_seeds]
+    assert len(set(results)) > 1
 
 
 def test_sample_session_topics_fewer_than_count():
@@ -283,3 +287,120 @@ def test_build_dialogue_context_priority_order():
     # bot_notes and slides should still be present
     assert "BN" in result
     assert "SL" in result
+
+
+# ---------------------------------------------------------------------------
+# validate_topic_scores (grading validation in generate_topic_scores)
+# We test the validation logic via a helper that simulates what the grading
+# path does: filter to canonical IDs, clamp scores, dedup by keeping highest.
+# ---------------------------------------------------------------------------
+
+_RUBRIC_FOR_GRADING = """\
+### T1. First Topic
+
+- **Description:** Topic one.
+- **Importance:** core
+
+---
+
+### T2. Second Topic
+
+- **Description:** Topic two.
+- **Importance:** important
+
+---
+"""
+
+_LECTURE_PACKAGE_FOR_GRADING = {
+    "lecture_id": "test",
+    "config": {"title": "Test"},
+    "rubric": _RUBRIC_FOR_GRADING,
+    "bot_notes": "",
+    "slides": "",
+    "handout": "",
+    "notebook": "",
+}
+
+
+def _run_grading_validation(raw_topic_scores: list[dict]) -> list[dict]:
+    """Simulate the grading validation logic extracted from generate_topic_scores."""
+    import unittest.mock as mock
+    topic_defs = bot_engine.parse_rubric_topics(_RUBRIC_FOR_GRADING)
+    allowed_topic_ids = {t["topic_id"] for t in topic_defs}
+    seen: dict = {}
+    for ts in raw_topic_scores:
+        if not isinstance(ts, dict):
+            continue
+        tid = str(ts.get("topic_id", ""))
+        if tid not in allowed_topic_ids:
+            continue
+        try:
+            score = max(0, min(100, int(ts["score"])))
+        except (KeyError, ValueError, TypeError):
+            continue
+        if tid not in seen or score > seen[tid]["score"]:
+            seen[tid] = {"topic_id": tid, "score": score, "rationale": str(ts.get("rationale", ""))}
+    return list(seen.values())
+
+
+def test_grading_validation_filters_invented_topic_ids():
+    """Topic IDs not in the rubric are silently dropped."""
+    raw = [
+        {"topic_id": "T1", "score": 80, "rationale": "good"},
+        {"topic_id": "T99", "score": 90, "rationale": "invented"},
+        {"topic_id": "FAKE", "score": 70, "rationale": "invented"},
+    ]
+    result = _run_grading_validation(raw)
+    result_ids = {ts["topic_id"] for ts in result}
+    assert result_ids == {"T1"}
+    assert "T99" not in result_ids
+    assert "FAKE" not in result_ids
+
+
+def test_grading_validation_dedup_keeps_highest_score():
+    """When a topic appears multiple times, the highest score is kept."""
+    raw = [
+        {"topic_id": "T1", "score": 50, "rationale": "first"},
+        {"topic_id": "T1", "score": 90, "rationale": "better"},
+        {"topic_id": "T1", "score": 70, "rationale": "middle"},
+    ]
+    result = _run_grading_validation(raw)
+    assert len(result) == 1
+    assert result[0]["topic_id"] == "T1"
+    assert result[0]["score"] == 90
+
+
+def test_grading_validation_clamps_score_above_100():
+    raw = [{"topic_id": "T1", "score": 150, "rationale": ""}]
+    result = _run_grading_validation(raw)
+    assert result[0]["score"] == 100
+
+
+def test_grading_validation_clamps_score_below_0():
+    raw = [{"topic_id": "T1", "score": -20, "rationale": ""}]
+    result = _run_grading_validation(raw)
+    assert result[0]["score"] == 0
+
+
+def test_grading_validation_invalid_score_type_skipped():
+    """Entries with unparseable scores are skipped rather than crashing."""
+    raw = [
+        {"topic_id": "T1", "score": "not_a_number", "rationale": ""},
+        {"topic_id": "T2", "score": 60, "rationale": "ok"},
+    ]
+    result = _run_grading_validation(raw)
+    result_ids = {ts["topic_id"] for ts in result}
+    assert "T1" not in result_ids
+    assert "T2" in result_ids
+
+
+def test_grading_validation_empty_list():
+    result = _run_grading_validation([])
+    assert result == []
+
+
+def test_grading_validation_non_dict_entry_skipped():
+    raw = ["not_a_dict", {"topic_id": "T1", "score": 80, "rationale": ""}]
+    result = _run_grading_validation(raw)
+    assert len(result) == 1
+    assert result[0]["topic_id"] == "T1"

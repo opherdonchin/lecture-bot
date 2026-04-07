@@ -96,8 +96,11 @@ def test_start_session_topics_sampled_immutable_after_creation(client):
     initial_state = json.loads(row.state_json)
     original_sampled = list(initial_state["topics_sampled"])
 
-    # Send a message (stub reply won't change topics_sampled)
-    client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+    # Send a message with OpenAI mocked — this test only cares about topics_sampled immutability
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("no api in tests")
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
 
     db2 = next(app.dependency_overrides[db_module.get_db]())
     row2 = db2.query(models.SessionStateModel).filter(
@@ -149,7 +152,8 @@ def test_restart_session_invalid_old_session(client):
 
 def test_get_grade_returns_grade_structure(client):
     session_id = start_session(client)
-    response = client.post("/get_grade", json={"session_id": session_id})
+    with _mock_topic_scores([80]):
+        response = client.post("/get_grade", json={"session_id": session_id})
     assert response.status_code == 200, response.text
     data = response.json()
     assert "grade" in data
@@ -262,9 +266,19 @@ def test_get_grade_accepted_payload_authoritative_after_lower_candidate(client):
 # /generate_report
 # ---------------------------------------------------------------------------
 
+def _mock_openai_report(report_text="Generated report."):
+    """Patch openai.OpenAI so generate_report returns a canned response without a real API call."""
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = json.dumps({"report_text": report_text})
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+    return mock.patch("openai.OpenAI", return_value=mock_client)
+
+
 def test_generate_report_returns_report_structure(client):
     session_id = start_session(client)
-    response = client.post("/generate_report", json={"session_id": session_id})
+    with _mock_openai_report():
+        response = client.post("/generate_report", json={"session_id": session_id})
     assert response.status_code == 200, response.text
     data = response.json()
     assert "report_text" in data
@@ -288,7 +302,7 @@ def _mock_scores_for_report(topic_scores_list, explanation="Good work.", missing
 def test_generate_report_uses_authoritative_grade(client):
     """report_json.final_grade equals session.current_grade."""
     session_id = start_session(client)
-    with _mock_scores_for_report([100, 100]):
+    with _mock_scores_for_report([100, 100]), _mock_openai_report():
         response = client.post("/generate_report", json={"session_id": session_id})
     assert response.status_code == 200
     data = response.json()
@@ -301,7 +315,7 @@ def test_generate_report_grade_monotone_nondecreasing(client):
     with _mock_topic_scores([100, 100]):
         client.post("/get_grade", json={"session_id": session_id})
 
-    with _mock_scores_for_report([0]):
+    with _mock_scores_for_report([0]), _mock_openai_report():
         response = client.post("/generate_report", json={"session_id": session_id})
 
     data = response.json()
@@ -342,7 +356,9 @@ def test_generate_report_uses_prior_explanation_when_lower_candidate(client):
 def test_generate_report_inserts_report_event(client):
     """A grade event with event_type='report' is inserted."""
     session_id = start_session(client)
-    with _mock_scores_for_report([80]):
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("no api in tests")
+    with _mock_scores_for_report([80]), mock.patch("openai.OpenAI", return_value=mock_client):
         client.post("/generate_report", json={"session_id": session_id})
 
     db = next(app.dependency_overrides[db_module.get_db]())
@@ -351,3 +367,35 @@ def test_generate_report_inserts_report_event(client):
         models.GradeEventModel.event_type == "report",
     ).all()
     assert len(events) >= 1
+
+
+def test_get_grade_uses_report_event_payload_when_authoritative(client):
+    """If the highest accepted payload came from a report event, get_grade still uses it.
+
+    This validates the shared _get_authoritative_grading_payload helper searches
+    both 'grade' and 'report' event types.
+    """
+    session_id = start_session(client)
+
+    # First accepted payload comes from a /generate_report call (no prior /get_grade)
+    high_grading = {
+        "topic_scores": [{"topic_id": "T1", "score": 100, "rationale": "strong"}],
+        "explanation": "Authoritative payload from report event.",
+        "missing_topics": [],
+    }
+    with mock.patch("app.bot_engine.generate_topic_scores", return_value=high_grading), \
+         _mock_openai_report():
+        client.post("/generate_report", json={"session_id": session_id})
+
+    # Now get_grade with a lower candidate score
+    low_grading = {
+        "topic_scores": [],
+        "explanation": "Nothing demonstrated.",
+        "missing_topics": ["T1"],
+    }
+    with mock.patch("app.bot_engine.generate_topic_scores", return_value=low_grading):
+        r = client.post("/get_grade", json={"session_id": session_id})
+
+    data = r.json()
+    assert data["grade"] == 55.0
+    assert "Authoritative payload from report event" in data["explanation"]

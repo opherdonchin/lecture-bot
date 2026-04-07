@@ -1,9 +1,14 @@
 import json as j_
+import logging as logging_
 import math as math_
 import random as random_
 import re as re_
 
+import openai as openai_
+
 import app.config as config_module
+
+_log = logging_.getLogger(__name__)
 
 _GRADE_WEIGHTS = [55, 25, 13, 4, 3]
 
@@ -95,8 +100,7 @@ def generate_reply(
     messages.append({"role": "user", "content": user_message})
 
     try:
-        import openai as openai_
-        client = openai_.OpenAI(api_key=settings.openai_api_key)
+        client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
         response = client.chat.completions.create(
             model=settings.openai_model,
             messages=messages,
@@ -110,10 +114,13 @@ def generate_reply(
             state, parsed.get("updated_state", {}), allowed_topic_ids
         )
         return assistant_message, updated_state
+    except openai_.AuthenticationError:
+        _log.exception("generate_reply failed: OpenAI authentication error")
     except Exception:
-        fallback_state = dict(state)
-        fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
+        _log.exception("generate_reply failed")
+    fallback_state = dict(state)
+    fallback_state["turn_count"] = state.get("turn_count", 0) + 1
+    return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
 
 
 # ---------------------------------------------------------------------------
@@ -295,8 +302,7 @@ def generate_topic_scores(
     user_message = f"Here is the tutoring conversation to grade:\n\n{conversation_text}"
 
     try:
-        import openai as openai_
-        client = openai_.OpenAI(api_key=settings.openai_api_key)
+        client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
         response = client.chat.completions.create(
             model=settings.openai_model,
             messages=[
@@ -308,22 +314,36 @@ def generate_topic_scores(
         )
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
-        # Validate structure defensively
-        topic_scores = []
+        allowed_topic_ids = {t["topic_id"] for t in topic_defs}
+        # Validate: only canonical IDs, clamped scores, dedup by keeping highest score
+        seen: dict = {}
         for ts in parsed.get("topic_scores", []):
-            if isinstance(ts, dict) and "topic_id" in ts and "score" in ts:
-                topic_scores.append({
-                    "topic_id": str(ts["topic_id"]),
-                    "score": max(0, min(100, int(ts["score"]))),
+            if not isinstance(ts, dict):
+                continue
+            tid = str(ts.get("topic_id", ""))
+            if tid not in allowed_topic_ids:
+                continue
+            try:
+                score = max(0, min(100, int(ts["score"])))
+            except (KeyError, ValueError, TypeError):
+                continue
+            if tid not in seen or score > seen[tid]["score"]:
+                seen[tid] = {
+                    "topic_id": tid,
+                    "score": score,
                     "rationale": str(ts.get("rationale", "")),
-                })
+                }
+        topic_scores = list(seen.values())
         return {
             "topic_scores": topic_scores,
             "explanation": str(parsed.get("explanation", "")),
             "missing_topics": [str(t) for t in parsed.get("missing_topics", []) if isinstance(t, str)],
         }
+    except openai_.AuthenticationError:
+        _log.exception("generate_topic_scores failed: OpenAI authentication error")
     except Exception:
-        return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
+        _log.exception("generate_topic_scores failed")
+    return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
 
 
 # ---------------------------------------------------------------------------
@@ -376,8 +396,7 @@ def generate_report(
     )
 
     try:
-        import openai as openai_
-        client = openai_.OpenAI(api_key=settings.openai_api_key)
+        client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
         response = client.chat.completions.create(
             model=settings.openai_model,
             messages=[
@@ -390,7 +409,15 @@ def generate_report(
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
         report_text = str(parsed["report_text"])
+    except openai_.AuthenticationError:
+        _log.exception("generate_report failed: OpenAI authentication error")
+        report_text = (
+            f"Session report for {student_id}. "
+            f"Final grade: {final_grade}/100. "
+            f"{explanation}"
+        )
     except Exception:
+        _log.exception("generate_report failed")
         report_text = (
             f"Session report for {student_id}. "
             f"Final grade: {final_grade}/100. "

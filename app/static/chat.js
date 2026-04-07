@@ -7,6 +7,14 @@ const startSessionBtn = document.getElementById("startSessionBtn");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 
+// Ctrl+Enter submits the message from the textarea
+messageInput.addEventListener("keydown", function (e) {
+  if (e.ctrlKey && e.key === "Enter") {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
 const transcript = document.getElementById("transcript");
 const errorBox = document.getElementById("errorBox");
 const sessionInfo = document.getElementById("sessionInfo");
@@ -141,17 +149,42 @@ async function getGrade() {
       return;
     }
     const data = await res.json();
-    const lines = [
-      "Current grade: " + data.grade + "/100",
-      data.explanation,
-      data.missing_topics && data.missing_topics.length
-        ? "Missing topics: " + data.missing_topics.join(", ")
-        : "No missing topics identified.",
-    ];
-    appendMessage("assistant", lines.join(" | "));
+    appendGradeMessage(data);
   } catch (err) {
     showError("Network error: " + err.message);
   }
+}
+
+function appendGradeMessage(data) {
+  const row = document.createElement("div");
+  row.className = "msg assistant grade-card";
+
+  const header = document.createElement("div");
+  header.className = "grade-header";
+  header.innerHTML = "Current grade: <strong>" + data.grade + " / 100</strong>";
+  row.appendChild(header);
+
+  if (data.explanation) {
+    const exp = document.createElement("p");
+    exp.className = "grade-explanation";
+    exp.textContent = data.explanation;
+    row.appendChild(exp);
+  }
+
+  if (data.missing_topics && data.missing_topics.length > 0) {
+    const miss = document.createElement("p");
+    miss.className = "grade-missing";
+    miss.textContent = "Topics not yet covered: " + data.missing_topics.join(", ");
+    row.appendChild(miss);
+  } else {
+    const ok = document.createElement("p");
+    ok.className = "grade-missing";
+    ok.textContent = "All topics covered.";
+    row.appendChild(ok);
+  }
+
+  transcript.appendChild(row);
+  transcript.scrollTop = transcript.scrollHeight;
 }
 
 async function generateReport() {
@@ -170,10 +203,34 @@ async function generateReport() {
       return;
     }
     const data = await res.json();
-    appendMessage("assistant", data.report_text || "[No report text returned]");
+    appendReportMessage(data);
   } catch (err) {
     showError("Network error: " + err.message);
   }
+}
+
+function appendReportMessage(data) {
+  const row = document.createElement("div");
+  row.className = "msg assistant report-card";
+
+  const header = document.createElement("div");
+  header.className = "report-header";
+  header.innerHTML = "Final Report &mdash; <strong>" + (data.report_json && data.report_json.final_grade != null ? data.report_json.final_grade + " / 100" : "") + "</strong>";
+  row.appendChild(header);
+
+  const reportText = data.report_text || "[No report text returned]";
+  const paragraphs = reportText.split(/\n{2,}/);
+  for (const para of paragraphs) {
+    const trimmed = para.trim();
+    if (trimmed) {
+      const p = document.createElement("p");
+      p.textContent = trimmed;
+      row.appendChild(p);
+    }
+  }
+
+  transcript.appendChild(row);
+  transcript.scrollTop = transcript.scrollHeight;
 }
 
 async function restartSession() {

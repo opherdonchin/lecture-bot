@@ -128,6 +128,28 @@ def _get_active_session(db: sqlalchemy_orm.Session, session_id: str) -> models.S
     return session
 
 
+def _get_authoritative_grading_payload(db: sqlalchemy_orm.Session, session_id: str) -> dict | None:
+    """Return the payload dict from the highest accepted grading event (grade or report), or None.
+
+    Searches both event types so that a high-grade report event is visible to get_grade,
+    and a high-grade grade event is visible to generate_report.
+    Returns the most-recent accepted event's payload (most-recent = highest accepted, given
+    the monotone rule).
+    """
+    events = (
+        db.query(models.GradeEventModel)
+        .filter(models.GradeEventModel.session_id == session_id)
+        .filter(models.GradeEventModel.event_type.in_(["grade", "report"]))
+        .order_by(models.GradeEventModel.id.desc())
+        .all()
+    )
+    for event in events:
+        payload = j_.loads(event.payload_json or "{}")
+        if payload.get("accepted_as_current"):
+            return payload
+    return None
+
+
 @app.post("/get_grade", response_model=schema.GradeResponse)
 def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
     """Compute and return the current grade using real LLM grading."""
@@ -182,28 +204,14 @@ def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.
         auth_missing = grading_result["missing_topics"]
         auth_grade = float(candidate_grade)
     else:
-        # Find the last accepted grade-event payload
-        last_accepted = (
-            db.query(models.GradeEventModel)
-            .filter(models.GradeEventModel.session_id == session.session_id)
-            .filter(models.GradeEventModel.event_type == "grade")
-            .order_by(models.GradeEventModel.id.desc())
-            .all()
-        )
-        accepted_event = next(
-            (e for e in last_accepted
-             if j_.loads(e.payload_json or "{}").get("accepted_as_current")),
-            None,
-        )
-        if accepted_event:
-            prior = j_.loads(accepted_event.payload_json)
+        prior = _get_authoritative_grading_payload(db, session.session_id)
+        if prior:
             auth_explanation = prior.get("explanation", "")
             auth_missing = prior.get("missing_topics", [])
-            auth_grade = float(session.current_grade or 0.0)
         else:
             auth_explanation = grading_result["explanation"]
             auth_missing = grading_result["missing_topics"]
-            auth_grade = float(session.current_grade or 0.0)
+        auth_grade = float(session.current_grade or 0.0)
 
     return schema.GradeResponse(
         grade=auth_grade,
@@ -250,21 +258,8 @@ def generate_report(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session
         auth_topic_scores = raw_grading["topic_scores"]
     else:
         auth_grade = float(session.current_grade or 0.0)
-        # Retrieve the accepted grading payload for the authoritative explanation
-        last_accepted = (
-            db.query(models.GradeEventModel)
-            .filter(models.GradeEventModel.session_id == session.session_id)
-            .filter(models.GradeEventModel.event_type.in_(["grade", "report"]))
-            .order_by(models.GradeEventModel.id.desc())
-            .all()
-        )
-        accepted_event = next(
-            (e for e in last_accepted
-             if j_.loads(e.payload_json or "{}").get("accepted_as_current")),
-            None,
-        )
-        if accepted_event:
-            prior = j_.loads(accepted_event.payload_json)
+        prior = _get_authoritative_grading_payload(db, session.session_id)
+        if prior:
             auth_explanation = prior.get("explanation", "")
             auth_missing = prior.get("missing_topics", [])
             auth_topic_scores = prior.get("topic_scores", [])
