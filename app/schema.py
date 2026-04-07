@@ -23,3 +23,31 @@ class SendMessageRequest(pd.BaseModel):
 class SendMessageResponse(pd.BaseModel):
     message: str
     session_active: bool = True
+
+
+class SessionIdRequest(pd.BaseModel):
+    session_id: str
+
+
+class RestartSessionRequest(pd.BaseModel):
+    session_id: str
+    student_id: str
+    lecture_id: str
+
+
+class GradeResponse(pd.BaseModel):
+    grade: float
+    explanation: str
+    missing_topics: list[str]
+
+
+class ReportJson(pd.BaseModel):
+    session_id: str
+    student_id: str
+    timestamp: str
+    final_grade: float
+
+
+class ReportResponse(pd.BaseModel):
+    report_text: str
+    report_json: ReportJson

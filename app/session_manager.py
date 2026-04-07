@@ -3,12 +3,13 @@ import uuid as uuid_module
 
 import sqlalchemy.orm as sqlalchemy_orm
 
+import app.bot_engine as bot_engine
 import app.models as models
 
 
-def build_initial_state(lecture_package: dict) -> dict:
+def build_initial_state(lecture_package: dict, topics_sampled: list) -> dict:
     return {
-        "topics_sampled": [],
+        "topics_sampled": topics_sampled,
         "topics_covered": [],
         "mastery": {},
         "turn_count": 0,
@@ -27,9 +28,13 @@ def create_session(db: sqlalchemy_orm.Session, student_id: str, lecture_id: str,
     db.add(session)
     db.flush()
 
+    # Parse rubric topics and sample deterministically using session_id
+    topic_defs = bot_engine.parse_rubric_topics(lecture_package["rubric"])
+    topics_sampled = bot_engine.sample_session_topics(topic_defs, session.session_id)
+
     state = models.SessionStateModel(
         session_id=session.session_id,
-        state_json=j.dumps(build_initial_state(lecture_package), ensure_ascii=False),
+        state_json=j.dumps(build_initial_state(lecture_package, topics_sampled), ensure_ascii=False),
     )
     db.add(state)
     db.flush()

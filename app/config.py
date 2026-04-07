@@ -12,6 +12,11 @@ class Settings(ps.BaseSettings):
     lectures_dir: pathlib_.Path = pd.Field(default=pathlib_.Path("lectures"))
     session_timeout_minutes: int = 20
     openai_api_key: str | None = None
+    openai_model: str = "gpt-4.1-mini"
+    recent_message_limit: int = 10
+    max_dialogue_context_chars: int = 120000
+    max_grading_context_chars: int = 180000
+    sampled_topic_count: int = 5
 
     model_config = ps.SettingsConfigDict(
         env_file=".env",
