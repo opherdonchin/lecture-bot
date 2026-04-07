@@ -37,3 +37,8 @@ data/*.sqlite
 data/*.sqlite3
 exports/
 logs/
+
+# Lecture content (keep directory structure but not files)
+lectures/**
+!lectures/
+!lectures/**/.gitkeep
