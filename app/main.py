@@ -3,7 +3,7 @@ import json as j_
 
 import fastapi as fa
 import sqlalchemy.orm as sqlalchemy_orm
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -19,6 +19,11 @@ app = fa.FastAPI(title="Lecture Bot")
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse("app/static/bot.svg")
 
 
 @app.get("/", response_class=HTMLResponse)
