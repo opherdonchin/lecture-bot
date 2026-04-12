@@ -42,6 +42,20 @@ def test_start_session_persists_opening_message(client):
     assert any(m.role == "assistant" for m in messages)
 
 
+def test_start_session_uses_selected_lecture_title_in_opening_message(client):
+    session_id = start_session(client, lecture_id="lecture_02")
+    db = next(app.dependency_overrides[db_module.get_db]())
+    opening_message = (
+        db.query(models.MessageModel)
+        .filter(models.MessageModel.session_id == session_id)
+        .filter(models.MessageModel.role == "assistant")
+        .order_by(models.MessageModel.id.asc())
+        .first()
+    )
+    assert opening_message is not None
+    assert "Lecture 2: Models" in opening_message.content
+
+
 def test_start_session_persists_state(client):
     session_id = start_session(client)
     db = next(app.dependency_overrides[db_module.get_db]())

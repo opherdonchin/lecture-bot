@@ -48,3 +48,15 @@ class GradeEventModel(db_module.Base):
     grade: sqlalchemy_orm.Mapped[float] = sqlalchemy_orm.mapped_column(sa.Float)
     timestamp: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)
     payload_json: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+
+
+class ClassificationLogModel(db_module.Base):
+    __tablename__ = "classification_logs"
+
+    id: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    session_id: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.ForeignKey("sessions.session_id"), index=True)
+    message_id: sqlalchemy_orm.Mapped[int | None] = sqlalchemy_orm.mapped_column(sa.Integer, nullable=True)
+    turn_index: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer)
+    classifier_json: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    policy_decision_json: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    timestamp: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)

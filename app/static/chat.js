@@ -164,6 +164,7 @@ async function sendMessage() {
   sendBtn.disabled = true;
   const userRow = appendMessage("user", message);
   const thinkingRow = appendThinking();
+  let sessionStillActive = true;
 
   try {
     const res = await fetch("/send_message", {
@@ -184,14 +185,31 @@ async function sendMessage() {
     const data = await res.json();
     thinkingRow.remove();
     appendMessage("assistant", data.message || "[no reply]");
+    if (data.final_grade != null) {
+      appendGradeMessage({
+        grade: data.final_grade,
+        explanation: data.final_grade_explanation || "",
+        missing_topics: data.final_missing_topics || [],
+      });
+    }
+    if (data.session_active === false) {
+      sessionStillActive = false;
+      messageInput.disabled = true;
+      sendBtn.disabled = true;
+      sessionInfo.textContent = "Session ended: " + sessionId;
+    }
   } catch (err) {
     thinkingRow.remove();
     userRow.remove();
     messageInput.value = message; // restore on failure
     showError("Network error while sending message: " + err.message);
   } finally {
-    sendBtn.disabled = false;
-    messageInput.focus();
+    if (sessionStillActive) {
+      sendBtn.disabled = false;
+      messageInput.focus();
+    } else {
+      sendBtn.disabled = true;
+    }
   }
 }
 
@@ -376,6 +394,8 @@ async function restartSession() {
 
     // Clear transcript for fresh start
     transcript.innerHTML = "";
+    messageInput.disabled = false;
+    sendBtn.disabled = false;
     if (data.message) appendMessage("assistant", data.message);
   } catch (err) {
     showError("Network error: " + err.message);

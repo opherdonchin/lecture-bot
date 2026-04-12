@@ -177,61 +177,127 @@ OLD_STATE = {
     "topics_sampled": ["T1", "T2", "T3"],
     "topics_covered": [],
     "mastery": {},
+    "evidence_notes": {},
     "turn_count": 1,
-    "confidence": 0.5,
     "lecture_title": "Lecture 1",
 }
 ALLOWED_IDS = {"T1", "T2", "T3", "T4", "T5"}
 
 
 def test_sanitize_topics_sampled_immutable():
-    llm_state = {"topics_sampled": ["X9", "X10"], "topics_covered": [], "mastery": {}, "confidence": 0.5}
+    llm_state = {"topics_sampled": ["X9", "X10"], "topics_covered": [], "mastery": {}, "evidence_notes": {}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["topics_sampled"] == ["T1", "T2", "T3"]
 
 
 def test_sanitize_turn_count_incremented():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 0.5, "turn_count": 99}
+    llm_state = {"topics_covered": [], "mastery": {}, "evidence_notes": {}, "turn_count": 99}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["turn_count"] == OLD_STATE["turn_count"] + 1
 
 
 def test_sanitize_topics_covered_filtered():
-    llm_state = {"topics_covered": ["T1", "T99"], "mastery": {}, "confidence": 0.5}
+    llm_state = {"topics_covered": ["T1", "T99"], "mastery": {}, "evidence_notes": {}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["topics_covered"] == ["T1"]
 
 
 def test_sanitize_mastery_keys_filtered():
-    llm_state = {"topics_covered": [], "mastery": {"T1": 80, "T99": 50}, "confidence": 0.5}
+    llm_state = {"topics_covered": [], "mastery": {"T1": 80, "T99": 50}, "evidence_notes": {}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert "T1" in result["mastery"]
     assert "T99" not in result["mastery"]
 
 
 def test_sanitize_mastery_values_clamped():
-    llm_state = {"topics_covered": [], "mastery": {"T1": 150, "T2": -10}, "confidence": 0.5}
+    llm_state = {"topics_covered": [], "mastery": {"T1": 150, "T2": -10}, "evidence_notes": {}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["mastery"]["T1"] == 100
     assert result["mastery"]["T2"] == 0
 
 
-def test_sanitize_confidence_clamped():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 1.5}
+def test_sanitize_no_confidence_field():
+    """confidence field was removed; it must not appear in sanitized output."""
+    llm_state = {"topics_covered": [], "mastery": {}, "evidence_notes": {}, "confidence": 0.9}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
-    assert result["confidence"] == 1.0
+    assert "confidence" not in result
 
 
 def test_sanitize_unknown_keys_dropped():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 0.5, "extra_field": "bad"}
+    llm_state = {"topics_covered": [], "mastery": {}, "evidence_notes": {}, "extra_field": "bad"}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert "extra_field" not in result
 
 
 def test_sanitize_lecture_title_immutable():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 0.5, "lecture_title": "Changed"}
+    llm_state = {"topics_covered": [], "mastery": {}, "evidence_notes": {}, "lecture_title": "Changed"}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["lecture_title"] == "Lecture 1"
+
+
+# ---------------------------------------------------------------------------
+# sanitize_state_update — merge semantics
+# ---------------------------------------------------------------------------
+
+OLD_STATE_WITH_CONTENT = {
+    "topics_sampled": ["T1", "T2", "T3"],
+    "topics_covered": ["T1"],
+    "mastery": {"T1": 50},
+    "evidence_notes": {"T1": "prior note"},
+    "turn_count": 3,
+    "lecture_title": "Lecture 1",
+}
+
+
+def test_sanitize_empty_topics_preserves_prior():
+    """When LLM returns empty topics_covered, prior list is preserved."""
+    llm_state = {"topics_covered": [], "mastery": {}, "evidence_notes": {}}
+    result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
+    assert result["topics_covered"] == ["T1"]
+
+
+def test_sanitize_empty_mastery_preserves_prior():
+    """When LLM returns empty mastery, prior dict is preserved."""
+    llm_state = {"topics_covered": [], "mastery": {}, "evidence_notes": {}}
+    result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
+    assert result["mastery"] == {"T1": 50}
+
+
+def test_sanitize_empty_evidence_notes_preserves_prior():
+    """When LLM returns empty evidence_notes, prior dict is preserved."""
+    llm_state = {"topics_covered": [], "mastery": {}, "evidence_notes": {}}
+    result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
+    assert result["evidence_notes"] == {"T1": "prior note"}
+
+
+def test_sanitize_topics_covered_union():
+    """New valid topics are added to existing list without duplicates."""
+    llm_state = {"topics_covered": ["T1", "T2"], "mastery": {}, "evidence_notes": {}}
+    result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
+    assert set(result["topics_covered"]) == {"T1", "T2"}
+    assert result["topics_covered"].count("T1") == 1
+
+
+def test_sanitize_mastery_merge_updates_existing():
+    """New mastery values overwrite old values for the same topic."""
+    llm_state = {"topics_covered": ["T1"], "mastery": {"T1": 80}, "evidence_notes": {}}
+    result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
+    assert result["mastery"]["T1"] == 80
+
+
+def test_sanitize_evidence_notes_merge():
+    """New evidence_notes are merged; prior notes for untouched topics are preserved."""
+    llm_state = {"topics_covered": ["T2"], "mastery": {"T2": 45}, "evidence_notes": {"T2": "new note"}}
+    result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
+    assert result["evidence_notes"]["T1"] == "prior note"
+    assert result["evidence_notes"]["T2"] == "new note"
+
+
+def test_sanitize_evidence_notes_invalid_keys_dropped():
+    """evidence_notes keys not in allowed_topic_ids are dropped."""
+    llm_state = {"topics_covered": [], "mastery": {}, "evidence_notes": {"T99": "bad", "T1": "ok"}}
+    result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
+    assert "T99" not in result["evidence_notes"]
 
 
 # ---------------------------------------------------------------------------

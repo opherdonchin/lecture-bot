@@ -10,12 +10,22 @@ import app.models as models
 
 def build_initial_state(lecture_package: dict, topics_sampled: list) -> dict:
     return {
+        # tutoring state
         "topics_sampled": topics_sampled,
         "topics_covered": [],
         "mastery": {},
+        "evidence_notes": {},
         "turn_count": 0,
-        "confidence": 0.0,
         "lecture_title": lecture_package["config"].get("title", lecture_package["lecture_id"]),
+        "timeout_warning_sent": False,
+        # routing state
+        "last_top_classification": None,
+        "last_recommended_policy": None,
+        "last_effective_policy": None,
+        "consecutive_redirects": 0,
+        "consecutive_meta_requests": 0,
+        "consecutive_clarifications": 0,
+        "last_policy_override_reason": None,
     }
 
 
@@ -59,3 +69,18 @@ def save_state(db: sqlalchemy_orm.Session, session_id: str, state: dict) -> None
     if not row:
         raise ValueError(f"No state found for session {session_id}")
     row.state_json = j.dumps(state, ensure_ascii=False)
+
+
+def log_classification(
+    db: sqlalchemy_orm.Session,
+    session_id: str,
+    turn_index: int,
+    classifier_json: str,
+    policy_decision_json: str,
+) -> None:
+    db.add(models.ClassificationLogModel(
+        session_id=session_id,
+        turn_index=turn_index,
+        classifier_json=classifier_json,
+        policy_decision_json=policy_decision_json,
+    ))

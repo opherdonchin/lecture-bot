@@ -1,12 +1,25 @@
+import functools as functools_
 import json as j_
 import logging as logging_
 import math as math_
+import pathlib as pathlib_
 import random as random_
 import re as re_
 
 import openai as openai_
+import sqlalchemy.orm as sqlalchemy_orm_
 
 import app.config as config_module
+import app.models as models_module
+import app.session_manager as session_manager_module
+from app.policy_decider import HARD_BACKSTOP_PATTERNS, PolicyDecider
+from app.schema import (
+    ClassifierInput,
+    ClassifierMessage,
+    ClassifierResult,
+    ClassifierStateExcerpt,
+    PolicyDecision,
+)
 
 _log = logging_.getLogger(__name__)
 
@@ -21,18 +34,216 @@ _FALLBACK_DIALOGUE_MESSAGE = (
     "what idea from this lecture seems most important to you, and why?"
 )
 
+# ---------------------------------------------------------------------------
+# Policy routing constants and helpers
+# ---------------------------------------------------------------------------
+
+_POLICY_TO_PROMPT: dict[str, str] = {
+    "respond": "respond_prompt.md",
+    "provide_content_support": "provide_content_support_prompt.md",
+    "provide_technical_support": "provide_technical_support_prompt.md",
+    "redirect": "redirect_prompt.md",
+    "seek_clarification": "clarification_prompt.md",
+}
+
+# These policies receive lecture content and rubric text in their prompts.
+_CONTENT_POLICIES: frozenset[str] = frozenset({"respond", "provide_content_support", "seek_clarification"})
+
+# Matches {identifier} placeholders while leaving {}, {"key": value}, etc. intact.
+_TEMPLATE_VAR_RE = re_.compile(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}')
+
+
+@functools_.lru_cache(maxsize=32)
+def _load_prompt(prompt_dir_str: str, filename: str) -> str:
+    """Load and cache a prompt file from disk."""
+    return (pathlib_.Path(prompt_dir_str) / filename).read_text(encoding="utf-8")
+
+
+@functools_.lru_cache(maxsize=1)
+def _get_policy_decider() -> PolicyDecider:
+    settings = config_module.get_settings()
+    return PolicyDecider(
+        hard_backstops=HARD_BACKSTOP_PATTERNS,
+        top1_min=settings.policy_top1_min,
+        top2_trigger=settings.policy_top2_trigger,
+        ambiguity_gap_max=settings.policy_ambiguity_gap_max,
+        clarification_redirect_threshold=settings.clarification_redirect_threshold,
+    )
+
+
+def _render_prompt(template: str, **kwargs: object) -> str:
+    """Substitute {name} placeholders; leave unrecognised ones intact."""
+    def _replace(m: re_.Match) -> str:
+        key = m.group(1)
+        return str(kwargs[key]) if key in kwargs else m.group(0)
+    return _TEMPLATE_VAR_RE.sub(_replace, template)
+
+
+def _format_messages_for_prompt(messages: list[dict]) -> str:
+    lines = []
+    for m in messages:
+        role_label = "Student" if m["role"] == "user" else "Tutor"
+        lines.append(f"[{role_label}]: {m['content']}")
+    return "\n".join(lines)
+
+
+def _fallback_classification() -> ClassifierResult:
+    return ClassifierResult(
+        top_classification="content_answer",
+        class_probabilities={
+            "content_answer": 0.60,
+            "content_question": 0.20,
+            "technical_request": 0.10,
+            "meta_request": 0.05,
+            "off_task": 0.05,
+        },
+        recommended_policy="respond",
+        policy_confidence=0.60,
+        short_reason="Classifier fallback: treating as content answer.",
+    )
+
+
+def _classify_message(
+    settings: config_module.Settings,
+    user_message: str,
+    recent_messages: list[dict],
+    state: dict,
+) -> ClassifierResult:
+    """Run the intent classifier. Returns a ClassifierResult (falls back on any failure)."""
+    state_excerpt = ClassifierStateExcerpt(
+        last_top_classification=state.get("last_top_classification"),
+        last_recommended_policy=state.get("last_recommended_policy"),
+        last_effective_policy=state.get("last_effective_policy"),
+        consecutive_redirects=state.get("consecutive_redirects", 0),
+        consecutive_meta_requests=state.get("consecutive_meta_requests", 0),
+        last_policy_override_reason=state.get("last_policy_override_reason"),
+    )
+    window = recent_messages[-settings.classifier_recent_message_window:]
+    classifier_input = ClassifierInput(
+        latest_user_message=user_message,
+        recent_messages=[ClassifierMessage(role=m["role"], content=m["content"]) for m in window],
+        state=state_excerpt,
+    )
+    classifier_system_prompt = _load_prompt(str(settings.prompt_dir), "classifier_system_prompt.md")
+    try:
+        client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
+        response = client.chat.completions.create(
+            model=settings.classifier_model,
+            messages=[
+                {"role": "system", "content": classifier_system_prompt},
+                {"role": "user", "content": classifier_input.model_dump_json()},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.0,
+        )
+        raw = response.choices[0].message.content
+        parsed = j_.loads(raw)
+        return ClassifierResult.model_validate(parsed)
+    except Exception:
+        _log.exception("Classifier failed; using fallback classification")
+        return _fallback_classification()
+
+
+def _build_system_prompt(
+    settings: config_module.Settings,
+    effective_policy: str,
+    lecture_package: dict,
+    state: dict,
+    recent_messages: list[dict],
+) -> str:
+    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
+    topics_sampled = state.get("topics_sampled", [])
+    sampled_labels_str = ", ".join(
+        topic_id_to_label.get(tid, tid) for tid in topics_sampled
+    ) or "all topics"
+
+    template = _load_prompt(str(settings.prompt_dir), _POLICY_TO_PROMPT[effective_policy])
+    render_vars: dict[str, object] = {
+        "sampled_labels": sampled_labels_str,
+        "topics_covered": state.get("topics_covered", []),
+        "mastery": state.get("mastery", {}),
+        "evidence_notes": state.get("evidence_notes", {}),
+        "recent_messages": _format_messages_for_prompt(recent_messages),
+        "turn_count": state.get("turn_count", 0) + 1,
+        "lecture_title": state.get("lecture_title", ""),
+    }
+    if effective_policy in _CONTENT_POLICIES:
+        render_vars["rubric_text"] = lecture_package["rubric"]
+        render_vars["context"] = build_dialogue_context(lecture_package, settings.max_dialogue_context_chars)
+    return _render_prompt(template, **render_vars)
+
+
+def _apply_routing_state(
+    state: dict,
+    classification: ClassifierResult,
+    policy_decision: PolicyDecision,
+    old_state: dict,
+) -> None:
+    """Write routing metadata into state in-place."""
+    state["last_top_classification"] = classification.top_classification
+    state["last_recommended_policy"] = classification.recommended_policy
+    state["last_effective_policy"] = policy_decision.effective_policy
+    state["last_policy_override_reason"] = policy_decision.override_reason
+    if policy_decision.effective_policy == "redirect":
+        state["consecutive_redirects"] = old_state.get("consecutive_redirects", 0) + 1
+    else:
+        state["consecutive_redirects"] = 0
+    if classification.top_classification == "meta_request":
+        state["consecutive_meta_requests"] = old_state.get("consecutive_meta_requests", 0) + 1
+    else:
+        state["consecutive_meta_requests"] = 0
+    if policy_decision.effective_policy == "seek_clarification":
+        state["consecutive_clarifications"] = old_state.get("consecutive_clarifications", 0) + 1
+    else:
+        state["consecutive_clarifications"] = 0
+
+
+def _make_fallback_state(
+    old_state: dict,
+    classification: ClassifierResult,
+    policy_decision: PolicyDecision,
+) -> dict:
+    fallback = dict(old_state)
+    fallback["turn_count"] = old_state.get("turn_count", 0) + 1
+    _apply_routing_state(fallback, classification, policy_decision, old_state)
+    return fallback
+
 
 # ---------------------------------------------------------------------------
 # Public: opening message
 # ---------------------------------------------------------------------------
 
-def build_opening_message(lecture_package: dict) -> str:
+def _join_topic_labels(labels: list[str]) -> str:
+    if not labels:
+        return ""
+    if len(labels) == 1:
+        return labels[0]
+    if len(labels) == 2:
+        return f"{labels[0]} or {labels[1]}"
+    return f"{', '.join(labels[:-1])}, or {labels[-1]}"
+
+
+def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | None = None) -> str:
     title = lecture_package["config"].get("title", lecture_package["lecture_id"])
+    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
+    choice_count = config_module.get_settings().opening_topic_choice_count
+    chosen_ids = (sampled_topic_ids or [])[:choice_count]
+    chosen_labels = [topic_id_to_label.get(tid, tid) for tid in chosen_ids if tid in topic_id_to_label]
+
+    if chosen_labels:
+        topic_choices = _join_topic_labels(chosen_labels)
+        return (
+            f"Welcome to the review bot for {title}. "
+            "We can start wherever feels most useful. "
+            f"Want to begin with {topic_choices}?"
+        )
+
     return (
         f"Welcome to the review bot for {title}. "
-        "I'll work with you through a short conceptual review of this lecture. "
-        "You can ask for your current grade or a final report at any time. "
-        "Let's begin: what do you think was one central idea of this lecture?"
+        "We can start wherever feels most useful. "
+        "What topic from this lecture would you like to begin with?"
     )
 
 
@@ -43,67 +254,51 @@ def build_opening_message(lecture_package: dict) -> str:
 
 def generate_reply(
     *,
+    db: sqlalchemy_orm_.Session,
+    session_id: str,
+    turn_index: int,
     lecture_package: dict,
     recent_messages: list,
     state: dict,
     user_message: str,
 ) -> tuple[str, dict]:
-    """Generate a tutoring reply using OpenAI.
+    """Generate a tutoring reply via the policy routing pipeline.
 
     Returns (assistant_message, sanitized_updated_state).
-    Falls back to a generic message if OpenAI fails or returns malformed output.
+    Falls back to a generic message if the dialogue LLM call fails.
     """
     settings = config_module.get_settings()
     topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
     allowed_topic_ids = {t["topic_id"] for t in topic_defs}
-    context = build_dialogue_context(lecture_package, settings.max_dialogue_context_chars)
 
-    rubric_text = lecture_package["rubric"]
-    topics_sampled = state.get("topics_sampled", [])
-    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
-    sampled_labels = [
-        f"{tid}: {topic_id_to_label.get(tid, tid)}" for tid in topics_sampled
-    ]
+    # 1. Classify the student message.
+    classification = _classify_message(settings, user_message, recent_messages, state)
 
-    system_prompt = (
-        "You are a Socratic tutoring assistant conducting a short conceptual review of a lecture.\n"
-        "Your job is to guide the student toward understanding through focused questions.\n\n"
-        f"Session focus topics: {', '.join(sampled_labels) if sampled_labels else 'all topics'}\n"
-        f"Topics covered so far: {state.get('topics_covered', [])}\n"
-        f"Mastery estimates so far: {state.get('mastery', {})}\n\n"
-        "Rubric:\n"
-        f"{rubric_text}\n\n"
-        "Lecture content:\n"
-        f"{context}\n\n"
-        "Rules:\n"
-        "- Keep your reply short and pedagogically focused.\n"
-        "- Ask at most ONE follow-up question.\n"
-        "- Do NOT change the topics_sampled list.\n"
-        "- Do NOT invent new topic IDs. Use only canonical IDs from the rubric (T1, T2, etc.).\n"
-        "- Update topics_covered and mastery only for topics the student actually demonstrated understanding of.\n"
-        "- Return JSON only. No extra text outside the JSON.\n\n"
-        "Return exactly this JSON structure:\n"
-        '{\n'
-        '  "assistant_message": "your short pedagogical reply with one focused next question",\n'
-        '  "updated_state": {\n'
-        '    "topics_covered": ["T1"],\n'
-        '    "mastery": {"T1": 60},\n'
-        f'    "turn_count": {state.get("turn_count", 0) + 1},\n'
-        '    "confidence": 0.35,\n'
-        f'    "lecture_title": "{state.get("lecture_title", "")}"\n'
-        '  }\n'
-        '}'
+    # 2. Decide effective policy.
+    policy_decision = _get_policy_decider().decide_policy(user_message, classification, state)
+    effective_policy = policy_decision.effective_policy
+
+    # 3. Log classifier output and policy decision.
+    session_manager_module.log_classification(
+        db=db,
+        session_id=session_id,
+        turn_index=turn_index,
+        classifier_json=classification.model_dump_json(),
+        policy_decision_json=policy_decision.model_dump_json(),
     )
 
-    messages = [{"role": "system", "content": system_prompt}]
-    messages.extend(recent_messages)
-    messages.append({"role": "user", "content": user_message})
+    # 4. Build system prompt from the appropriate prompt family.
+    system_prompt = _build_system_prompt(settings, effective_policy, lecture_package, state, recent_messages)
 
+    # 5. Call the dialogue LLM.
     try:
         client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
         response = client.chat.completions.create(
             model=settings.openai_model,
-            messages=messages,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
             response_format={"type": "json_object"},
             temperature=0.3,
         )
@@ -113,25 +308,21 @@ def generate_reply(
         raw_updated_state = parsed.get("updated_state", {})
     except openai_.AuthenticationError:
         _log.exception("generate_reply failed: OpenAI authentication error")
-        fallback_state = dict(state)
-        fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
+        return _FALLBACK_DIALOGUE_MESSAGE, _make_fallback_state(state, classification, policy_decision)
     except openai_.APIError:
         # Rate limits, timeouts, connection errors from the OpenAI API.
         _log.exception("generate_reply failed: OpenAI API error")
-        fallback_state = dict(state)
-        fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
+        return _FALLBACK_DIALOGUE_MESSAGE, _make_fallback_state(state, classification, policy_decision)
     except Exception:
         # Catches malformed JSON, missing model output keys, and other unexpected
         # response-parsing failures. sanitize_state_update (our code) is deliberately
         # outside this block so bugs there propagate as 500 instead of hiding as fallback.
         _log.exception("generate_reply failed")
-        fallback_state = dict(state)
-        fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
-    # sanitize_state_update is our own code — bugs here propagate as 500, not masked
+        return _FALLBACK_DIALOGUE_MESSAGE, _make_fallback_state(state, classification, policy_decision)
+
+    # sanitize_state_update and routing state are our own code — bugs propagate as 500.
     updated_state = sanitize_state_update(state, raw_updated_state, allowed_topic_ids)
+    _apply_routing_state(updated_state, classification, policy_decision, state)
     return assistant_message, updated_state
 
 
@@ -211,45 +402,71 @@ def compute_weighted_grade(topic_scores: list[dict]) -> int:
 
 
 def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: set) -> dict:
-    """Sanitize a model-returned state update.
+    """Sanitize a model-returned state update with merge semantics.
 
     Rules enforced:
     - topics_sampled: immutable, taken from old_state
     - lecture_title: immutable, taken from old_state
-    - topics_covered: subset of allowed_topic_ids
-    - mastery: keys in allowed_topic_ids, values clamped int 0-100
-    - turn_count: old_turn_count + 1
-    - confidence: clamped float 0.0-1.0
+    - timeout_warning_sent: backend-owned flag preserved from old_state
+    - topics_covered: union of old + new (new filtered to allowed_topic_ids);
+      when new is empty the prior list is preserved unchanged
+    - mastery: old merged with new (new values filtered and clamped 0-100);
+      when new is empty the prior dict is preserved unchanged
+    - evidence_notes: old merged with new (new values must be strings);
+      when new is empty the prior dict is preserved unchanged
+    - turn_count: old_turn_count + 1 (LLM value ignored)
     - unknown keys dropped
     """
     result = {
         "topics_sampled": list(old_state.get("topics_sampled", [])),
         "lecture_title": old_state.get("lecture_title", ""),
+        "timeout_warning_sent": bool(old_state.get("timeout_warning_sent", False)),
     }
 
-    result["topics_covered"] = [
+    # topics_covered: union when LLM provides entries; preserve prior when empty
+    new_topics = [
         t for t in llm_state.get("topics_covered", [])
         if isinstance(t, str) and t in allowed_topic_ids
     ]
+    if new_topics:
+        seen: set = set()
+        merged: list = []
+        for t in list(old_state.get("topics_covered", [])) + new_topics:
+            if t not in seen:
+                seen.add(t)
+                merged.append(t)
+        result["topics_covered"] = merged
+    else:
+        result["topics_covered"] = list(old_state.get("topics_covered", []))
 
+    # mastery: merge new into old when LLM provides entries; preserve prior when empty
     raw_mastery = llm_state.get("mastery", {})
-    result["mastery"] = {}
+    new_mastery: dict[str, int] = {}
     if isinstance(raw_mastery, dict):
         for k, v in raw_mastery.items():
             if isinstance(k, str) and k in allowed_topic_ids:
                 try:
-                    result["mastery"][k] = max(0, min(100, int(v)))
+                    new_mastery[k] = max(0, min(100, int(v)))
                 except (ValueError, TypeError):
                     pass
+    if new_mastery:
+        result["mastery"] = {**old_state.get("mastery", {}), **new_mastery}
+    else:
+        result["mastery"] = dict(old_state.get("mastery", {}))
+
+    # evidence_notes: merge new into old when LLM provides entries; preserve prior when empty
+    raw_evidence = llm_state.get("evidence_notes", {})
+    new_evidence: dict[str, str] = {}
+    if isinstance(raw_evidence, dict):
+        for k, v in raw_evidence.items():
+            if isinstance(k, str) and k in allowed_topic_ids and isinstance(v, str):
+                new_evidence[k] = v
+    if new_evidence:
+        result["evidence_notes"] = {**old_state.get("evidence_notes", {}), **new_evidence}
+    else:
+        result["evidence_notes"] = dict(old_state.get("evidence_notes", {}))
 
     result["turn_count"] = old_state.get("turn_count", 0) + 1
-
-    raw_conf = llm_state.get("confidence", old_state.get("confidence", 0.0))
-    try:
-        conf = float(raw_conf)
-    except (TypeError, ValueError):
-        conf = 0.0
-    result["confidence"] = max(0.0, min(1.0, conf))
 
     return result
 
