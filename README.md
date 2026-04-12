@@ -24,6 +24,7 @@ Then open http://127.0.0.1:8000/.
 | Command | Purpose |
 |---|---|
 | `pixi run dev` | Start dev server with auto-reload |
+| `pixi run stop` | Stop dev server / reload workers |
 | `pixi run test` | Run test suite |
 | `pixi run init-db` | Initialise SQLite database |
 
