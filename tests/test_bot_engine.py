@@ -1,5 +1,8 @@
 """Unit tests for pure helper functions in app/bot_engine.py."""
+import json as j
 import math
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -178,6 +181,12 @@ OLD_STATE = {
     "topics_covered": [],
     "mastery": {},
     "evidence_notes": {},
+    "current_topic_id": None,
+    "assisted_turn_streak": 0,
+    "recent_explanation_attempts": 0,
+    "recent_parroting_streak": 0,
+    "recent_unelaborated_agreement_streak": 0,
+    "current_line_status": "unclear",
     "turn_count": 1,
     "lecture_title": "Lecture 1",
 }
@@ -244,6 +253,12 @@ OLD_STATE_WITH_CONTENT = {
     "topics_covered": ["T1"],
     "mastery": {"T1": 50},
     "evidence_notes": {"T1": "prior note"},
+    "current_topic_id": "T1",
+    "assisted_turn_streak": 1,
+    "recent_explanation_attempts": 1,
+    "recent_parroting_streak": 0,
+    "recent_unelaborated_agreement_streak": 0,
+    "current_line_status": "productive",
     "turn_count": 3,
     "lecture_title": "Lecture 1",
 }
@@ -298,6 +313,116 @@ def test_sanitize_evidence_notes_invalid_keys_dropped():
     llm_state = {"topics_covered": [], "mastery": {}, "evidence_notes": {"T99": "bad", "T1": "ok"}}
     result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
     assert "T99" not in result["evidence_notes"]
+
+
+def test_sanitize_pedagogical_state_fields():
+    llm_state = {
+        "topics_covered": [],
+        "mastery": {},
+        "evidence_notes": {},
+        "current_topic_id": "T2",
+        "assisted_turn_streak": 2,
+        "recent_explanation_attempts": 3,
+        "recent_parroting_streak": 1,
+        "recent_unelaborated_agreement_streak": 2,
+        "current_line_status": "over_scaffolded",
+    }
+    result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
+    assert result["current_topic_id"] == "T2"
+    assert result["assisted_turn_streak"] == 2
+    assert result["recent_explanation_attempts"] == 3
+    assert result["recent_parroting_streak"] == 1
+    assert result["recent_unelaborated_agreement_streak"] == 2
+    assert result["current_line_status"] == "over_scaffolded"
+
+
+def test_sanitize_pedagogical_state_invalid_values_preserve_or_clamp():
+    llm_state = {
+        "topics_covered": [],
+        "mastery": {},
+        "evidence_notes": {},
+        "current_topic_id": "T99",
+        "assisted_turn_streak": -5,
+        "recent_explanation_attempts": 99,
+        "recent_parroting_streak": "bad",
+        "recent_unelaborated_agreement_streak": 4,
+        "current_line_status": "mystery",
+    }
+    result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
+    assert result["current_topic_id"] == "T1"
+    assert result["assisted_turn_streak"] == 0
+    assert result["recent_explanation_attempts"] == 9
+    assert result["recent_parroting_streak"] == 0
+    assert result["recent_unelaborated_agreement_streak"] == 4
+    assert result["current_line_status"] == "productive"
+
+
+def test_classify_message_passes_structured_pedagogical_excerpt(monkeypatch):
+    captured = {}
+
+    def _fake_create(**kwargs):
+        captured["payload"] = j.loads(kwargs["messages"][1]["content"])
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=j.dumps(
+                            {
+                                "top_classification": "content_answer",
+                                "class_probabilities": {
+                                    "content_answer": 0.70,
+                                    "content_question": 0.10,
+                                    "technical_request": 0.10,
+                                    "meta_request": 0.05,
+                                    "off_task": 0.05,
+                                },
+                                "recommended_policy": "provide_content_support",
+                                "policy_confidence": 0.70,
+                                "short_reason": "Weak content attempt after recent support.",
+                            }
+                        )
+                    )
+                )
+            ]
+        )
+
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=_fake_create)))
+    monkeypatch.setattr(bot_engine.openai_, "OpenAI", lambda **_: fake_client)
+
+    settings = SimpleNamespace(
+        classifier_recent_message_window=4,
+        prompt_dir=str(Path(__file__).resolve().parents[1] / "prompts" / "generated"),
+        openai_api_key="test-key",
+        classifier_model="test-model",
+    )
+    state = {
+        "last_top_classification": "content_answer",
+        "last_recommended_policy": "provide_content_support",
+        "last_effective_policy": "provide_content_support",
+        "consecutive_redirects": 0,
+        "consecutive_meta_requests": 0,
+        "consecutive_clarifications": 1,
+        "last_policy_override_reason": None,
+        "assisted_turn_streak": 2,
+        "recent_explanation_attempts": 2,
+        "recent_parroting_streak": 1,
+        "recent_unelaborated_agreement_streak": 1,
+        "current_line_status": "stalled",
+    }
+
+    result = bot_engine._classify_message(
+        settings,
+        "yeah I guess",
+        [{"role": "assistant", "content": "Try saying it in your own words."}],
+        state,
+    )
+
+    assert result.recommended_policy == "provide_content_support"
+    assert captured["payload"]["state"]["assisted_turn_streak"] == 2
+    assert captured["payload"]["state"]["recent_explanation_attempts"] == 2
+    assert captured["payload"]["state"]["recent_parroting_streak"] == 1
+    assert captured["payload"]["state"]["recent_unelaborated_agreement_streak"] == 1
+    assert captured["payload"]["state"]["current_line_status"] == "stalled"
 
 
 # ---------------------------------------------------------------------------

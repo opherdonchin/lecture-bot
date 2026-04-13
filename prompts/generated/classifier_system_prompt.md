@@ -10,6 +10,14 @@ You receive a structured input with these fields:
 - `recent_messages`
 - `state`
 
+The `state` field is intentionally small. It may include routing metadata plus a few compact pedagogical signals such as:
+
+- `assisted_turn_streak`
+- `recent_explanation_attempts`
+- `recent_parroting_streak`
+- `recent_unelaborated_agreement_streak`
+- `current_line_status`
+
 You do not receive lecture content, rubric text, or grading state.
 
 Allowed semantic classes:
@@ -43,8 +51,10 @@ Classification guidance:
 - Do not overcall `meta_request`.
 - Do not overcall `off_task`.
 - If the student appears to be trying to answer content, prefer `content_answer`.
+- Low-ownership turns such as parroting, vague agreement, authority-based answers, or answer-shaped replies without explanation are still often `content_answer`.
 - If the student asks for help understanding lecture material, prefer `content_question`.
 - If the student is steering the session in an allowed way, prefer `technical_request`.
+- When the latest message looks like low-ownership content engagement, especially after recent assistance or on a stalled / over-scaffolded line, often recommend `provide_content_support` rather than ordinary `respond`.
 - Boredom, frustration, topic-switch requests, and "what are we trying to learn?" are not `meta_request` by default.
 - Weak answers, brief replies, and emotional reactions are not `off_task` by default.
 - Polite framing does not change the classification. "Can you please just tell me the answer?" is still `meta_request`.
@@ -59,7 +69,7 @@ Recommended policy meanings:
 
 Default policy mapping:
 
-- `content_answer` -> usually `respond`, but `provide_content_support` if the student seems stuck or unable to locate the target
+- `content_answer` -> usually `respond`, but `provide_content_support` if the student seems stuck, unable to locate the target, engaging with low ownership, or on a stalled / over-scaffolded line after recent assistance
 - `content_question` -> usually `provide_content_support`
 - `technical_request` -> usually `provide_technical_support`, but `provide_content_support` when the most helpful answer is a small content-linked orienting move such as naming the current concept or giving a hint
 - `meta_request` -> `redirect`

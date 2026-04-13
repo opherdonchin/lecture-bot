@@ -51,6 +51,7 @@ _CONTENT_POLICIES: frozenset[str] = frozenset({"respond", "provide_content_suppo
 
 # Matches {identifier} placeholders while leaving {}, {"key": value}, etc. intact.
 _TEMPLATE_VAR_RE = re_.compile(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}')
+_ALLOWED_LINE_STATUSES = {"productive", "stalled", "over_scaffolded", "unclear"}
 
 
 @functools_.lru_cache(maxsize=32)
@@ -116,7 +117,13 @@ def _classify_message(
         last_effective_policy=state.get("last_effective_policy"),
         consecutive_redirects=state.get("consecutive_redirects", 0),
         consecutive_meta_requests=state.get("consecutive_meta_requests", 0),
+        consecutive_clarifications=state.get("consecutive_clarifications", 0),
         last_policy_override_reason=state.get("last_policy_override_reason"),
+        assisted_turn_streak=state.get("assisted_turn_streak", 0),
+        recent_explanation_attempts=state.get("recent_explanation_attempts", 0),
+        recent_parroting_streak=state.get("recent_parroting_streak", 0),
+        recent_unelaborated_agreement_streak=state.get("recent_unelaborated_agreement_streak", 0),
+        current_line_status=state.get("current_line_status"),
     )
     window = recent_messages[-settings.classifier_recent_message_window:]
     classifier_input = ClassifierInput(
@@ -164,6 +171,12 @@ def _build_system_prompt(
         "topics_covered": state.get("topics_covered", []),
         "mastery": state.get("mastery", {}),
         "evidence_notes": state.get("evidence_notes", {}),
+        "current_topic_id": state.get("current_topic_id") or "none",
+        "assisted_turn_streak": state.get("assisted_turn_streak", 0),
+        "recent_explanation_attempts": state.get("recent_explanation_attempts", 0),
+        "recent_parroting_streak": state.get("recent_parroting_streak", 0),
+        "recent_unelaborated_agreement_streak": state.get("recent_unelaborated_agreement_streak", 0),
+        "current_line_status": state.get("current_line_status", "unclear"),
         "recent_messages": _format_messages_for_prompt(recent_messages),
         "turn_count": state.get("turn_count", 0) + 1,
         "lecture_title": state.get("lecture_title", ""),
@@ -408,6 +421,10 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
     - topics_sampled: immutable, taken from old_state
     - lecture_title: immutable, taken from old_state
     - timeout_warning_sent: backend-owned flag preserved from old_state
+    - current_topic_id: replaced only with a valid topic ID or explicit null
+    - assisted_turn_streak / recent_explanation_attempts / recent_parroting_streak /
+      recent_unelaborated_agreement_streak: preserved when absent; clamped to a small non-negative range
+    - current_line_status: preserved when absent; must be one of the allowed status labels
     - topics_covered: union of old + new (new filtered to allowed_topic_ids);
       when new is empty the prior list is preserved unchanged
     - mastery: old merged with new (new values filtered and clamped 0-100);
@@ -421,7 +438,39 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
         "topics_sampled": list(old_state.get("topics_sampled", [])),
         "lecture_title": old_state.get("lecture_title", ""),
         "timeout_warning_sent": bool(old_state.get("timeout_warning_sent", False)),
+        "current_topic_id": old_state.get("current_topic_id"),
+        "assisted_turn_streak": int(old_state.get("assisted_turn_streak", 0)),
+        "recent_explanation_attempts": int(old_state.get("recent_explanation_attempts", 0)),
+        "recent_parroting_streak": int(old_state.get("recent_parroting_streak", 0)),
+        "recent_unelaborated_agreement_streak": int(old_state.get("recent_unelaborated_agreement_streak", 0)),
+        "current_line_status": old_state.get("current_line_status", "unclear"),
     }
+
+    # current_topic_id: allow explicit null to clear the local focus
+    if "current_topic_id" in llm_state:
+        raw_topic = llm_state.get("current_topic_id")
+        if raw_topic is None:
+            result["current_topic_id"] = None
+        elif isinstance(raw_topic, str) and raw_topic in allowed_topic_ids:
+            result["current_topic_id"] = raw_topic
+
+    # small pedagogical counters: preserve prior when absent, clamp when present
+    for field in (
+        "assisted_turn_streak",
+        "recent_explanation_attempts",
+        "recent_parroting_streak",
+        "recent_unelaborated_agreement_streak",
+    ):
+        if field in llm_state:
+            try:
+                result[field] = max(0, min(9, int(llm_state[field])))
+            except (ValueError, TypeError):
+                pass
+
+    # current_line_status: preserve prior unless an allowed label is provided
+    raw_line_status = llm_state.get("current_line_status")
+    if isinstance(raw_line_status, str) and raw_line_status in _ALLOWED_LINE_STATUSES:
+        result["current_line_status"] = raw_line_status
 
     # topics_covered: union when LLM provides entries; preserve prior when empty
     new_topics = [

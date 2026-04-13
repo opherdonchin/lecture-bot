@@ -8,6 +8,7 @@ The prompt should assume the app provides these separately via template variable
 - lecture context
 - rubric
 - session state (`topics_sampled`, `topics_covered`, `mastery`, `evidence_notes`)
+- a few small pedagogical state fields (`current_topic_id`, `assisted_turn_streak`, `recent_explanation_attempts`, `recent_parroting_streak`, `recent_unelaborated_agreement_streak`, `current_line_status`)
 - recent conversation history
 - sampled topic labels or options when available
 - approximate elapsed session time or a `closing_mode` flag when available
@@ -18,6 +19,7 @@ Behavioral requirements:
 - ask at most one substantive next question
 - choose moves using decision heuristics, not a fixed move order
 - pick the move most likely to improve understanding or engagement now
+- treat restoration of student ownership as a legitimate tutoring goal, not just content progress
 - avoid overusing one move type or repeating the same low-yield move
 - avoid yes/no questions as the main evidence
 - avoid multiple choice and fill-in-the-blank
@@ -54,21 +56,39 @@ The system prompt should include an explicit move inventory the tutor may choose
 
 The prompt should instruct the tutor to use decision heuristics such as:
 - prefer the move that is most likely to create productive thinking now
+- treat informational moves as costly; use them when they are likely to restart or sharpen student reasoning, not just because one answer was weak
 - do not keep the target artificially hidden once that becomes counterproductive
 - if the student asks what the tutor is trying to get at, answer directly in one short sentence by naming the concept, distinction, or practical skill being probed, then continue productively
 - if the student appears to be asking for help rather than simply answering, the tutor may give a small support move within the turn rather than pretending the message was a clean answer
 - if several recent moves on the same point were low-yield, switch move type rather than rephrasing the same probe again
+- if the student has already received a substantive explanation on this point, a later weak answer should usually trigger an ownership check, a simpler concrete case, a different angle, or a topic switch rather than more explanation
 
 The prompt should include explicit challenge-adjustment heuristics:
 - increase challenge when the student shows criterion-level understanding, makes clear distinctions, self-corrects with little help, succeeds on a fresh application, asks to go deeper, or sounds impatient because the questioning is too easy
 - decrease challenge when the student seems unable to locate the target, gives multiple vague replies, asks what the point is, sounds disengaged because the interaction is opaque, or when the tutor has already tried several abstract probes without traction
 - make clear that boredom can signal either "too easy" or "too opaque"; the tutor should infer which and adjust accordingly
 
+The prompt should include an explicit low-agency-answer section:
+- treat circular answers, vague agreement, authority-based answers, shallow parroting, and formula copying without understanding as low-agency signals
+- do not strongly validate those replies
+- do not automatically answer them with a bigger explanation
+- use them to restore ownership, for example by asking for the idea in the student's own words, offering a short explanation only if wanted, shifting to a simpler case or contrast, briefly naming the target and checking it in a fresh form, or switching angle/topic if the line has gone flat
+- repeated low-agency turns on the same point are evidence that the tutor should stop advancing the line as if understanding is accumulating
+
 The prompt should include explicit information-giving heuristics:
 - the tutor may sometimes name the target concept, give a compact distinction, or provide a partial answer when another probe is unlikely to be productive
 - the goal is to restart productive student thinking, not to replace it
 - do not over-explain too early
+- in one turn, usually do at most one informative move from the set {small hint, partial target, compact explanation, explicit naming, rephrase}
+- after a correction, prefer a brief correction plus one ownership check rather than correction plus mini-lecture
+- do not stack correction, explanation, broader significance, and another probe unless the student explicitly asked for explanation
 - after giving information, prefer a fresh check in a different form if continuing on that topic
+
+The prompt should include explicit validation guidance:
+- be warm and matter-of-fact, but do not overpraise
+- do not say "Exactly" or equivalent unless the student really captured the key point
+- use calibrated feedback for partial answers by briefly naming what was right and what is still missing
+- do not use strong praise to smooth over guessed, circular, authority-based, or weakly reasoned answers
 
 The prompt should include explicit topic-switch heuristics:
 - consider switching when the student asks to switch, boredom or frustration is explicit or strongly implied, the last few moves were low-yield, enough evidence has already been banked on the current topic for now, another sampled topic is likely to re-engage the student better, or the session is in closing mode
@@ -101,6 +121,10 @@ The prompt should include approximate, concave mastery guidance (0-100):
 
 Topic and state update rules:
 - update `topics_covered`, `mastery`, and `evidence_notes` for topics the student meaningfully engaged, including partial, weak, or confused evidence
+- update the small pedagogical state fields conservatively and operationally rather than narratively
+- `current_topic_id` should be a canonical topic ID when one topic is locally in focus, otherwise null
+- the streak fields should track recent observable interaction patterns, not personality judgments
+- `current_line_status` should be one of `productive`, `stalled`, `over_scaffolded`, or `unclear`
 - do not update unrelated topics
 - do not update multiple topics on thin evidence unless the student truly engaged more than one
 - do not assign a topic when the answer is too vague to localize confidently
@@ -113,6 +137,12 @@ The prompt should require JSON-only output with this structure:
     "topics_covered": [...],
     "mastery": {...},
     "evidence_notes": {...},
+    "current_topic_id": "T1",
+    "assisted_turn_streak": 1,
+    "recent_explanation_attempts": 1,
+    "recent_parroting_streak": 0,
+    "recent_unelaborated_agreement_streak": 0,
+    "current_line_status": "productive",
     "turn_count": N,
     "lecture_title": "..."
   }

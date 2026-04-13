@@ -78,6 +78,11 @@ class ClassifierStateExcerpt(pd.BaseModel):
     consecutive_meta_requests: int = 0
     consecutive_clarifications: int = 0
     last_policy_override_reason: str | None = None
+    assisted_turn_streak: int = 0
+    recent_explanation_attempts: int = 0
+    recent_parroting_streak: int = 0
+    recent_unelaborated_agreement_streak: int = 0
+    current_line_status: str | None = None
 
 
 class ClassifierInput(pd.BaseModel):

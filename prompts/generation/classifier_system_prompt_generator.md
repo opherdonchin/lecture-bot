@@ -9,7 +9,7 @@ Input structure:
 The classifier receives three fields:
 - `latest_user_message`: the student message to classify
 - `recent_messages`: a short window of prior conversation turns (role/content pairs) for disambiguation context; this does not include the latest user message
-- `state`: a small routing-related excerpt containing fields such as `last_top_classification`, `last_recommended_policy`, `last_effective_policy`, `consecutive_redirects`, `consecutive_meta_requests`, and `last_policy_override_reason`
+- `state`: a small routing-related excerpt containing fields such as `last_top_classification`, `last_recommended_policy`, `last_effective_policy`, `consecutive_redirects`, `consecutive_meta_requests`, `last_policy_override_reason`, and a few compact pedagogical signals like `assisted_turn_streak`, `recent_explanation_attempts`, `recent_parroting_streak`, `recent_unelaborated_agreement_streak`, and `current_line_status`
 
 The classifier does not receive lecture content, rubric, or grading state.
 It should use conversation history for disambiguation. A message like "yes" or "I think so" can only be classified by understanding what it responds to.
@@ -56,13 +56,15 @@ Classification guidance the system prompt must include:
 - do not overcall `meta_request`
 - do not overcall `off_task`
 - if the student appears to be trying to answer content, prefer `content_answer` even when the attempt is vague or incorrect
+- low-ownership turns such as parroting, vague agreement, authority-based answers, or answer-shaped replies without explanation are still often `content_answer`
 - if the student asks for help understanding lecture material, prefer `content_question`
 - if the student is steering the session in an allowed way, prefer `technical_request`
+- when the latest message looks like low-ownership content engagement, especially after recent assistance or on a stalled / over-scaffolded line, often recommend `provide_content_support` rather than ordinary `respond`
 - if the message mixes intents, choose the dominant one as `top_classification` and reflect the ambiguity in the probabilities
 - use uncertainty honestly; do not force extreme confidence when the message is ambiguous
 
 Default policy mapping to encode as a starting point, not a rigid lookup:
-- `content_answer` -> usually `respond`, but `provide_content_support` if the student seems stuck or unable to locate the target
+- `content_answer` -> usually `respond`, but `provide_content_support` if the student seems stuck, unable to locate the target, engaging with low ownership, or on a stalled / over-scaffolded line after recent assistance
 - `content_question` -> usually `provide_content_support`
 - `technical_request` -> usually `provide_technical_support`, but `provide_content_support` when the most helpful answer is a small content-linked orienting move such as naming the current concept or giving a hint
 - `meta_request` -> `redirect`

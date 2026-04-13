@@ -18,6 +18,12 @@ def build_initial_state(lecture_package: dict, topics_sampled: list) -> dict:
         "turn_count": 0,
         "lecture_title": lecture_package["config"].get("title", lecture_package["lecture_id"]),
         "timeout_warning_sent": False,
+        "current_topic_id": None,
+        "assisted_turn_streak": 0,
+        "recent_explanation_attempts": 0,
+        "recent_parroting_streak": 0,
+        "recent_unelaborated_agreement_streak": 0,
+        "current_line_status": "unclear",
         # routing state
         "last_top_classification": None,
         "last_recommended_policy": None,
