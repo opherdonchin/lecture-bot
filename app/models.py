@@ -48,3 +48,39 @@ class GradeEventModel(db_module.Base):
     grade: sqlalchemy_orm.Mapped[float] = sqlalchemy_orm.mapped_column(sa.Float)
     timestamp: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)
     payload_json: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+
+
+class ClassificationLogModel(db_module.Base):
+    __tablename__ = "classification_logs"
+
+    id: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    session_id: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.ForeignKey("sessions.session_id"), index=True)
+    message_id: sqlalchemy_orm.Mapped[int | None] = sqlalchemy_orm.mapped_column(sa.Integer, nullable=True)
+    turn_index: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer)
+    classifier_json: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    policy_decision_json: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    timestamp: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)
+
+
+class DialogueTurnAuditModel(db_module.Base):
+    __tablename__ = "dialogue_turn_audits"
+
+    id: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    session_id: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.ForeignKey("sessions.session_id"), index=True)
+    turn_index: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer, index=True)
+    effective_policy: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(64))
+    prompt_template_name: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(128))
+    dialogue_model: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(128))
+    tutor_mode: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(64), default="content_answer")
+    action_hint_json: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text, default="{}")
+    challenge_level: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer, default=1)
+    current_topic_id: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.String(64), nullable=True)
+    target_topic_id: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.String(64), nullable=True)
+    ended_with_content_question: sqlalchemy_orm.Mapped[bool] = sqlalchemy_orm.mapped_column(sa.Boolean, default=False)
+    repetition_complaint: sqlalchemy_orm.Mapped[bool] = sqlalchemy_orm.mapped_column(sa.Boolean, default=False)
+    switched_topics: sqlalchemy_orm.Mapped[bool] = sqlalchemy_orm.mapped_column(sa.Boolean, default=False)
+    state_before_json: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    recent_messages_json: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    user_message: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    rendered_system_prompt: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    timestamp: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)

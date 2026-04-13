@@ -59,6 +59,11 @@ input, select, button {
   margin: 6px 0;
   padding: 6px 8px;
   border-radius: 6px;
+  line-height: 1.4;
+}
+
+.msg span {
+  white-space: pre-wrap;
 }
 
 .msg.user {

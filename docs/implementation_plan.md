@@ -25,7 +25,7 @@ Also fold in the missing timeout check while touching `main.py`, since the spec 
 This version makes the following changes explicit:
 
 1. `topics_sampled` is created once at `start_session` by backend code and is immutable thereafter.
-2. Topic grading is done per touched topic on a 0–100 scale; Python converts those topic scores into the student-facing weighted grade.
+2. Topic grading is done per touched topic on a 0-100 scale; Python converts those topic scores into the student-facing weighted grade.
 3. The weighted grade is computed in Python, never trusted from the model.
 4. The stored `current_grade` means **best demonstrated grade so far**, not merely the latest estimate.
 5. Explanations and reports must be based on the grading payload associated with the accepted best grade, not on a lower later attempt.
@@ -33,6 +33,9 @@ This version makes the following changes explicit:
 7. Topic identifiers are canonical backend-defined IDs, not model-invented strings.
 8. Context size is bounded deterministically.
 9. OpenAI API failures are handled explicitly, not only malformed JSON.
+10. The top-level weighted-best-5 grade formula stays fixed at `55 / 25 / 13 / 4 / 3`.
+11. Within-topic mastery semantics become faster early and slower late, as described in `docs/policy_routing_spec.md` and `docs/session_calibration.md`.
+12. Dialogue behavior is guided by heuristics and a move inventory rather than a rigid move ladder.
 
 ---
 
@@ -67,7 +70,11 @@ This is a small cleanup, not a redesign.
 `app/bot_engine.py` should expose these public functions:
 
 ```python
-def build_opening_message(lecture_package: dict) -> str: ...
+def build_opening_message(
+    *,
+    lecture_package: dict,
+    sampled_topic_ids: list[str],
+) -> str: ...
 
 def generate_reply(
     *,
@@ -75,6 +82,8 @@ def generate_reply(
     recent_messages: list[dict],
     state: dict,
     user_message: str,
+    session_elapsed_minutes: float,
+    closing_mode: bool,
 ) -> tuple[str, dict]: ...
 
 def generate_topic_scores(
@@ -105,6 +114,7 @@ def build_dialogue_context(lecture_package: dict, max_chars: int) -> str: ...
 def compute_weighted_grade(topic_scores: list[dict]) -> int: ...
 def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: set[str]) -> dict: ...
 def serialize_messages(rows) -> list[dict]: ...
+def is_closing_mode(session_elapsed_minutes: float, threshold_minutes: int = 25) -> bool: ...
 ```
 
 Grading math belongs in `bot_engine.py` as a pure helper, because it is part of the bot contract but should remain testable and database-free.
@@ -122,7 +132,7 @@ Each parsed topic definition should include at least:
 ```python
 {
     "topic_id": "T1",
-    "label": "Reality–Data–Model distinction",
+    "label": "Reality-Data-Model distinction",
     "importance": "core",
 }
 ```
@@ -142,7 +152,7 @@ Sampling should be deterministic per session, for example by seeding from `sessi
 
 ### 5.3 Meaning of `topics_sampled`
 
-`topics_sampled` means “preferred focus topics for this session,” not “the only topics that can ever appear.”
+`topics_sampled` means "preferred focus topics for this session," not "the only topics that can ever appear."
 
 The dialogue engine should preferentially guide toward these topics.
 Grading should score the topics actually touched, not pretend to score untouched topics.
@@ -166,20 +176,34 @@ State shape:
     "T1": 60,
     "T4": 35
   },
+  "evidence_notes": {
+    "T1": "stated criterion but not yet verified with transfer",
+    "T4": "vague label only"
+  },
   "turn_count": 2,
-  "confidence": 0.35,
   "lecture_title": "Lecture 1: Probabilities"
 }
 ```
 
+> **Note (step-1 migration):** The `confidence` field has been removed.
+> See `docs/policy_routing_spec.md` for the updated state contract, mastery scale, and evidence_notes.
+
 ### Meaning of fields
 
 * `topics_sampled`: immutable backend-selected focus topics
-* `topics_covered`: topics touched so far in conversation
-* `mastery`: provisional per-topic 0–100 hints, keyed by canonical topic ID
+* `topics_covered`: topics the student meaningfully engaged (including partial or confused evidence)
+* `mastery`: provisional per-topic 0-100 scores, keyed by canonical topic ID (see mastery scale in policy_routing_spec.md)
+* `evidence_notes`: per-topic brief internal tags summarizing the strongest evidence seen so far
 * `turn_count`: integer
-* `confidence`: float 0.0–1.0, optional and coarse
 * `lecture_title`: string
+
+Backend-owned prompt context should also include:
+
+* sampled topic labels, not just topic IDs
+* approximate elapsed session minutes
+* a `closing_mode` flag once the session is nearing a natural finish
+
+These are prompt inputs, not model-owned state fields.
 
 ### Validation rules
 
@@ -188,10 +212,16 @@ The backend sanitizes any model-returned state:
 * `topics_sampled` must remain unchanged
 * `topics_covered` must be a subset of known topic IDs
 * `mastery` keys must be known topic IDs
-* `mastery` values must be integers 0–100
+* `mastery` values must be integers 0-100
 * `turn_count` must become `old_turn_count + 1`
-* `confidence` is clamped into 0.0–1.0
+* `evidence_notes` keys must be known topic IDs; values must be strings
 * unknown top-level keys are dropped
+
+### Merge semantics for non-content turns
+
+When the LLM returns empty content-assessment fields (`topics_covered: []`, `mastery: {}`, `evidence_notes: {}`), the backend must preserve the prior state for those fields rather than replacing them with empty values. When the LLM returns non-empty content fields, the backend merges: union for `topics_covered`, key-level update for `mastery` and `evidence_notes`.
+
+> **Note (step-1 migration):** `sanitize_state_update` currently replaces rather than merges, and does not handle `evidence_notes` at all. Both must be fixed during code integration.
 
 The session state is not the source of truth for final grading. It is a running interaction scaffold only.
 
@@ -207,6 +237,9 @@ recent_message_limit: int = 10
 max_dialogue_context_chars: int = 120000
 max_grading_context_chars: int = 180000
 sampled_topic_count: int = 5
+opening_topic_choice_count: int = 3
+closing_mode_minutes: int = 25
+target_session_finish_minutes: int = 30
 ```
 
 The model should be configurable through settings, but there should still be a concrete default in code.
@@ -226,6 +259,8 @@ Dialogue should receive:
 * current state
 * recent messages
 * current user message
+* sampled topic labels
+* approximate elapsed session minutes / `closing_mode`
 
 ### 8.2 Grading and report context
 
@@ -261,6 +296,56 @@ No hidden summarization step is introduced in v1.
 
 ## 9. Dialogue path
 
+The dialogue path should preserve the fixed top-level grade formula while making the tutor more flexible and engaging inside a topic.
+
+### 9.0 Dialogue behavior requirements
+
+The tutoring prompt stack should use decision heuristics rather than a fixed move sequence.
+
+At a minimum, the tutor should be able to choose among moves such as:
+
+* open probe
+* narrowing question
+* contrastive question
+* request for example
+* request for counterexample or near-miss
+* request for practical interpretation
+* request for transfer or application
+* ask the student to diagnose an earlier mistake
+* ask the student to compare two plausible claims
+* ask for a one-sentence takeaway
+* small hint
+* partial target or partial answer
+* compact explanation
+* explicit naming of the target concept
+* rephrase in plainer language
+* offer a choice of topics
+* topic switch
+* challenge increase
+* challenge decrease
+* short recap before a fresh check
+* closing or wrap-up move
+
+The bot engine should avoid overusing one move type or repeating low-yield moves.
+
+Challenge-adjustment heuristics should be explicit:
+
+* increase challenge when the student shows criterion-level understanding, makes sharp distinctions, self-corrects, succeeds on a fresh application, asks to go deeper, or signals that the questioning is too easy
+* decrease challenge when the student cannot locate the target, gives several vague replies, asks what the tutor is trying to get at, seems disengaged because the interaction is opaque, or when recent moves have been low-yield
+* treat boredom as ambiguous: it can mean "too easy" or "too opaque"
+
+Information-giving heuristics should also be explicit:
+
+* the tutor may sometimes name the target concept, give a compact distinction, or provide a partial answer when another probe is unlikely to help
+* the goal is to restart productive thinking, not to dump the answer
+* after giving information, prefer a fresh check in a different form when staying on the topic
+
+Topic-switch heuristics should also be explicit:
+
+* consider switching when the student asks to switch, boredom or frustration is explicit or strongly implied, recent moves were low-yield, enough evidence has already been banked on the current topic, another sampled topic is likely to re-engage the student better, or the session is in closing mode
+* staying is often better when the student is making real progress or one qualitatively different move is still likely to work
+* switching does not erase already banked evidence
+
 ## 9.1 Prompt contract
 
 The dialogue call must return JSON only:
@@ -271,8 +356,8 @@ The dialogue call must return JSON only:
   "updated_state": {
     "topics_covered": ["T1", "T4"],
     "mastery": {"T1": 60, "T4": 35},
+    "evidence_notes": {"T1": "criterion stated", "T4": "vague label only"},
     "turn_count": 2,
-    "confidence": 0.35,
     "lecture_title": "Lecture 1: Probabilities"
   }
 }
@@ -284,8 +369,18 @@ The prompt must explicitly instruct the model:
 * do not invent new topic IDs
 * keep the reply short
 * ask at most one next question
-* update only touched topics
+* update topics_covered, mastery, and evidence_notes for meaningfully engaged topics
+* do not update multiple topics on thin evidence
+* answer "what are you trying to get at?" directly in one short sentence when asked, then continue productively
+* allow topic switching, pace adjustment, and other allowed session-steering requests to change tutor behavior
+* use decision heuristics rather than a rigid move ladder
 * return JSON only
+
+The prompt should also receive enough context to support:
+
+* a brief opening choice among 2-3 sampled lecture topics
+* direct handling of allowed session-steering requests
+* closing mode after about 25 minutes
 
 ### 9.2 Fallback dialogue behavior
 
@@ -295,9 +390,11 @@ If the OpenAI call fails or the JSON is malformed:
 * preserve the previous state otherwise
 * return a generic fallback such as:
 
-  * “I’m having trouble updating the tutoring state cleanly. Let’s keep going with one focused question: what idea from this lecture seems most important to you, and why?”
+  * "I'm having trouble updating the tutoring state cleanly. Let's keep going with one focused question: what idea from this lecture seems most important to you, and why?"
 
 This must not be lecture-specific.
+
+The fallback should still sound conversational rather than like a hard reset.
 
 ---
 
@@ -306,9 +403,12 @@ This must not be lecture-specific.
 ## 10.1 Grading philosophy
 
 The model grades only the topics that have been touched or evidenced in the conversation.
-For each touched topic, it returns a 0–100 mastery score based on the rubric and a short rationale.
+For each touched topic, it returns a 0-100 mastery score based on the rubric and a short rationale.
 
 Python then converts those touched-topic scores into the student-facing weighted grade.
+
+The fixed weighting stays `55 / 25 / 13 / 4 / 3`.
+Only the within-topic calibration changes in this pass.
 
 This means:
 
@@ -390,6 +490,12 @@ This makes `current_grade` monotone non-decreasing across the session.
 
 The report prompt should see all of that.
 
+The report text should naturally mention:
+
+* the student's strongest topic so far
+* the next best topic to improve
+* whether the student would likely benefit more from deepening covered topics or moving to uncovered ones
+
 If the current request produced a lower candidate grade than the stored best grade, the report should still use the stored accepted grading payload rather than the lower candidate payload.
 
 ## 11.2 Report output schema
@@ -453,7 +559,7 @@ New flow:
 3. parse rubric topics
 4. sample session topics deterministically using `session_id`
 5. create initial state with `topics_sampled` populated
-6. generate opening message
+6. generate an opening message that briefly offers 2-3 sampled topics and invites the student to choose
 7. persist opening message
 8. commit
 
@@ -466,11 +572,13 @@ New flow:
 3. load state
 4. reload lecture package
 5. fetch recent messages in chronological order using configured limit
-6. call `generate_reply(...)`
-7. append user message
-8. append assistant message
-9. save sanitized state
-10. commit
+6. compute approximate elapsed session minutes and `closing_mode`
+7. call `generate_reply(...)`
+8. allow the tutor to adapt to session-steering requests such as hint requests, pace changes, and topic switches
+9. append user message
+10. append assistant message
+11. save sanitized state
+12. commit
 
 ## 12.3 `/get_grade`
 
@@ -560,6 +668,7 @@ Add tests that verify:
 * `topics_sampled` is populated at session start
 * `topics_sampled` contains canonical topic IDs
 * `topics_sampled` is deterministic for the session
+* the opening message offers 2-3 sampled topics rather than a generic broad opener
 
 ### 15.2 `/send_message`
 
@@ -569,6 +678,7 @@ Monkeypatch `bot_engine.generate_reply()` and assert:
 * user and assistant messages persist
 * sanitized state persists
 * timeout is enforced
+* approximate elapsed time / `closing_mode` is passed into the reply path
 
 ### 15.3 `/get_grade`
 
@@ -589,6 +699,7 @@ Monkeypatch `generate_topic_scores()` and `generate_report()` and assert:
 * `report_json.final_grade` matches persisted `current_grade`
 * if a lower candidate is produced later, the report still uses the previously accepted higher-grade payload
 * a `report` event is inserted
+* the report text guidance includes strongest topic, next best topic to improve, and whether to deepen covered topics or move to uncovered ones
 
 ### 15.5 Unit tests
 
@@ -598,6 +709,7 @@ Add pure tests for:
 * deterministic topic sampling
 * weighted grade computation
 * state sanitization
+* closing-mode threshold logic
 
 ---
 
@@ -649,6 +761,9 @@ Do not:
 * store full lecture text in session state
 * hardcode lecture-specific fallback questions
 * leave grading/report calls able to disagree within a single request
+* reintroduce a rigid tutoring move ladder
+* treat topic number as an input to within-topic scoring
+* add a punitive hard stop at 25 or 30 minutes
 
 ---
 
@@ -658,10 +773,13 @@ The implementation is successful when:
 
 * `topics_sampled` is initialized at session start and remains stable
 * `/send_message` uses a real OpenAI call and returns short pedagogical replies
+* the opening message offers a natural topic choice among sampled topics
+* the tutoring prompts use heuristics rather than a rigid move ladder
 * `/get_grade` returns a real grade derived from Python weighting over per-topic mastery scores
 * the stored `current_grade` behaves as best demonstrated grade so far and never decreases
 * explanations and reports stay aligned with the authoritative accepted grading payload
 * `/generate_report` returns a coherent report using the same authoritative grading result it reports
+* closing mode begins softly around 25 minutes and still counts the student's final message
 * timeout is enforced
 * OpenAI failures do not crash the app
 * tests pass without calling the real API

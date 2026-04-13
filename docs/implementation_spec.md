@@ -30,6 +30,8 @@ All implementation should follow this specification.
   - Generate final report
   - Restart session
 - Avoid quiz-style UI elements.
+- Keep the interaction conversational.
+- Do not add progress bars or other rigid progress UI in this pass.
 
 ### Persistence conventions
 - Store sessions, messages, session state, and optional grade events in SQLite.
@@ -51,8 +53,11 @@ All implementation should follow this specification.
   - 4
   - 3
 - Grade is the sum of the best demonstrated five topic scores, rounded down.
+- Do not redesign this formula in this pass.
+- Recalibrate within-topic mastery semantics separately from the top-level weighting.
 - The stored grade field is the current grade.
 - Grade/report requests may be logged as grade events.
+- Within-topic mastery calibration should follow `docs/policy_routing_spec.md` and `docs/session_calibration.md`.
 
 ### Lecture package conventions
 Each lecture package should ultimately contain:
@@ -118,6 +123,7 @@ Behavior:
 * Create session
 * Initialize state
 * Sample rubric topics
+* Open with a brief conversational choice among 2-3 sampled lecture topics
 
 ---
 
@@ -149,6 +155,7 @@ Behavior:
 * Append message
 * Run bot engine
 * Update state
+* Enter a soft closing mode after about 25 minutes, without abruptly ending the session
 
 ---
 
@@ -169,6 +176,7 @@ Returns:
 ```
 
 Uses dedicated grading prompt.
+The grade explanation should briefly identify the strongest topic so far and the next most promising improvement area when the grading payload supports it.
 
 ---
 
@@ -189,6 +197,11 @@ Returns:
 ```
 
 Uses dedicated grading/report prompt.
+The report text should explicitly mention:
+
+* the student's strongest topic so far
+* the next best topic to improve
+* whether the student would likely benefit more from deepening covered topics or moving to uncovered ones
 
 ---
 
@@ -208,10 +221,15 @@ Stored per session:
   "topics_sampled": [],
   "topics_covered": [],
   "mastery": {},
-  "turn_count": 0,
-  "confidence": 0.0
+  "evidence_notes": {},
+  "turn_count": 0
 }
 ```
+
+> **Note (step-1 migration):** The `confidence` field from the original design has been removed.
+> Confidence is now expressed through the mastery score itself (see `docs/policy_routing_spec.md`).
+> A new `evidence_notes` field (per-topic string tags) has been added.
+> Backend-owned prompt context may also include sampled topic labels, approximate elapsed session time, and a `closing_mode` flag. Those are prompt inputs rather than model-owned state fields.
 
 ---
 
@@ -242,6 +260,7 @@ Rules:
 * lecture content (full)
 * session state
 * recent messages
+* backend-owned prompt context such as sampled topic labels and approximate elapsed time / `closing_mode`
 
 ### Output
 
@@ -257,7 +276,13 @@ Responsibilities:
 * Ask next question
 * Evaluate answer
 * Update mastery
+* Choose the next tutoring move heuristically rather than by a rigid ladder
+* Adjust challenge up or down when the student's signals warrant it
+* Give compact orienting information when repeated probing would be low-yield
 * Move topic if needed
+* Offer topic choices naturally when opening or re-engaging
+* Shift into conversational closing mode after about 25 minutes
+* Count the student's final message toward grading/reporting
 
 ---
 
@@ -301,6 +326,10 @@ Responsibilities:
 * No resume
 * Text-only
 * Full rubric each turn
+* Keep the interaction conversational
+* Do not add UI buttons beyond the existing minimal control set in this pass
+* Do not add progress bars
+* Do not treat topic number as an input to within-topic scoring
 
 ---
 
