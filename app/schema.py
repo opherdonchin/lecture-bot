@@ -78,19 +78,15 @@ class ClassifierStateExcerpt(pd.BaseModel):
     consecutive_meta_requests: int = 0
     consecutive_clarifications: int = 0
     last_policy_override_reason: str | None = None
-    assisted_turn_streak: int = 0
-    recent_explanation_attempts: int = 0
-    recent_parroting_streak: int = 0
-    recent_unelaborated_agreement_streak: int = 0
+    current_topic_id: str | None = None
     current_line_status: str | None = None
-    student_goal_now: str = ""
-    interaction_state: str = ""
-    current_line: str = ""
-    what_student_has_shown: str = ""
-    what_remains_uncertain: str = ""
-    why_continue_or_switch: str = ""
-    do_not_repeat: list[str] = pd.Field(default_factory=list)
-    best_next_move: str = ""
+    last_challenge_level: int = 1
+    last_action: str | None = None
+    last_target_topic_id: str | None = None
+    last_reason_code: str | None = None
+    last_repetition_complaint: bool = False
+    must_not_repeat: list[str] = pd.Field(default_factory=list)
+    lecture_native_only: bool = True
 
 
 class ClassifierInput(pd.BaseModel):

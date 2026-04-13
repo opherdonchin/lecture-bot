@@ -39,22 +39,62 @@ _FALLBACK_DIALOGUE_MESSAGE = (
 # ---------------------------------------------------------------------------
 
 _POLICY_TO_PROMPT: dict[str, str] = {
-    "respond": "respond_prompt.md",
-    "provide_content_support": "provide_content_support_prompt.md",
-    "provide_technical_support": "provide_technical_support_prompt.md",
+    "respond": "tutor_prompt.md",
+    "provide_content_support": "tutor_prompt.md",
+    "provide_technical_support": "tutor_prompt.md",
     "redirect": "redirect_prompt.md",
-    "seek_clarification": "clarification_prompt.md",
+    "seek_clarification": "tutor_prompt.md",
 }
 
 # These policies receive lecture content and rubric text in their prompts.
-_CONTENT_POLICIES: frozenset[str] = frozenset({"respond", "provide_content_support", "seek_clarification"})
+_CONTENT_POLICIES: frozenset[str] = frozenset({"respond", "provide_content_support", "provide_technical_support", "seek_clarification"})
 
 # Matches {identifier} placeholders while leaving {}, {"key": value}, etc. intact.
 _TEMPLATE_VAR_RE = re_.compile(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}')
-_ALLOWED_LINE_STATUSES = {"productive", "stalled", "over_scaffolded", "unclear"}
-_MAX_SYNOPSIS_TEXT_LEN = 240
-_MAX_DO_NOT_REPEAT_ITEMS = 4
-_MAX_DO_NOT_REPEAT_ITEM_LEN = 120
+_ALLOWED_LINE_STATUSES = {"productive", "low_yield", "needs_repair", "ready_to_wrap", "unclear"}
+_MAX_MUST_NOT_REPEAT_ITEMS = 4
+_MAX_MUST_NOT_REPEAT_ITEM_LEN = 120
+_CHALLENGE_LABELS = {
+    1: "recognition / naming",
+    2: "criterion / definition",
+    3: "distinction / contrast",
+    4: "explanation / why",
+    5: "application / transfer",
+    6: "practical interpretation",
+    7: "independent correction / critique",
+}
+_MOVE_NARRATION_PATTERNS = [
+    re_.compile(r"\bthe next move is\b", re_.IGNORECASE),
+    re_.compile(r"\bthe next step is\b", re_.IGNORECASE),
+    re_.compile(r"\bthe most useful next step is\b", re_.IGNORECASE),
+    re_.compile(r"\bthe clean next move (?:is|would be)\b", re_.IGNORECASE),
+    re_.compile(r"\bthe most useful question\b", re_.IGNORECASE),
+    re_.compile(r"\bif you want[,]?\s+i can\b", re_.IGNORECASE),
+    re_.compile(r"\bwe can use\b", re_.IGNORECASE),
+]
+_PROCEDURAL_QUESTION_PATTERNS = [
+    re_.compile(r"\bwould you like\b", re_.IGNORECASE),
+    re_.compile(r"\bdo you want\b", re_.IGNORECASE),
+    re_.compile(r"\bready for\b", re_.IGNORECASE),
+    re_.compile(r"\bswitch topics\b", re_.IGNORECASE),
+    re_.compile(r"\bmove on\b", re_.IGNORECASE),
+]
+_SOURCE_BOUNDED_REPLACEMENTS = {
+    "posterior kernel": "prior × likelihood before normalization",
+    "unnormalized posterior": "prior × likelihood before normalization",
+    "normalizing constant": "evidence",
+}
+_REPETITION_COMPLAINT_RE = re_.compile(
+    r"(repeating yourself|same question|not again|what (?:exactly )?was missing|what was missing|already said|asked .* again)",
+    re_.IGNORECASE,
+)
+_REQUEST_HARDER_RE = re_.compile(r"(harder|get me points|most likely to improve my grade|most useful question|too easy|high[- ]value)", re_.IGNORECASE)
+_REQUEST_SWITCH_RE = re_.compile(r"\b(switch topics|switch topic|move on|different topic|fresh topic|other topics?)\b", re_.IGNORECASE)
+_REQUEST_HINT_RE = re_.compile(r"\b(hint|what are you trying to get at|what do you mean|what am i missing)\b", re_.IGNORECASE)
+
+
+def _prompt_template_name_for_policy(effective_policy: str) -> str:
+    return _POLICY_TO_PROMPT[effective_policy]
 
 
 @functools_.lru_cache(maxsize=32)
@@ -91,14 +131,7 @@ def _format_messages_for_prompt(messages: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _format_synopsis_text(value: object) -> str:
-    if not isinstance(value, str):
-        return "none"
-    text = " ".join(value.split()).strip()
-    return text or "none"
-
-
-def _format_do_not_repeat(value: object) -> str:
+def _format_must_not_repeat(value: object) -> str:
     if not isinstance(value, list):
         return "none"
     cleaned = []
@@ -108,6 +141,223 @@ def _format_do_not_repeat(value: object) -> str:
             if text:
                 cleaned.append(text)
     return " | ".join(cleaned) if cleaned else "none"
+
+
+def _sanitize_must_not_repeat(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        text = " ".join(item.split()).strip()[:_MAX_MUST_NOT_REPEAT_ITEM_LEN]
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        cleaned.append(text)
+        if len(cleaned) >= _MAX_MUST_NOT_REPEAT_ITEMS:
+            break
+    return cleaned
+
+
+def _challenge_label(level: int) -> str:
+    return _CHALLENGE_LABELS.get(level, _CHALLENGE_LABELS[3])
+
+
+def _clamp_challenge_level(value: object, default: int = 3) -> int:
+    try:
+        level = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(7, level))
+
+
+def _topic_importance_bonus(topic_id: str, topic_defs: list[dict]) -> int:
+    for topic in topic_defs:
+        if topic["topic_id"] != topic_id:
+            continue
+        importance = topic.get("importance", "unknown")
+        if importance == "core":
+            return 2
+        if importance == "important":
+            return 1
+    return 0
+
+
+def _student_turn_flags(user_message: str, recent_messages: list[dict]) -> dict[str, bool]:
+    text = user_message.lower()
+    last_assistant = ""
+    for message in reversed(recent_messages):
+        if message["role"] == "assistant":
+            last_assistant = message["content"].lower()
+            break
+    return {
+        "requested_switch": bool(_REQUEST_SWITCH_RE.search(text)),
+        "requested_harder": bool(_REQUEST_HARDER_RE.search(text)),
+        "requested_hint": bool(_REQUEST_HINT_RE.search(text)),
+        "repetition_complaint": bool(_REPETITION_COMPLAINT_RE.search(text)),
+        "explicitly_procedural_only": "just answer the procedural part" in text or "purely procedural" in text,
+        "offered_options_recently": "which would you like" in last_assistant or "a few good places to start" in last_assistant,
+    }
+
+
+def _pick_switch_target(
+    state: dict,
+    topic_defs: list[dict],
+    *,
+    exclude_topic_id: str | None = None,
+) -> str | None:
+    topics_sampled = [topic["topic_id"] for topic in topic_defs if topic["topic_id"] in state.get("topics_sampled", [])]
+    topics_covered = set(state.get("topics_covered", []))
+    mastery = state.get("mastery", {})
+
+    best_topic_id = None
+    best_score = -10**9
+    for topic_id in topics_sampled:
+        if topic_id == exclude_topic_id:
+            continue
+        topic_score = 0
+        if topic_id not in topics_covered:
+            topic_score += 12
+        topic_score += _topic_importance_bonus(topic_id, topic_defs) * 3
+        topic_score += max(0, 6 - int(mastery.get(topic_id, 0) // 20))
+        if topic_score > best_score:
+            best_score = topic_score
+            best_topic_id = topic_id
+    return best_topic_id
+
+
+def _action_base_level(current_mastery: int) -> int:
+    if current_mastery >= 90:
+        return 7
+    if current_mastery >= 75:
+        return 6
+    if current_mastery >= 60:
+        return 5
+    if current_mastery >= 40:
+        return 4
+    if current_mastery >= 20:
+        return 3
+    return 2
+
+
+def _compute_action_hint(
+    state: dict,
+    lecture_package: dict,
+    recent_messages: list[dict],
+    user_message: str,
+) -> dict:
+    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    current_topic_id = state.get("current_topic_id")
+    current_mastery = 0
+    if isinstance(current_topic_id, str):
+        current_mastery = int(state.get("mastery", {}).get(current_topic_id, 0))
+    line_status = state.get("current_line_status", "unclear")
+    flags = _student_turn_flags(user_message, recent_messages)
+    target_topic_id = _pick_switch_target(state, topic_defs, exclude_topic_id=current_topic_id)
+    must_not_repeat = list(state.get("must_not_repeat", []))
+
+    if flags["repetition_complaint"]:
+        must_not_repeat.append("do not ask the same question again")
+    if flags["requested_harder"]:
+        must_not_repeat.append("do not fall back to a recognition-only check")
+    if flags["requested_switch"]:
+        must_not_repeat.append("do not stay on the old topic")
+    if flags["offered_options_recently"]:
+        must_not_repeat.append("do not offer another topic menu")
+    must_not_repeat = _sanitize_must_not_repeat(must_not_repeat)
+
+    recommended_action = "stay"
+    reason_code = "easy_points_available"
+    secondary_reason_code = None
+    chosen_target = current_topic_id or target_topic_id
+
+    if flags["requested_switch"] and target_topic_id:
+        recommended_action = "switch"
+        chosen_target = target_topic_id
+        reason_code = "student_requested_switch"
+    elif flags["repetition_complaint"]:
+        if target_topic_id and (current_mastery >= 60 or line_status in {"low_yield", "needs_repair", "ready_to_wrap"}):
+            recommended_action = "switch"
+            chosen_target = target_topic_id
+            reason_code = "current_line_low_yield"
+            secondary_reason_code = "student_reported_repetition"
+        else:
+            recommended_action = "repair"
+            chosen_target = current_topic_id
+            reason_code = "repair_after_repeat"
+    elif flags["requested_harder"]:
+        if current_topic_id and line_status == "productive":
+            recommended_action = "escalate"
+            chosen_target = current_topic_id
+            reason_code = "student_requested_harder"
+        elif target_topic_id:
+            recommended_action = "switch"
+            chosen_target = target_topic_id
+            reason_code = "high_weight_open_topic"
+            secondary_reason_code = "student_requested_harder"
+    elif current_topic_id and current_mastery >= 80:
+        if target_topic_id:
+            recommended_action = "switch"
+            chosen_target = target_topic_id
+            reason_code = "high_weight_open_topic"
+        else:
+            recommended_action = "wrap"
+            chosen_target = current_topic_id
+            reason_code = "criterion_reached"
+    elif current_topic_id and line_status in {"low_yield", "needs_repair"} and target_topic_id:
+        recommended_action = "switch"
+        chosen_target = target_topic_id
+        reason_code = "current_line_low_yield"
+    elif current_topic_id and current_mastery >= 55:
+        recommended_action = "escalate"
+        chosen_target = current_topic_id
+        reason_code = "needs_transfer_check"
+    elif not current_topic_id and target_topic_id:
+        recommended_action = "switch"
+        chosen_target = target_topic_id
+        reason_code = "high_weight_open_topic"
+    elif line_status == "needs_repair":
+        recommended_action = "repair"
+        chosen_target = current_topic_id
+        reason_code = "repair_after_repeat"
+
+    base_level = _action_base_level(current_mastery)
+    if recommended_action == "switch":
+        challenge_level = 5 if flags["requested_harder"] else max(3, min(5, base_level))
+    elif recommended_action == "escalate":
+        challenge_level = max(base_level + 1, 5 if flags["requested_harder"] else base_level)
+    elif recommended_action == "repair":
+        challenge_level = max(3, min(4, base_level))
+    elif recommended_action == "wrap":
+        challenge_level = max(5, base_level)
+    else:
+        challenge_level = base_level
+
+    return {
+        "recommended_action": recommended_action,
+        "target_topic_id": chosen_target,
+        "challenge_level": max(state.get("last_challenge_level", 1), 1) if flags["explicitly_procedural_only"] else _clamp_challenge_level(challenge_level),
+        "reason_code": reason_code,
+        "secondary_reason_code": secondary_reason_code,
+        "must_not_repeat": must_not_repeat,
+        "source_scope_note": (
+            "Use lecture-native terminology only. Do not import outside textbook language, alternate conventions, "
+            "or stronger framings unless they clearly appear in the lecture materials."
+        ),
+        "flags": flags,
+    }
+
+
+def _tutor_mode_for_turn(classification: ClassifierResult, effective_policy: str) -> str:
+    if effective_policy == "seek_clarification":
+        return "ambiguous_but_continue"
+    if classification.top_classification == "technical_request":
+        return "technical_request"
+    if classification.top_classification == "content_question":
+        return "content_question"
+    return "content_answer"
 
 
 def _enforce_single_question_turn(text: str) -> str:
@@ -120,68 +370,59 @@ def _enforce_single_question_turn(text: str) -> str:
     return stripped[:first_q + 1].rstrip()
 
 
-def _sanitize_synopsis_text(value: object) -> str:
-    if not isinstance(value, str):
-        return ""
-    return " ".join(value.split()).strip()[:_MAX_SYNOPSIS_TEXT_LEN]
+def _clean_control_chars(text: str) -> str:
+    return "".join(ch for ch in text if ch in {"\n", "\t"} or ord(ch) >= 32)
 
 
-def _sanitize_do_not_repeat(value: object) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    cleaned: list[str] = []
-    seen: set[str] = set()
-    for item in value:
-        if not isinstance(item, str):
+def _drop_move_narration_sentences(text: str) -> str:
+    parts = [part.strip() for part in re_.split(r"(?<=[.!?])\s+|\n+", text.strip()) if part.strip()]
+    kept = [part for part in parts if not any(pattern.search(part) for pattern in _MOVE_NARRATION_PATTERNS)]
+    if kept:
+        return " ".join(kept).strip()
+    return text.strip()
+
+
+def _lecture_terms_blob(lecture_package: dict) -> str:
+    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    topic_labels = " ".join(topic["label"] for topic in topic_defs)
+    return " ".join([
+        lecture_package.get("rubric", ""),
+        lecture_package.get("slides", ""),
+        lecture_package.get("handout", ""),
+        lecture_package.get("notebook", ""),
+        lecture_package.get("bot_notes", ""),
+        topic_labels,
+    ]).lower()
+
+
+def _enforce_source_boundedness(text: str, lecture_package: dict) -> tuple[str, bool]:
+    lecture_terms = _lecture_terms_blob(lecture_package)
+    updated = text
+    changed = False
+    for external_term, replacement in _SOURCE_BOUNDED_REPLACEMENTS.items():
+        if external_term in lecture_terms:
             continue
-        text = " ".join(item.split()).strip()[:_MAX_DO_NOT_REPEAT_ITEM_LEN]
-        if not text or text in seen:
+        pattern = re_.compile(re_.escape(external_term), re_.IGNORECASE)
+        if not pattern.search(updated):
             continue
-        seen.add(text)
-        cleaned.append(text)
-        if len(cleaned) >= _MAX_DO_NOT_REPEAT_ITEMS:
-            break
-    return cleaned
+        updated = pattern.sub(replacement, updated)
+        changed = True
+    return updated, changed
 
 
-def _build_progress_guidance(state: dict, topic_id_to_label: dict[str, str]) -> tuple[str, str, str]:
-    current_topic_id = state.get("current_topic_id")
-    mastery = state.get("mastery", {})
-    topics_sampled = [tid for tid in state.get("topics_sampled", []) if tid in topic_id_to_label]
-    topics_covered = set(state.get("topics_covered", []))
+def _contains_substantive_content_question(text: str) -> bool:
+    if "?" not in text:
+        return False
+    question_text = text.strip().split("?")[0]
+    return not any(pattern.search(question_text) for pattern in _PROCEDURAL_QUESTION_PATTERNS)
 
-    current_topic_mastery = "none"
-    if isinstance(current_topic_id, str):
-        current_topic_mastery = str(int(mastery.get(current_topic_id, 0)))
 
-    remaining_labels = [topic_id_to_label[tid] for tid in topics_sampled if tid not in topics_covered]
-    remaining_sampled_topics = ", ".join(remaining_labels) if remaining_labels else "none"
-
-    current_mastery_value = 0
-    if isinstance(current_topic_id, str):
-        try:
-            current_mastery_value = int(mastery.get(current_topic_id, 0))
-        except (TypeError, ValueError):
-            current_mastery_value = 0
-
-    line_status = state.get("current_line_status", "unclear")
-    if remaining_labels and current_mastery_value >= 70:
-        progress_focus = (
-            "The current topic already has workable evidence. Unless the student explicitly wants depth or the next move is unusually diagnostic, "
-            "a fresh sampled topic is probably more valuable than squeezing for marginal extra mastery here."
-        )
-    elif remaining_labels and line_status in {"stalled", "over_scaffolded"}:
-        progress_focus = (
-            "This line is losing yield and there are still untouched sampled topics. Prefer moving on unless the next move is clearly different and high-value."
-        )
-    elif remaining_labels:
-        progress_focus = (
-            "Continue only if the next move is distinct and likely to add meaningful evidence; otherwise consider moving to one of the remaining sampled topics."
-        )
-    else:
-        progress_focus = "No sampled-topic coverage advantage is available from switching right now; continue only if the next move is genuinely useful."
-
-    return current_topic_mastery, remaining_sampled_topics, progress_focus
+def _finalize_assistant_message(text: str, lecture_package: dict) -> tuple[str, bool]:
+    cleaned = _clean_control_chars(text)
+    cleaned = _drop_move_narration_sentences(cleaned)
+    cleaned, source_rewrite_used = _enforce_source_boundedness(cleaned, lecture_package)
+    cleaned = _enforce_single_question_turn(cleaned)
+    return cleaned.strip(), source_rewrite_used
 
 
 def _fallback_classification() -> ClassifierResult:
@@ -215,19 +456,15 @@ def _classify_message(
         consecutive_meta_requests=state.get("consecutive_meta_requests", 0),
         consecutive_clarifications=state.get("consecutive_clarifications", 0),
         last_policy_override_reason=state.get("last_policy_override_reason"),
-        assisted_turn_streak=state.get("assisted_turn_streak", 0),
-        recent_explanation_attempts=state.get("recent_explanation_attempts", 0),
-        recent_parroting_streak=state.get("recent_parroting_streak", 0),
-        recent_unelaborated_agreement_streak=state.get("recent_unelaborated_agreement_streak", 0),
+        current_topic_id=state.get("current_topic_id"),
         current_line_status=state.get("current_line_status"),
-        student_goal_now=state.get("student_goal_now", ""),
-        interaction_state=state.get("interaction_state", ""),
-        current_line=state.get("current_line", ""),
-        what_student_has_shown=state.get("what_student_has_shown", ""),
-        what_remains_uncertain=state.get("what_remains_uncertain", ""),
-        why_continue_or_switch=state.get("why_continue_or_switch", ""),
-        do_not_repeat=state.get("do_not_repeat", []),
-        best_next_move=state.get("best_next_move", ""),
+        last_challenge_level=state.get("last_challenge_level", 1),
+        last_action=state.get("last_action"),
+        last_target_topic_id=state.get("last_target_topic_id"),
+        last_reason_code=state.get("last_reason_code"),
+        last_repetition_complaint=bool(state.get("last_repetition_complaint", False)),
+        must_not_repeat=state.get("must_not_repeat", []),
+        lecture_native_only=bool(state.get("lecture_native_only", True)),
     )
     window = recent_messages[-settings.classifier_recent_message_window:]
     classifier_input = ClassifierInput(
@@ -261,6 +498,8 @@ def _build_system_prompt(
     lecture_package: dict,
     state: dict,
     recent_messages: list[dict],
+    tutor_mode: str,
+    action_hint: dict,
 ) -> str:
     topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
     topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
@@ -268,31 +507,28 @@ def _build_system_prompt(
     sampled_labels_str = ", ".join(
         topic_id_to_label.get(tid, tid) for tid in topics_sampled
     ) or "all topics"
-    current_topic_mastery, remaining_sampled_topics, progress_focus = _build_progress_guidance(state, topic_id_to_label)
 
-    template = _load_prompt(str(settings.prompt_dir), _POLICY_TO_PROMPT[effective_policy])
+    template = _load_prompt(str(settings.prompt_dir), _prompt_template_name_for_policy(effective_policy))
+    target_topic_id = action_hint.get("target_topic_id")
     render_vars: dict[str, object] = {
+        "tutor_mode": tutor_mode,
         "sampled_labels": sampled_labels_str,
         "topics_covered": state.get("topics_covered", []),
         "mastery": state.get("mastery", {}),
         "evidence_notes": state.get("evidence_notes", {}),
         "current_topic_id": state.get("current_topic_id") or "none",
-        "assisted_turn_streak": state.get("assisted_turn_streak", 0),
-        "recent_explanation_attempts": state.get("recent_explanation_attempts", 0),
-        "recent_parroting_streak": state.get("recent_parroting_streak", 0),
-        "recent_unelaborated_agreement_streak": state.get("recent_unelaborated_agreement_streak", 0),
         "current_line_status": state.get("current_line_status", "unclear"),
-        "student_goal_now": _format_synopsis_text(state.get("student_goal_now")),
-        "interaction_state": _format_synopsis_text(state.get("interaction_state")),
-        "current_line": _format_synopsis_text(state.get("current_line")),
-        "what_student_has_shown": _format_synopsis_text(state.get("what_student_has_shown")),
-        "what_remains_uncertain": _format_synopsis_text(state.get("what_remains_uncertain")),
-        "why_continue_or_switch": _format_synopsis_text(state.get("why_continue_or_switch")),
-        "do_not_repeat": _format_do_not_repeat(state.get("do_not_repeat")),
-        "best_next_move": _format_synopsis_text(state.get("best_next_move")),
-        "current_topic_mastery": current_topic_mastery,
-        "remaining_sampled_topics": remaining_sampled_topics,
-        "progress_focus": progress_focus,
+        "last_challenge_level": state.get("last_challenge_level", 1),
+        "must_not_repeat": _format_must_not_repeat(state.get("must_not_repeat", [])),
+        "recommended_action": action_hint.get("recommended_action", "stay"),
+        "target_topic_id": target_topic_id or "none",
+        "target_topic_label": topic_id_to_label.get(target_topic_id, target_topic_id or "none"),
+        "challenge_level": action_hint.get("challenge_level", 3),
+        "challenge_label": _challenge_label(_clamp_challenge_level(action_hint.get("challenge_level", 3))),
+        "reason_code": action_hint.get("reason_code", "easy_points_available"),
+        "secondary_reason_code": action_hint.get("secondary_reason_code") or "none",
+        "action_must_not_repeat": _format_must_not_repeat(action_hint.get("must_not_repeat", [])),
+        "source_scope_note": action_hint.get("source_scope_note", "Use lecture-native terminology only."),
         "recent_messages": _format_messages_for_prompt(recent_messages),
         "turn_count": state.get("turn_count", 0) + 1,
         "lecture_title": state.get("lecture_title", ""),
@@ -343,14 +579,10 @@ def _make_fallback_state(
 # Public: opening message
 # ---------------------------------------------------------------------------
 
-def _join_topic_labels(labels: list[str]) -> str:
+def _format_opening_topic_choices(labels: list[str]) -> str:
     if not labels:
         return ""
-    if len(labels) == 1:
-        return labels[0]
-    if len(labels) == 2:
-        return f"{labels[0]} or {labels[1]}"
-    return f"{', '.join(labels[:-1])}, or {labels[-1]}"
+    return "\n".join(f"- {label}" for label in labels)
 
 
 def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | None = None) -> str:
@@ -362,11 +594,13 @@ def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | 
     chosen_labels = [topic_id_to_label.get(tid, tid) for tid in chosen_ids if tid in topic_id_to_label]
 
     if chosen_labels:
-        topic_choices = _join_topic_labels(chosen_labels)
+        topic_choices = _format_opening_topic_choices(chosen_labels)
         return (
             f"Welcome to the review bot for {title}. "
-            "We can start wherever feels most useful. "
-            f"Want to begin with {topic_choices}?"
+            "We can start wherever feels most useful.\n"
+            "A few good places to start are:\n"
+            f"{topic_choices}\n\n"
+            "Which would you like to begin with?"
         )
 
     return (
@@ -406,6 +640,8 @@ def generate_reply(
     # 2. Decide effective policy.
     policy_decision = _get_policy_decider().decide_policy(user_message, classification, state)
     effective_policy = policy_decision.effective_policy
+    tutor_mode = _tutor_mode_for_turn(classification, effective_policy)
+    action_hint = _compute_action_hint(state, lecture_package, recent_messages, user_message)
 
     # 3. Log classifier output and policy decision.
     session_manager_module.log_classification(
@@ -417,7 +653,16 @@ def generate_reply(
     )
 
     # 4. Build system prompt from the appropriate prompt family.
-    system_prompt = _build_system_prompt(settings, effective_policy, lecture_package, state, recent_messages)
+    system_prompt = _build_system_prompt(
+        settings,
+        effective_policy,
+        lecture_package,
+        state,
+        recent_messages,
+        tutor_mode,
+        action_hint,
+    )
+    prompt_template_name = _prompt_template_name_for_policy(effective_policy)
 
     # 5. Call the dialogue LLM.
     try:
@@ -433,7 +678,7 @@ def generate_reply(
         )
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
-        assistant_message = _enforce_single_question_turn(str(parsed["assistant_message"]))
+        assistant_message, _ = _finalize_assistant_message(str(parsed["assistant_message"]), lecture_package)
         raw_updated_state = parsed.get("updated_state", {})
     except openai_.AuthenticationError:
         _log.exception("generate_reply failed: OpenAI authentication error")
@@ -451,7 +696,42 @@ def generate_reply(
 
     # sanitize_state_update and routing state are our own code — bugs propagate as 500.
     updated_state = sanitize_state_update(state, raw_updated_state, allowed_topic_ids)
+    if action_hint.get("recommended_action") == "switch" and action_hint.get("target_topic_id"):
+        updated_state["current_topic_id"] = action_hint["target_topic_id"]
+    updated_state["last_challenge_level"] = _clamp_challenge_level(action_hint.get("challenge_level", 3))
+    updated_state["must_not_repeat"] = _sanitize_must_not_repeat(
+        list(updated_state.get("must_not_repeat", [])) + list(action_hint.get("must_not_repeat", []))
+    )
+    updated_state["lecture_native_only"] = True
+    updated_state["last_action"] = action_hint.get("recommended_action")
+    updated_state["last_target_topic_id"] = action_hint.get("target_topic_id")
+    updated_state["last_reason_code"] = action_hint.get("reason_code")
+    updated_state["last_repetition_complaint"] = bool(action_hint.get("flags", {}).get("repetition_complaint", False))
+    updated_state["last_assistant_had_content_question"] = _contains_substantive_content_question(assistant_message)
     _apply_routing_state(updated_state, classification, policy_decision, state)
+    try:
+        session_manager_module.log_dialogue_turn_audit(
+            db=db,
+            session_id=session_id,
+            turn_index=turn_index,
+            effective_policy=effective_policy,
+            prompt_template_name=prompt_template_name,
+            dialogue_model=settings.openai_model,
+            tutor_mode=tutor_mode,
+            action_hint_json=j_.dumps(action_hint, ensure_ascii=False),
+            challenge_level=_clamp_challenge_level(action_hint.get("challenge_level", 3)),
+            current_topic_id=state.get("current_topic_id"),
+            target_topic_id=action_hint.get("target_topic_id"),
+            ended_with_content_question=_contains_substantive_content_question(assistant_message),
+            repetition_complaint=bool(action_hint.get("flags", {}).get("repetition_complaint", False)),
+            switched_topics=bool(state.get("current_topic_id") != updated_state.get("current_topic_id")),
+            state_before_json=j_.dumps(state, ensure_ascii=False),
+            recent_messages_json=j_.dumps(recent_messages, ensure_ascii=False),
+            user_message=user_message,
+            rendered_system_prompt=system_prompt,
+        )
+    except Exception:
+        _log.exception("Failed to persist dialogue turn audit")
     return assistant_message, updated_state
 
 
@@ -538,10 +818,10 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
     - lecture_title: immutable, taken from old_state
     - timeout_warning_sent: backend-owned flag preserved from old_state
     - current_topic_id: replaced only with a valid topic ID or explicit null
-    - assisted_turn_streak / recent_explanation_attempts / recent_parroting_streak /
-      recent_unelaborated_agreement_streak: preserved when absent; clamped to a small non-negative range
     - current_line_status: preserved when absent; must be one of the allowed status labels
-    - working-memory synopsis fields: preserved when absent; normalized and length-limited when present
+    - last_challenge_level: preserved when absent; clamped 1-7 when present
+    - must_not_repeat: preserved when absent; deduplicated and length-limited when present
+    - backend-owned routing/action/source fields are preserved from old_state
     - topics_covered: union of old + new (new filtered to allowed_topic_ids);
       when new is empty the prior list is preserved unchanged
     - mastery: old merged with new (new values filtered and clamped 0-100);
@@ -556,19 +836,15 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
         "lecture_title": old_state.get("lecture_title", ""),
         "timeout_warning_sent": bool(old_state.get("timeout_warning_sent", False)),
         "current_topic_id": old_state.get("current_topic_id"),
-        "assisted_turn_streak": int(old_state.get("assisted_turn_streak", 0)),
-        "recent_explanation_attempts": int(old_state.get("recent_explanation_attempts", 0)),
-        "recent_parroting_streak": int(old_state.get("recent_parroting_streak", 0)),
-        "recent_unelaborated_agreement_streak": int(old_state.get("recent_unelaborated_agreement_streak", 0)),
         "current_line_status": old_state.get("current_line_status", "unclear"),
-        "student_goal_now": _sanitize_synopsis_text(old_state.get("student_goal_now", "")),
-        "interaction_state": _sanitize_synopsis_text(old_state.get("interaction_state", "")),
-        "current_line": _sanitize_synopsis_text(old_state.get("current_line", "")),
-        "what_student_has_shown": _sanitize_synopsis_text(old_state.get("what_student_has_shown", "")),
-        "what_remains_uncertain": _sanitize_synopsis_text(old_state.get("what_remains_uncertain", "")),
-        "why_continue_or_switch": _sanitize_synopsis_text(old_state.get("why_continue_or_switch", "")),
-        "do_not_repeat": _sanitize_do_not_repeat(old_state.get("do_not_repeat", [])),
-        "best_next_move": _sanitize_synopsis_text(old_state.get("best_next_move", "")),
+        "last_challenge_level": _clamp_challenge_level(old_state.get("last_challenge_level", 1), default=1),
+        "must_not_repeat": _sanitize_must_not_repeat(old_state.get("must_not_repeat", [])),
+        "lecture_native_only": bool(old_state.get("lecture_native_only", True)),
+        "last_action": old_state.get("last_action"),
+        "last_target_topic_id": old_state.get("last_target_topic_id"),
+        "last_reason_code": old_state.get("last_reason_code"),
+        "last_repetition_complaint": bool(old_state.get("last_repetition_complaint", False)),
+        "last_assistant_had_content_question": bool(old_state.get("last_assistant_had_content_question", False)),
     }
 
     # current_topic_id: allow explicit null to clear the local focus
@@ -579,38 +855,16 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
         elif isinstance(raw_topic, str) and raw_topic in allowed_topic_ids:
             result["current_topic_id"] = raw_topic
 
-    # small pedagogical counters: preserve prior when absent, clamp when present
-    for field in (
-        "assisted_turn_streak",
-        "recent_explanation_attempts",
-        "recent_parroting_streak",
-        "recent_unelaborated_agreement_streak",
-    ):
-        if field in llm_state:
-            try:
-                result[field] = max(0, min(9, int(llm_state[field])))
-            except (ValueError, TypeError):
-                pass
-
     # current_line_status: preserve prior unless an allowed label is provided
     raw_line_status = llm_state.get("current_line_status")
     if isinstance(raw_line_status, str) and raw_line_status in _ALLOWED_LINE_STATUSES:
         result["current_line_status"] = raw_line_status
 
-    for field in (
-        "student_goal_now",
-        "interaction_state",
-        "current_line",
-        "what_student_has_shown",
-        "what_remains_uncertain",
-        "why_continue_or_switch",
-        "best_next_move",
-    ):
-        if field in llm_state:
-            result[field] = _sanitize_synopsis_text(llm_state.get(field))
+    if "last_challenge_level" in llm_state:
+        result["last_challenge_level"] = _clamp_challenge_level(llm_state.get("last_challenge_level"), default=result["last_challenge_level"])
 
-    if "do_not_repeat" in llm_state:
-        result["do_not_repeat"] = _sanitize_do_not_repeat(llm_state.get("do_not_repeat"))
+    if "must_not_repeat" in llm_state:
+        result["must_not_repeat"] = _sanitize_must_not_repeat(llm_state.get("must_not_repeat"))
 
     # topics_covered: union when LLM provides entries; preserve prior when empty
     new_topics = [

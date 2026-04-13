@@ -1,11 +1,14 @@
 import json as j
 import uuid as uuid_module
 
+import sqlalchemy as sa
 import sqlalchemy.orm as sqlalchemy_orm
 
 import app.bot_engine as bot_engine
 import app.config as config_module
 import app.models as models
+
+_DIALOGUE_AUDIT_TABLE_READY = False
 
 
 def build_initial_state(lecture_package: dict, topics_sampled: list) -> dict:
@@ -19,19 +22,15 @@ def build_initial_state(lecture_package: dict, topics_sampled: list) -> dict:
         "lecture_title": lecture_package["config"].get("title", lecture_package["lecture_id"]),
         "timeout_warning_sent": False,
         "current_topic_id": None,
-        "assisted_turn_streak": 0,
-        "recent_explanation_attempts": 0,
-        "recent_parroting_streak": 0,
-        "recent_unelaborated_agreement_streak": 0,
         "current_line_status": "unclear",
-        "student_goal_now": "pick a starting topic and begin explaining in their own words",
-        "interaction_state": "opening",
-        "current_line": "no content line established yet",
-        "what_student_has_shown": "",
-        "what_remains_uncertain": "which sampled topic the student wants to start with",
-        "why_continue_or_switch": "start with a clear topic choice before probing deeply",
-        "do_not_repeat": [],
-        "best_next_move": "offer or confirm a starting topic choice",
+        "last_challenge_level": 1,
+        "must_not_repeat": [],
+        "lecture_native_only": True,
+        "last_action": None,
+        "last_target_topic_id": None,
+        "last_reason_code": None,
+        "last_repetition_complaint": False,
+        "last_assistant_had_content_question": False,
         # routing state
         "last_top_classification": None,
         "last_recommended_policy": None,
@@ -97,4 +96,73 @@ def log_classification(
         turn_index=turn_index,
         classifier_json=classifier_json,
         policy_decision_json=policy_decision_json,
+    ))
+
+
+def _ensure_dialogue_audit_table(db: sqlalchemy_orm.Session) -> None:
+    global _DIALOGUE_AUDIT_TABLE_READY
+    bind = db.get_bind()
+    models.DialogueTurnAuditModel.__table__.create(bind=bind, checkfirst=True)
+    inspector = sa.inspect(bind)
+    existing = {col["name"] for col in inspector.get_columns(models.DialogueTurnAuditModel.__tablename__)}
+    required_columns = {
+        "tutor_mode": "VARCHAR(64) DEFAULT 'content_answer'",
+        "action_hint_json": "TEXT DEFAULT '{}'",
+        "challenge_level": "INTEGER DEFAULT 1",
+        "current_topic_id": "VARCHAR(64)",
+        "target_topic_id": "VARCHAR(64)",
+        "ended_with_content_question": "BOOLEAN DEFAULT 0",
+        "repetition_complaint": "BOOLEAN DEFAULT 0",
+        "switched_topics": "BOOLEAN DEFAULT 0",
+    }
+    for column_name, column_sql in required_columns.items():
+        if column_name in existing:
+            continue
+        with bind.begin() as conn:
+            conn.execute(sa.text(
+                f"ALTER TABLE {models.DialogueTurnAuditModel.__tablename__} "
+                f"ADD COLUMN {column_name} {column_sql}"
+            ))
+    _DIALOGUE_AUDIT_TABLE_READY = True
+
+
+def log_dialogue_turn_audit(
+    db: sqlalchemy_orm.Session,
+    session_id: str,
+    turn_index: int,
+    effective_policy: str,
+    prompt_template_name: str,
+    dialogue_model: str,
+    tutor_mode: str,
+    action_hint_json: str,
+    challenge_level: int,
+    current_topic_id: str | None,
+    target_topic_id: str | None,
+    ended_with_content_question: bool,
+    repetition_complaint: bool,
+    switched_topics: bool,
+    state_before_json: str,
+    recent_messages_json: str,
+    user_message: str,
+    rendered_system_prompt: str,
+) -> None:
+    _ensure_dialogue_audit_table(db)
+    db.add(models.DialogueTurnAuditModel(
+        session_id=session_id,
+        turn_index=turn_index,
+        effective_policy=effective_policy,
+        prompt_template_name=prompt_template_name,
+        dialogue_model=dialogue_model,
+        tutor_mode=tutor_mode,
+        action_hint_json=action_hint_json,
+        challenge_level=challenge_level,
+        current_topic_id=current_topic_id,
+        target_topic_id=target_topic_id,
+        ended_with_content_question=ended_with_content_question,
+        repetition_complaint=repetition_complaint,
+        switched_topics=switched_topics,
+        state_before_json=state_before_json,
+        recent_messages_json=recent_messages_json,
+        user_message=user_message,
+        rendered_system_prompt=rendered_system_prompt,
     ))

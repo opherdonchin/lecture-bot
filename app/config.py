@@ -13,7 +13,7 @@ class Settings(ps.BaseSettings):
     session_timeout_minutes: int = 20
     session_warning_minutes: int = 5
     openai_api_key: str | None = None
-    openai_model: str = "gpt-4.1-mini"
+    openai_model: str = "gpt-5.4-mini"
     recent_message_limit: int = 10
     max_dialogue_context_chars: int = 120000
     max_grading_context_chars: int = 180000
