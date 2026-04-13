@@ -52,6 +52,9 @@ _CONTENT_POLICIES: frozenset[str] = frozenset({"respond", "provide_content_suppo
 # Matches {identifier} placeholders while leaving {}, {"key": value}, etc. intact.
 _TEMPLATE_VAR_RE = re_.compile(r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}')
 _ALLOWED_LINE_STATUSES = {"productive", "stalled", "over_scaffolded", "unclear"}
+_MAX_SYNOPSIS_TEXT_LEN = 240
+_MAX_DO_NOT_REPEAT_ITEMS = 4
+_MAX_DO_NOT_REPEAT_ITEM_LEN = 120
 
 
 @functools_.lru_cache(maxsize=32)
@@ -86,6 +89,99 @@ def _format_messages_for_prompt(messages: list[dict]) -> str:
         role_label = "Student" if m["role"] == "user" else "Tutor"
         lines.append(f"[{role_label}]: {m['content']}")
     return "\n".join(lines)
+
+
+def _format_synopsis_text(value: object) -> str:
+    if not isinstance(value, str):
+        return "none"
+    text = " ".join(value.split()).strip()
+    return text or "none"
+
+
+def _format_do_not_repeat(value: object) -> str:
+    if not isinstance(value, list):
+        return "none"
+    cleaned = []
+    for item in value:
+        if isinstance(item, str):
+            text = " ".join(item.split()).strip()
+            if text:
+                cleaned.append(text)
+    return " | ".join(cleaned) if cleaned else "none"
+
+
+def _enforce_single_question_turn(text: str) -> str:
+    stripped = text.strip()
+    if stripped.count("?") <= 1:
+        return stripped
+    first_q = stripped.find("?")
+    if first_q == -1:
+        return stripped
+    return stripped[:first_q + 1].rstrip()
+
+
+def _sanitize_synopsis_text(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.split()).strip()[:_MAX_SYNOPSIS_TEXT_LEN]
+
+
+def _sanitize_do_not_repeat(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        text = " ".join(item.split()).strip()[:_MAX_DO_NOT_REPEAT_ITEM_LEN]
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        cleaned.append(text)
+        if len(cleaned) >= _MAX_DO_NOT_REPEAT_ITEMS:
+            break
+    return cleaned
+
+
+def _build_progress_guidance(state: dict, topic_id_to_label: dict[str, str]) -> tuple[str, str, str]:
+    current_topic_id = state.get("current_topic_id")
+    mastery = state.get("mastery", {})
+    topics_sampled = [tid for tid in state.get("topics_sampled", []) if tid in topic_id_to_label]
+    topics_covered = set(state.get("topics_covered", []))
+
+    current_topic_mastery = "none"
+    if isinstance(current_topic_id, str):
+        current_topic_mastery = str(int(mastery.get(current_topic_id, 0)))
+
+    remaining_labels = [topic_id_to_label[tid] for tid in topics_sampled if tid not in topics_covered]
+    remaining_sampled_topics = ", ".join(remaining_labels) if remaining_labels else "none"
+
+    current_mastery_value = 0
+    if isinstance(current_topic_id, str):
+        try:
+            current_mastery_value = int(mastery.get(current_topic_id, 0))
+        except (TypeError, ValueError):
+            current_mastery_value = 0
+
+    line_status = state.get("current_line_status", "unclear")
+    if remaining_labels and current_mastery_value >= 70:
+        progress_focus = (
+            "The current topic already has workable evidence. Unless the student explicitly wants depth or the next move is unusually diagnostic, "
+            "a fresh sampled topic is probably more valuable than squeezing for marginal extra mastery here."
+        )
+    elif remaining_labels and line_status in {"stalled", "over_scaffolded"}:
+        progress_focus = (
+            "This line is losing yield and there are still untouched sampled topics. Prefer moving on unless the next move is clearly different and high-value."
+        )
+    elif remaining_labels:
+        progress_focus = (
+            "Continue only if the next move is distinct and likely to add meaningful evidence; otherwise consider moving to one of the remaining sampled topics."
+        )
+    else:
+        progress_focus = "No sampled-topic coverage advantage is available from switching right now; continue only if the next move is genuinely useful."
+
+    return current_topic_mastery, remaining_sampled_topics, progress_focus
 
 
 def _fallback_classification() -> ClassifierResult:
@@ -124,6 +220,14 @@ def _classify_message(
         recent_parroting_streak=state.get("recent_parroting_streak", 0),
         recent_unelaborated_agreement_streak=state.get("recent_unelaborated_agreement_streak", 0),
         current_line_status=state.get("current_line_status"),
+        student_goal_now=state.get("student_goal_now", ""),
+        interaction_state=state.get("interaction_state", ""),
+        current_line=state.get("current_line", ""),
+        what_student_has_shown=state.get("what_student_has_shown", ""),
+        what_remains_uncertain=state.get("what_remains_uncertain", ""),
+        why_continue_or_switch=state.get("why_continue_or_switch", ""),
+        do_not_repeat=state.get("do_not_repeat", []),
+        best_next_move=state.get("best_next_move", ""),
     )
     window = recent_messages[-settings.classifier_recent_message_window:]
     classifier_input = ClassifierInput(
@@ -164,6 +268,7 @@ def _build_system_prompt(
     sampled_labels_str = ", ".join(
         topic_id_to_label.get(tid, tid) for tid in topics_sampled
     ) or "all topics"
+    current_topic_mastery, remaining_sampled_topics, progress_focus = _build_progress_guidance(state, topic_id_to_label)
 
     template = _load_prompt(str(settings.prompt_dir), _POLICY_TO_PROMPT[effective_policy])
     render_vars: dict[str, object] = {
@@ -177,6 +282,17 @@ def _build_system_prompt(
         "recent_parroting_streak": state.get("recent_parroting_streak", 0),
         "recent_unelaborated_agreement_streak": state.get("recent_unelaborated_agreement_streak", 0),
         "current_line_status": state.get("current_line_status", "unclear"),
+        "student_goal_now": _format_synopsis_text(state.get("student_goal_now")),
+        "interaction_state": _format_synopsis_text(state.get("interaction_state")),
+        "current_line": _format_synopsis_text(state.get("current_line")),
+        "what_student_has_shown": _format_synopsis_text(state.get("what_student_has_shown")),
+        "what_remains_uncertain": _format_synopsis_text(state.get("what_remains_uncertain")),
+        "why_continue_or_switch": _format_synopsis_text(state.get("why_continue_or_switch")),
+        "do_not_repeat": _format_do_not_repeat(state.get("do_not_repeat")),
+        "best_next_move": _format_synopsis_text(state.get("best_next_move")),
+        "current_topic_mastery": current_topic_mastery,
+        "remaining_sampled_topics": remaining_sampled_topics,
+        "progress_focus": progress_focus,
         "recent_messages": _format_messages_for_prompt(recent_messages),
         "turn_count": state.get("turn_count", 0) + 1,
         "lecture_title": state.get("lecture_title", ""),
@@ -317,7 +433,7 @@ def generate_reply(
         )
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
-        assistant_message = str(parsed["assistant_message"])
+        assistant_message = _enforce_single_question_turn(str(parsed["assistant_message"]))
         raw_updated_state = parsed.get("updated_state", {})
     except openai_.AuthenticationError:
         _log.exception("generate_reply failed: OpenAI authentication error")
@@ -425,6 +541,7 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
     - assisted_turn_streak / recent_explanation_attempts / recent_parroting_streak /
       recent_unelaborated_agreement_streak: preserved when absent; clamped to a small non-negative range
     - current_line_status: preserved when absent; must be one of the allowed status labels
+    - working-memory synopsis fields: preserved when absent; normalized and length-limited when present
     - topics_covered: union of old + new (new filtered to allowed_topic_ids);
       when new is empty the prior list is preserved unchanged
     - mastery: old merged with new (new values filtered and clamped 0-100);
@@ -444,6 +561,14 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
         "recent_parroting_streak": int(old_state.get("recent_parroting_streak", 0)),
         "recent_unelaborated_agreement_streak": int(old_state.get("recent_unelaborated_agreement_streak", 0)),
         "current_line_status": old_state.get("current_line_status", "unclear"),
+        "student_goal_now": _sanitize_synopsis_text(old_state.get("student_goal_now", "")),
+        "interaction_state": _sanitize_synopsis_text(old_state.get("interaction_state", "")),
+        "current_line": _sanitize_synopsis_text(old_state.get("current_line", "")),
+        "what_student_has_shown": _sanitize_synopsis_text(old_state.get("what_student_has_shown", "")),
+        "what_remains_uncertain": _sanitize_synopsis_text(old_state.get("what_remains_uncertain", "")),
+        "why_continue_or_switch": _sanitize_synopsis_text(old_state.get("why_continue_or_switch", "")),
+        "do_not_repeat": _sanitize_do_not_repeat(old_state.get("do_not_repeat", [])),
+        "best_next_move": _sanitize_synopsis_text(old_state.get("best_next_move", "")),
     }
 
     # current_topic_id: allow explicit null to clear the local focus
@@ -471,6 +596,21 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
     raw_line_status = llm_state.get("current_line_status")
     if isinstance(raw_line_status, str) and raw_line_status in _ALLOWED_LINE_STATUSES:
         result["current_line_status"] = raw_line_status
+
+    for field in (
+        "student_goal_now",
+        "interaction_state",
+        "current_line",
+        "what_student_has_shown",
+        "what_remains_uncertain",
+        "why_continue_or_switch",
+        "best_next_move",
+    ):
+        if field in llm_state:
+            result[field] = _sanitize_synopsis_text(llm_state.get(field))
+
+    if "do_not_repeat" in llm_state:
+        result["do_not_repeat"] = _sanitize_do_not_repeat(llm_state.get("do_not_repeat"))
 
     # topics_covered: union when LLM provides entries; preserve prior when empty
     new_topics = [

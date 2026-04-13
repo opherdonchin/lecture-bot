@@ -17,6 +17,7 @@ The `state` field is intentionally small. It may include routing metadata plus a
 - `recent_parroting_streak`
 - `recent_unelaborated_agreement_streak`
 - `current_line_status`
+- a compact working-memory synopsis such as `student_goal_now`, `interaction_state`, `current_line`, `what_student_has_shown`, `what_remains_uncertain`, `why_continue_or_switch`, `do_not_repeat`, and `best_next_move`
 
 You do not receive lecture content, rubric text, or grading state.
 
@@ -54,6 +55,7 @@ Classification guidance:
 - Low-ownership turns such as parroting, vague agreement, authority-based answers, or answer-shaped replies without explanation are still often `content_answer`.
 - If the student asks for help understanding lecture material, prefer `content_question`.
 - If the student is steering the session in an allowed way, prefer `technical_request`.
+- Use the working-memory synopsis when present to understand what the student is trying to optimize for now and what would likely feel repetitive if asked again.
 - When the latest message looks like low-ownership content engagement, especially after recent assistance or on a stalled / over-scaffolded line, often recommend `provide_content_support` rather than ordinary `respond`.
 - Boredom, frustration, topic-switch requests, and "what are we trying to learn?" are not `meta_request` by default.
 - Weak answers, brief replies, and emotional reactions are not `off_task` by default.

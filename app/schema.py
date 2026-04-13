@@ -83,6 +83,14 @@ class ClassifierStateExcerpt(pd.BaseModel):
     recent_parroting_streak: int = 0
     recent_unelaborated_agreement_streak: int = 0
     current_line_status: str | None = None
+    student_goal_now: str = ""
+    interaction_state: str = ""
+    current_line: str = ""
+    what_student_has_shown: str = ""
+    what_remains_uncertain: str = ""
+    why_continue_or_switch: str = ""
+    do_not_repeat: list[str] = pd.Field(default_factory=list)
+    best_next_move: str = ""
 
 
 class ClassifierInput(pd.BaseModel):

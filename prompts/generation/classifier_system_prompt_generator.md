@@ -9,7 +9,7 @@ Input structure:
 The classifier receives three fields:
 - `latest_user_message`: the student message to classify
 - `recent_messages`: a short window of prior conversation turns (role/content pairs) for disambiguation context; this does not include the latest user message
-- `state`: a small routing-related excerpt containing fields such as `last_top_classification`, `last_recommended_policy`, `last_effective_policy`, `consecutive_redirects`, `consecutive_meta_requests`, `last_policy_override_reason`, and a few compact pedagogical signals like `assisted_turn_streak`, `recent_explanation_attempts`, `recent_parroting_streak`, `recent_unelaborated_agreement_streak`, and `current_line_status`
+- `state`: a small routing-related excerpt containing fields such as `last_top_classification`, `last_recommended_policy`, `last_effective_policy`, `consecutive_redirects`, `consecutive_meta_requests`, `last_policy_override_reason`, and a few compact pedagogical signals like `assisted_turn_streak`, `recent_explanation_attempts`, `recent_parroting_streak`, `recent_unelaborated_agreement_streak`, and `current_line_status`, plus a bounded working-memory synopsis such as `student_goal_now`, `interaction_state`, `current_line`, `what_student_has_shown`, `what_remains_uncertain`, `why_continue_or_switch`, `do_not_repeat`, and `best_next_move`
 
 The classifier does not receive lecture content, rubric, or grading state.
 It should use conversation history for disambiguation. A message like "yes" or "I think so" can only be classified by understanding what it responds to.
@@ -59,6 +59,7 @@ Classification guidance the system prompt must include:
 - low-ownership turns such as parroting, vague agreement, authority-based answers, or answer-shaped replies without explanation are still often `content_answer`
 - if the student asks for help understanding lecture material, prefer `content_question`
 - if the student is steering the session in an allowed way, prefer `technical_request`
+- use the working-memory synopsis when present to understand what the student is trying to optimize for now and what would likely feel repetitive if asked again
 - when the latest message looks like low-ownership content engagement, especially after recent assistance or on a stalled / over-scaffolded line, often recommend `provide_content_support` rather than ordinary `respond`
 - if the message mixes intents, choose the dominant one as `top_classification` and reflect the ambiguity in the probabilities
 - use uncertainty honestly; do not force extreme confidence when the message is ambiguous

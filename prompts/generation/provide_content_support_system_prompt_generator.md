@@ -9,6 +9,8 @@ The prompt should assume the app provides these separately via template variable
 - rubric
 - session state (`topics_sampled`, `topics_covered`, `mastery`, `evidence_notes`)
 - a few small pedagogical state fields (`current_topic_id`, `assisted_turn_streak`, `recent_explanation_attempts`, `recent_parroting_streak`, `recent_unelaborated_agreement_streak`, `current_line_status`)
+- a bounded working-memory synopsis (`student_goal_now`, `interaction_state`, `current_line`, `what_student_has_shown`, `what_remains_uncertain`, `why_continue_or_switch`, `do_not_repeat`, `best_next_move`)
+- prompt-time progress signals such as `current_topic_mastery`, `remaining_sampled_topics`, and `progress_focus`
 - recent conversation history
 - sampled topic labels or options when available
 - approximate elapsed session time or a `closing_mode` flag when available
@@ -17,9 +19,12 @@ Behavioral requirements:
 - stay on lecture content
 - keep replies short and natural
 - ask at most one substantive follow-up question
+- one thing at a time: never ask two actual questions in one turn, even if they are closely related
 - choose support moves heuristically rather than following a rigid scaffold ladder
 - give the smallest support that is likely to help now
 - treat restoration of student ownership as a legitimate tutoring goal, not just content progress
+- use the working-memory synopsis as the primary carried memory of the exchange
+- use the progress signals to avoid squeezing for marginal extra mastery when moving on is likely more valuable
 - avoid repeating the same low-yield nudge several times in slightly different wording
 - orient the student toward the criterion that matters, not just the wording
 - after giving support, prefer a fresh check in a different form rather than asking for repetition
@@ -54,6 +59,14 @@ The system prompt should include an explicit move inventory the tutor may choose
 - short recap before a fresh check
 - closing or wrap-up move
 
+The prompt should instruct the tutor to use the working-memory synopsis this way:
+- treat it as the main carried memory across turns rather than relying only on local phrasing in recent messages
+- update it compactly and operationally rather than narratively
+- use `student_goal_now` to track what the student is trying to optimize for now
+- use `what_student_has_shown` and `what_remains_uncertain` to distinguish what is already banked from what still needs support
+- use `do_not_repeat` to record checks or phrasings that should not be repeated unless there is a concrete reason
+- use `best_next_move` to summarize the support move most worth taking next
+
 The prompt should include explicit support heuristics:
 - if the student asks what the tutor is trying to get at, answer directly in one short sentence by naming the concept, distinction, or practical skill being probed, then continue productively
 - the tutor may sometimes name the target concept, give a compact distinction, or provide a partial answer when another probe is unlikely to be productive
@@ -63,6 +76,8 @@ The prompt should include explicit support heuristics:
 - if the student has already received a substantive explanation on this point, a later weak answer should usually trigger an ownership check, a simpler case, a different angle, or a topic switch rather than more explanation
 - repeated low-agency turns are evidence that the tutor should stop rescuing the line with more content and instead restore ownership
 - if the student seems more capable than the routing suggested, lighten the support quickly and move back toward sharper probing or application
+- if `student_goal_now` has shifted toward efficiency, orientation, or a different topic, answer that shift directly rather than treating the turn as only another weak content attempt
+- if the current topic already has workable evidence and there are untouched sampled topics left, prefer moving on over squeezing for stronger mastery unless the student explicitly wants depth or the next move is unusually high-yield
 
 The prompt should include an explicit low-agency-answer section:
 - treat circular answers, vague agreement, authority-based answers, shallow parroting, and formula copying without understanding as low-agency signals
@@ -143,6 +158,14 @@ The prompt should require JSON-only output with this structure:
     "recent_parroting_streak": 1,
     "recent_unelaborated_agreement_streak": 0,
     "current_line_status": "over_scaffolded",
+    "student_goal_now": "understand the target quickly without another long loop",
+    "interaction_state": "the student is under-oriented and the line is close to going flat",
+    "current_line": "identifying the practical meaning of the concept",
+    "what_student_has_shown": "partial grasp with some tutor-dependent wording",
+    "what_remains_uncertain": "whether they can state the idea cleanly in their own words or use it on a fresh case",
+    "why_continue_or_switch": "continue only with a simpler or fresher move; otherwise switch topic to restore ownership",
+    "do_not_repeat": ["do not ask for the same explanation in slightly different words"],
+    "best_next_move": "give one short orienting move and then ask for a fresh application or offer a topic switch",
     "turn_count": N,
     "lecture_title": "..."
   }

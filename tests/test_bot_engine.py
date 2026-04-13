@@ -118,6 +118,26 @@ def test_sample_session_topics_fewer_than_count():
     assert result == ["T1"]
 
 
+def test_enforce_single_question_turn_keeps_one_question():
+    text = "You seem close. Can you explain why? Can you give an example too?"
+    assert bot_engine._enforce_single_question_turn(text) == "You seem close. Can you explain why?"
+
+
+def test_build_progress_guidance_prefers_move_on_after_workable_mastery():
+    topic_id_to_label = {"T1": "Topic 1", "T2": "Topic 2"}
+    state = {
+        "current_topic_id": "T1",
+        "mastery": {"T1": 75},
+        "topics_sampled": ["T1", "T2"],
+        "topics_covered": ["T1"],
+        "current_line_status": "productive",
+    }
+    current_topic_mastery, remaining_sampled_topics, progress_focus = bot_engine._build_progress_guidance(state, topic_id_to_label)
+    assert current_topic_mastery == "75"
+    assert remaining_sampled_topics == "Topic 2"
+    assert "more valuable than squeezing for marginal extra mastery" in progress_focus
+
+
 # ---------------------------------------------------------------------------
 # compute_weighted_grade
 # ---------------------------------------------------------------------------
@@ -187,6 +207,14 @@ OLD_STATE = {
     "recent_parroting_streak": 0,
     "recent_unelaborated_agreement_streak": 0,
     "current_line_status": "unclear",
+    "student_goal_now": "pick a starting topic",
+    "interaction_state": "opening",
+    "current_line": "no topic yet",
+    "what_student_has_shown": "",
+    "what_remains_uncertain": "which topic to start",
+    "why_continue_or_switch": "need a topic before probing",
+    "do_not_repeat": [],
+    "best_next_move": "offer a topic choice",
     "turn_count": 1,
     "lecture_title": "Lecture 1",
 }
@@ -259,6 +287,14 @@ OLD_STATE_WITH_CONTENT = {
     "recent_parroting_streak": 0,
     "recent_unelaborated_agreement_streak": 0,
     "current_line_status": "productive",
+    "student_goal_now": "show understanding efficiently",
+    "interaction_state": "student is engaged but repetition risk is rising",
+    "current_line": "core distinction within T1",
+    "what_student_has_shown": "partial explanation in own words",
+    "what_remains_uncertain": "fresh application still needed",
+    "why_continue_or_switch": "continue only if next move is different enough",
+    "do_not_repeat": ["do not ask for the same distinction again"],
+    "best_next_move": "ask for a fresh application",
     "turn_count": 3,
     "lecture_title": "Lecture 1",
 }
@@ -357,6 +393,31 @@ def test_sanitize_pedagogical_state_invalid_values_preserve_or_clamp():
     assert result["current_line_status"] == "productive"
 
 
+def test_sanitize_working_memory_synopsis_fields():
+    llm_state = {
+        "topics_covered": [],
+        "mastery": {},
+        "evidence_notes": {},
+        "student_goal_now": "  keep this efficient   ",
+        "interaction_state": "   repetition risk is high ",
+        "current_line": " likelihood as a function of theta ",
+        "what_student_has_shown": " said data are fixed ",
+        "what_remains_uncertain": " whether they can apply it freshly ",
+        "why_continue_or_switch": " switch if next move repeats the same check ",
+        "do_not_repeat": [" ask the same question again  ", "", "ask the same question again", "use the same wording"],
+        "best_next_move": " ask for a fresh application ",
+    }
+    result = bot_engine.sanitize_state_update(OLD_STATE_WITH_CONTENT, llm_state, ALLOWED_IDS)
+    assert result["student_goal_now"] == "keep this efficient"
+    assert result["interaction_state"] == "repetition risk is high"
+    assert result["current_line"] == "likelihood as a function of theta"
+    assert result["what_student_has_shown"] == "said data are fixed"
+    assert result["what_remains_uncertain"] == "whether they can apply it freshly"
+    assert result["why_continue_or_switch"] == "switch if next move repeats the same check"
+    assert result["do_not_repeat"] == ["ask the same question again", "use the same wording"]
+    assert result["best_next_move"] == "ask for a fresh application"
+
+
 def test_classify_message_passes_structured_pedagogical_excerpt(monkeypatch):
     captured = {}
 
@@ -408,6 +469,14 @@ def test_classify_message_passes_structured_pedagogical_excerpt(monkeypatch):
         "recent_parroting_streak": 1,
         "recent_unelaborated_agreement_streak": 1,
         "current_line_status": "stalled",
+        "student_goal_now": "keep this efficient",
+        "interaction_state": "student is frustrated by repetition",
+        "current_line": "likelihood as a function of the parameter",
+        "what_student_has_shown": "they already stated that data are fixed",
+        "what_remains_uncertain": "whether they can apply it freshly",
+        "why_continue_or_switch": "switch if the next move would just restate the same check",
+        "do_not_repeat": ["do not ask them to say data fixed again"],
+        "best_next_move": "ask a fresh application or honor a topic switch",
     }
 
     result = bot_engine._classify_message(
@@ -423,6 +492,9 @@ def test_classify_message_passes_structured_pedagogical_excerpt(monkeypatch):
     assert captured["payload"]["state"]["recent_parroting_streak"] == 1
     assert captured["payload"]["state"]["recent_unelaborated_agreement_streak"] == 1
     assert captured["payload"]["state"]["current_line_status"] == "stalled"
+    assert captured["payload"]["state"]["student_goal_now"] == "keep this efficient"
+    assert captured["payload"]["state"]["do_not_repeat"] == ["do not ask them to say data fixed again"]
+    assert captured["payload"]["state"]["best_next_move"] == "ask a fresh application or honor a topic switch"
 
 
 # ---------------------------------------------------------------------------

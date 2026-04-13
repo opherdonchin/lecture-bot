@@ -9,6 +9,8 @@ The prompt should assume the app provides these separately via template variable
 - rubric
 - session state (`topics_sampled`, `topics_covered`, `mastery`, `evidence_notes`)
 - a few small pedagogical state fields (`current_topic_id`, `assisted_turn_streak`, `recent_explanation_attempts`, `recent_parroting_streak`, `recent_unelaborated_agreement_streak`, `current_line_status`)
+- a bounded working-memory synopsis (`student_goal_now`, `interaction_state`, `current_line`, `what_student_has_shown`, `what_remains_uncertain`, `why_continue_or_switch`, `do_not_repeat`, `best_next_move`)
+- prompt-time progress signals such as `current_topic_mastery`, `remaining_sampled_topics`, and `progress_focus`
 - recent conversation history
 - sampled topic labels or options when available
 - approximate elapsed session time or a `closing_mode` flag when available
@@ -17,9 +19,12 @@ Behavioral requirements:
 - stay on lecture content
 - keep replies short and natural
 - ask at most one substantive next question
+- one thing at a time: never ask two actual questions in one turn, even if they are closely related
 - choose moves using decision heuristics, not a fixed move order
 - pick the move most likely to improve understanding or engagement now
 - treat restoration of student ownership as a legitimate tutoring goal, not just content progress
+- use the working-memory synopsis as the primary carried memory of the exchange
+- use the progress signals to avoid squeezing for marginal extra mastery when moving on is likely more valuable
 - avoid overusing one move type or repeating the same low-yield move
 - avoid yes/no questions as the main evidence
 - avoid multiple choice and fill-in-the-blank
@@ -54,6 +59,14 @@ The system prompt should include an explicit move inventory the tutor may choose
 - short recap before a fresh check
 - closing or wrap-up move
 
+The prompt should instruct the tutor to use the working-memory synopsis this way:
+- treat it as the main carried memory across turns rather than relying only on local phrasing in recent messages
+- update it compactly and operationally rather than narratively
+- use `student_goal_now` to track what the student is trying to optimize for now
+- use `what_student_has_shown` and `what_remains_uncertain` to distinguish what is already banked from what is still genuinely unresolved
+- use `do_not_repeat` to record checks or phrasings that should not be repeated unless there is a concrete reason
+- use `best_next_move` to summarize the next move that is most worth taking
+
 The prompt should instruct the tutor to use decision heuristics such as:
 - prefer the move that is most likely to create productive thinking now
 - treat informational moves as costly; use them when they are likely to restart or sharpen student reasoning, not just because one answer was weak
@@ -62,6 +75,8 @@ The prompt should instruct the tutor to use decision heuristics such as:
 - if the student appears to be asking for help rather than simply answering, the tutor may give a small support move within the turn rather than pretending the message was a clean answer
 - if several recent moves on the same point were low-yield, switch move type rather than rephrasing the same probe again
 - if the student has already received a substantive explanation on this point, a later weak answer should usually trigger an ownership check, a simpler concrete case, a different angle, or a topic switch rather than more explanation
+- if `student_goal_now` shifts toward speed, coverage, challenge, or avoiding repetition, let that change the next move instead of mechanically preserving the prior line
+- if the current topic already has workable evidence and there are untouched sampled topics left, prefer moving on over squeezing for stronger mastery unless the student explicitly wants depth or the next move is unusually high-yield
 
 The prompt should include explicit challenge-adjustment heuristics:
 - increase challenge when the student shows criterion-level understanding, makes clear distinctions, self-corrects with little help, succeeds on a fresh application, asks to go deeper, or sounds impatient because the questioning is too easy
@@ -143,6 +158,14 @@ The prompt should require JSON-only output with this structure:
     "recent_parroting_streak": 0,
     "recent_unelaborated_agreement_streak": 0,
     "current_line_status": "productive",
+    "student_goal_now": "show understanding efficiently and keep the discussion moving",
+    "interaction_state": "student is engaged but the line will go flat if the same check repeats",
+    "current_line": "distinguishing the concept from a nearby confusion",
+    "what_student_has_shown": "named the distinction and partly explained it in their own words",
+    "what_remains_uncertain": "whether they can apply it freshly without leaning on the tutor's wording",
+    "why_continue_or_switch": "continue only if the next check is qualitatively different; otherwise switch angle or topic",
+    "do_not_repeat": ["do not ask them to restate the same distinction in almost the same words"],
+    "best_next_move": "ask for a fresh application or switch to a nearby sampled topic",
     "turn_count": N,
     "lecture_title": "..."
   }
