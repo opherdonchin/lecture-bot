@@ -1,9 +1,11 @@
 """Unit tests for pure helper functions in app/bot_engine.py."""
 import math
+import unittest.mock as mock
 
 import pytest
 
 import app.bot_engine as bot_engine
+import app.prompt_loader as prompt_loader
 
 
 # ---------------------------------------------------------------------------
@@ -404,3 +406,81 @@ def test_grading_validation_non_dict_entry_skipped():
     result = _run_grading_validation(raw)
     assert len(result) == 1
     assert result[0]["topic_id"] == "T1"
+
+
+# ---------------------------------------------------------------------------
+# prompt templates
+# ---------------------------------------------------------------------------
+
+def test_render_prompt_template_replaces_placeholders():
+    rendered = prompt_loader.render_prompt_template(
+        "dialogue_system_prompt.txt",
+        {
+            "session_focus_topics": "T1: Topic 1",
+            "topics_covered_json": '["T1"]',
+            "mastery_json": '{"T1": 80}',
+            "rubric_text": "Rubric body",
+            "lecture_context": "Lecture body",
+            "next_turn_count": 3,
+            "lecture_title_json": '"Lecture 1"',
+        },
+    )
+
+    assert "{{" not in rendered
+    assert "Session focus topics: T1: Topic 1" in rendered
+    assert '"turn_count": 3' in rendered
+    assert '"lecture_title": "Lecture 1"' in rendered
+
+
+def test_render_prompt_template_raises_for_missing_values():
+    with pytest.raises(KeyError):
+        prompt_loader.render_prompt_template("dialogue_system_prompt.txt", {})
+
+
+def test_generate_reply_uses_rendered_dialogue_prompt():
+    lecture_package = {
+        "lecture_id": "lecture_01",
+        "config": {"title": "Lecture 1"},
+        "rubric": SAMPLE_RUBRIC,
+        "bot_notes": "Bot notes",
+        "slides": "Slides body",
+        "handout": "Handout body",
+        "notebook": "Notebook body",
+        "topics": [
+            {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
+            {"topic_id": "T2", "label": "Purpose of statistics", "importance": "core"},
+        ],
+    }
+    state = {
+        "topics_sampled": ["T1"],
+        "topics_covered": ["T1"],
+        "mastery": {"T1": 80},
+        "turn_count": 2,
+        "confidence": 0.5,
+        "lecture_title": 'Lecture "1"',
+    }
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = (
+        '{"assistant_message": "Next question", '
+        '"updated_state": {"topics_covered": ["T1"], "mastery": {"T1": 80}, "confidence": 0.5}}'
+    )
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        assistant_message, updated_state = bot_engine.generate_reply(
+            lecture_package=lecture_package,
+            recent_messages=[],
+            state=state,
+            user_message="I think data are imperfect measurements.",
+        )
+
+    create_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    system_prompt = create_kwargs["messages"][0]["content"]
+    assert "Session focus topics: T1: Reality–Data–Model distinction" in system_prompt
+    assert 'Topics covered so far: ["T1"]' in system_prompt
+    assert 'Mastery estimates so far: {"T1": 80}' in system_prompt
+    assert '"turn_count": 3' in system_prompt
+    assert '"lecture_title": "Lecture \\"1\\""' in system_prompt
+    assert assistant_message == "Next question"
+    assert updated_state["turn_count"] == 3

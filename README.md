@@ -33,6 +33,7 @@ Then open http://127.0.0.1:8000/.
 app/          FastAPI application (main.py, models, session manager, bot engine)
 app/static/   Frontend JS and CSS
 app/templates/ Jinja2 HTML templates
+prompts/      Prompt templates loaded at runtime
 lectures/     Lecture packages (config, rubric, slides, handout, notebook)
 scripts/      DB init and lecture build/conversion utilities
 tests/        Pytest test suite

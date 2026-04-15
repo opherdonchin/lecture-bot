@@ -7,6 +7,7 @@ import re as re_
 import openai as openai_
 
 import app.config as config_module
+import app.prompt_loader as prompt_loader
 
 _log = logging_.getLogger(__name__)
 
@@ -20,6 +21,7 @@ _FALLBACK_DIALOGUE_MESSAGE = (
     "Let's keep going with one focused question: "
     "what idea from this lecture seems most important to you, and why?"
 )
+_DIALOGUE_PROMPT_TEMPLATE = "dialogue_system_prompt.txt"
 
 
 # ---------------------------------------------------------------------------
@@ -65,34 +67,17 @@ def generate_reply(
         f"{tid}: {topic_id_to_label.get(tid, tid)}" for tid in topics_sampled
     ]
 
-    system_prompt = (
-        "You are a Socratic tutoring assistant conducting a short conceptual review of a lecture.\n"
-        "Your job is to guide the student toward understanding through focused questions.\n\n"
-        f"Session focus topics: {', '.join(sampled_labels) if sampled_labels else 'all topics'}\n"
-        f"Topics covered so far: {state.get('topics_covered', [])}\n"
-        f"Mastery estimates so far: {state.get('mastery', {})}\n\n"
-        "Rubric:\n"
-        f"{rubric_text}\n\n"
-        "Lecture content:\n"
-        f"{context}\n\n"
-        "Rules:\n"
-        "- Keep your reply short and pedagogically focused.\n"
-        "- Ask at most ONE follow-up question.\n"
-        "- Do NOT change the topics_sampled list.\n"
-        "- Do NOT invent new topic IDs. Use only canonical IDs from the rubric (T1, T2, etc.).\n"
-        "- Update topics_covered and mastery only for topics the student actually demonstrated understanding of.\n"
-        "- Return JSON only. No extra text outside the JSON.\n\n"
-        "Return exactly this JSON structure:\n"
-        '{\n'
-        '  "assistant_message": "your short pedagogical reply with one focused next question",\n'
-        '  "updated_state": {\n'
-        '    "topics_covered": ["T1"],\n'
-        '    "mastery": {"T1": 60},\n'
-        f'    "turn_count": {state.get("turn_count", 0) + 1},\n'
-        '    "confidence": 0.35,\n'
-        f'    "lecture_title": "{state.get("lecture_title", "")}"\n'
-        '  }\n'
-        '}'
+    system_prompt = prompt_loader.render_prompt_template(
+        _DIALOGUE_PROMPT_TEMPLATE,
+        {
+            "session_focus_topics": ", ".join(sampled_labels) if sampled_labels else "all topics",
+            "topics_covered_json": j_.dumps(state.get("topics_covered", []), ensure_ascii=False),
+            "mastery_json": j_.dumps(state.get("mastery", {}), ensure_ascii=False),
+            "rubric_text": rubric_text,
+            "lecture_context": context,
+            "next_turn_count": state.get("turn_count", 0) + 1,
+            "lecture_title_json": j_.dumps(state.get("lecture_title", ""), ensure_ascii=False),
+        },
     )
 
     messages = [{"role": "system", "content": system_prompt}]
