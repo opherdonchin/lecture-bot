@@ -26,6 +26,7 @@ Then open http://127.0.0.1:8000/.
 | `pixi run dev` | Start dev server with auto-reload |
 | `pixi run test` | Run test suite |
 | `pixi run init-db` | Initialise SQLite database |
+| `pixi run build-lecture -- <lecture_id> --force` | Build lecture markdown, minutes, and rubric artifacts |
 
 ## Project structure
 
@@ -60,3 +61,33 @@ data/         Runtime SQLite database (not committed)
 - [x] Bot stub (echo responses)
 - [ ] OpenAI integration
 - [ ] Grading logic
+
+## Lecture Build Pipeline
+
+`lecture_config.json` is the pipeline manifest for each lecture. The `files` map can now describe:
+
+- converted sources: `slides`, `handout`, `notebook`, `transcript`
+- generated artifacts: `minutes`, `rubric`
+
+Example:
+
+```json
+{
+  "files": {
+    "slides": { "source": "Lecture 3.pptx", "target": "slides.md" },
+    "handout": { "source": "Lecture 3 handout.qmd", "target": "handout.md" },
+    "notebook": { "source": "Lecture03.ipynb", "target": "notebook.md" },
+    "transcript": { "source": "Lecture03.vtt", "target": "transcript.md" },
+    "minutes": { "target": "minutes.json" },
+    "rubric": { "target": "rubric.md" }
+  }
+}
+```
+
+Running `pixi run build-lecture -- lecture_03 --force` will:
+
+- convert the source files to markdown
+- convert the WebVTT transcript into a cleaner markdown transcript
+- generate `minutes.json` from slides, handout, notebook, and transcript
+- generate `rubric.md` from slides, handout, notebook, and minutes
+- refresh `topics` inside `lecture_config.json` from the resulting rubric

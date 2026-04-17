@@ -64,6 +64,13 @@ function clearError() {
   errorBox.classList.add("hidden");
 }
 
+function setSessionActive(active) {
+  messageInput.disabled = !active;
+  sendBtn.disabled = !active;
+  gradeBtn.disabled = !active;
+  reportBtn.disabled = !active;
+}
+
 function appendMessage(role, content) {
   const row = document.createElement("div");
   row.className = "msg " + role;
@@ -137,7 +144,7 @@ async function startSession() {
     transcript.innerHTML = "";
 
     messageInput.disabled = false;
-    sendBtn.disabled = false;
+    setSessionActive(true);
     messageInput.focus();
 
     if (data.message) {
@@ -184,13 +191,21 @@ async function sendMessage() {
     const data = await res.json();
     thinkingRow.remove();
     appendMessage("assistant", data.message || "[no reply]");
+    if (data.final_report) {
+      appendReportMessage(data.final_report);
+    }
+    if (data.session_active === false) {
+      setSessionActive(false);
+    }
   } catch (err) {
     thinkingRow.remove();
     userRow.remove();
     messageInput.value = message; // restore on failure
     showError("Network error while sending message: " + err.message);
   } finally {
-    sendBtn.disabled = false;
+    if (sessionId && !messageInput.disabled) {
+      sendBtn.disabled = false;
+    }
     messageInput.focus();
   }
 }
@@ -237,6 +252,13 @@ function appendGradeMessage(data) {
     exp.className = "grade-explanation";
     exp.textContent = data.explanation;
     row.appendChild(exp);
+  }
+
+  if (data.scored_topics && data.scored_topics.length > 0) {
+    const scored = document.createElement("p");
+    scored.className = "grade-missing";
+    scored.textContent = "Scored topics: " + data.scored_topics.join(", ");
+    row.appendChild(scored);
   }
 
   if (data.missing_topics && data.missing_topics.length > 0) {
@@ -376,6 +398,7 @@ async function restartSession() {
 
     // Clear transcript for fresh start
     transcript.innerHTML = "";
+    setSessionActive(true);
     if (data.message) appendMessage("assistant", data.message);
   } catch (err) {
     showError("Network error: " + err.message);

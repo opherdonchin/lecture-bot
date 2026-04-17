@@ -64,9 +64,13 @@ def start_session(request: schema.StartSessionRequest, db: sqlalchemy_orm.Sessio
     
     # Create the session
     session = session_manager.create_session(db, request.student_id, request.lecture_id, lecture_package)
+    state = session_manager.load_state(db, session.session_id)
     
     # Generate opening message
-    opening_message = bot_engine.build_opening_message(lecture_package)
+    opening_message = bot_engine.build_opening_message(
+        lecture_package,
+        sampled_topic_ids=state.get("topics_sampled", []),
+    )
     
     # Save the opening message
     session_manager.append_message(db, session.session_id, "assistant", opening_message)
@@ -86,40 +90,94 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         raise fa.HTTPException(status_code=400, detail="Session has ended")
 
     settings = config_module.get_settings()
+    state = session_manager.load_state(db, request.session_id)
 
     # Enforce session timeout
+    now = dt.datetime.now(dt.timezone.utc)
     started_at = session.started_at
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=dt.timezone.utc)
     timeout_at = started_at + dt.timedelta(minutes=settings.session_timeout_minutes)
-    if dt.datetime.now(dt.timezone.utc) > timeout_at:
-        session.ended_at = dt.datetime.now(dt.timezone.utc)
+    if now > timeout_at:
+        grade_snapshot = _compute_authoritative_grade_snapshot(
+            db,
+            session=session,
+            state=state,
+        )
+        _record_grade_event(
+            db,
+            session_id=session.session_id,
+            event_type="grade",
+            grade=grade_snapshot["candidate_grade"],
+            payload=grade_snapshot["payload"],
+        )
+        final_report = _generate_authoritative_report_result(
+            db,
+            session=session,
+            state=state,
+            grade_snapshot=grade_snapshot,
+        )
+        closing_message = _build_timeout_closing_message(settings, grade_snapshot["grade"])
+        session_manager.append_message(db, request.session_id, "assistant", closing_message)
+        session_manager.save_state(db, request.session_id, state)
+        session.ended_at = now
         db.commit()
-        raise fa.HTTPException(status_code=400, detail="Session has timed out")
-
-    state = session_manager.load_state(db, request.session_id)
+        return schema.SendMessageResponse(
+            message=closing_message,
+            session_active=False,
+            ended_reason="timeout",
+            final_grade=grade_snapshot["grade"],
+            final_grade_explanation=grade_snapshot["explanation"],
+            final_scored_topics=grade_snapshot["scored_topics"],
+            final_missing_topics=grade_snapshot["missing_topics"],
+            final_report=final_report,
+        )
 
     # Reload lecture package
-    try:
-        lecture_package = lecture_loader.load_lecture_package(settings.lectures_dir, session.lecture_id)
-    except lecture_loader.LectureNotFoundError as e:
-        raise fa.HTTPException(status_code=404, detail=str(e))
+    lecture_package = _load_lecture_package_for_session(session)
+    _update_backend_grade_state(
+        db,
+        session=session,
+        state=state,
+        lecture_package=lecture_package,
+    )
 
     # Fetch recent messages in chronological order
-    all_msgs = (
-        db.query(models.MessageModel)
-        .filter(models.MessageModel.session_id == request.session_id)
-        .order_by(models.MessageModel.id.asc())
-        .all()
+    all_messages = _load_session_messages(db, request.session_id)
+    recent_messages = all_messages[-settings.recent_message_limit:]
+
+    remaining_seconds = max(0.0, (timeout_at - now).total_seconds())
+    minutes_left = max(1, int((remaining_seconds + 59) // 60))
+    should_warn_timeout = (
+        remaining_seconds <= settings.session_warning_minutes * 60
+        and not state.get("timeout_warning_sent", False)
     )
-    recent_rows = all_msgs[-settings.recent_message_limit:]
-    recent_messages = bot_engine.serialize_messages(recent_rows)
+    timing_context = {
+        "minutes_remaining": minutes_left,
+        "closing_mode": remaining_seconds <= settings.session_warning_minutes * 60,
+        "timeout_warning_sent": bool(state.get("timeout_warning_sent", False)),
+    }
 
     bot_reply, updated_state = bot_engine.generate_reply(
         lecture_package=lecture_package,
         recent_messages=recent_messages,
         state=state,
         user_message=request.message,
+        timing_context=timing_context,
+    )
+
+    if should_warn_timeout:
+        bot_reply = (
+            f"{bot_reply}\n\n"
+            f"We have about {minutes_left} minutes left in this session."
+        )
+        updated_state["timeout_warning_sent"] = True
+
+    _update_backend_grade_state(
+        db,
+        session=session,
+        state=updated_state,
+        lecture_package=lecture_package,
     )
 
     session_manager.append_message(db, request.session_id, "user", request.message)
@@ -167,137 +225,249 @@ def _get_authoritative_grading_payload(db: sqlalchemy_orm.Session, session_id: s
     return None
 
 
-@app.post("/get_grade", response_model=schema.GradeResponse)
-def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
-    """Compute and return the current grade using real LLM grading."""
-    session = _get_active_session(db, request.session_id)
-    state = session_manager.load_state(db, session.session_id)
+def _topic_id_to_label_map(lecture_package: dict) -> dict[str, str]:
+    topic_defs = lecture_package.get("topics") or bot_engine.parse_rubric_topics(lecture_package["rubric"])
+    return {topic["topic_id"]: topic["label"] for topic in topic_defs}
 
+
+def _labelled_scored_topics(topic_scores: list[dict], topic_id_to_label: dict[str, str]) -> list[str]:
+    scored_topic_ids = {
+        str(ts.get("topic_id", ""))
+        for ts in topic_scores
+        if isinstance(ts, dict) and str(ts.get("topic_id", "")) in topic_id_to_label
+    }
+    return [
+        label
+        for topic_id, label in topic_id_to_label.items()
+        if topic_id in scored_topic_ids
+    ]
+
+
+def _coerce_mastery_map(raw_mastery: dict | None, allowed_topic_ids: set[str]) -> dict[str, int]:
+    if not isinstance(raw_mastery, dict):
+        return {}
+    mastery: dict[str, int] = {}
+    for topic_id, score in raw_mastery.items():
+        if not isinstance(topic_id, str) or topic_id not in allowed_topic_ids:
+            continue
+        try:
+            mastery[topic_id] = max(0, min(100, int(score)))
+        except (TypeError, ValueError):
+            continue
+    return mastery
+
+
+def _join_labels(labels: list[str]) -> str:
+    if not labels:
+        return ""
+    if len(labels) == 1:
+        return labels[0]
+    if len(labels) == 2:
+        return f"{labels[0]} and {labels[1]}"
+    return f"{', '.join(labels[:-1])}, and {labels[-1]}"
+
+
+def _load_lecture_package_for_session(session: models.SessionModel) -> dict:
     settings = config_module.get_settings()
     try:
-        lecture_package = lecture_loader.load_lecture_package(settings.lectures_dir, session.lecture_id)
+        return lecture_loader.load_lecture_package(settings.lectures_dir, session.lecture_id)
     except lecture_loader.LectureNotFoundError as e:
         raise fa.HTTPException(status_code=404, detail=str(e))
 
+
+def _load_session_messages(db: sqlalchemy_orm.Session, session_id: str) -> list[dict]:
     all_msgs = (
         db.query(models.MessageModel)
-        .filter(models.MessageModel.session_id == session.session_id)
+        .filter(models.MessageModel.session_id == session_id)
         .order_by(models.MessageModel.id.asc())
         .all()
     )
-    messages = bot_engine.serialize_messages(all_msgs)
+    return bot_engine.serialize_messages(all_msgs)
 
-    grading_result = bot_engine.generate_topic_scores(
-        lecture_package=lecture_package,
-        messages=messages,
-        state=state,
-    )
 
-    candidate_grade = bot_engine.compute_weighted_grade(grading_result["topic_scores"])
-    stored_grade = session.current_grade or 0.0
-    accepted_as_current = candidate_grade > stored_grade
-
-    if accepted_as_current:
-        session.current_grade = float(candidate_grade)
-
-    payload = {
-        "candidate_grade": candidate_grade,
-        "accepted_as_current": accepted_as_current,
-        "topic_scores": grading_result["topic_scores"],
-        "explanation": grading_result["explanation"],
-        "missing_topics": grading_result["missing_topics"],
-    }
+def _record_grade_event(
+    db: sqlalchemy_orm.Session,
+    *,
+    session_id: str,
+    event_type: str,
+    grade: float,
+    payload: dict,
+) -> None:
     db.add(models.GradeEventModel(
-        session_id=session.session_id,
-        event_type="grade",
-        grade=float(candidate_grade),
+        session_id=session_id,
+        event_type=event_type,
+        grade=float(grade),
         payload_json=j_.dumps(payload, ensure_ascii=False),
     ))
-    db.commit()
 
-    # Use the authoritative accepted payload for the response
-    if accepted_as_current:
-        auth_explanation = grading_result["explanation"]
-        auth_missing = grading_result["missing_topics"]
-        auth_grade = float(candidate_grade)
-    else:
+
+def _update_backend_grade_state(
+    db: sqlalchemy_orm.Session,
+    *,
+    session: models.SessionModel,
+    state: dict,
+    lecture_package: dict,
+) -> None:
+    topic_id_to_label = _topic_id_to_label_map(lecture_package)
+    allowed_topic_ids = set(topic_id_to_label)
+
+    current_mastery = _coerce_mastery_map(state.get("mastery"), allowed_topic_ids)
+    best_mastery = _coerce_mastery_map(state.get("best_mastery"), allowed_topic_ids)
+
+    if not best_mastery:
         prior = _get_authoritative_grading_payload(db, session.session_id)
         if prior:
-            auth_explanation = prior.get("explanation", "")
-            auth_missing = prior.get("missing_topics", [])
-        else:
-            auth_explanation = grading_result["explanation"]
-            auth_missing = grading_result["missing_topics"]
-        auth_grade = float(session.current_grade or 0.0)
+            for topic_score in prior.get("topic_scores", []):
+                if not isinstance(topic_score, dict):
+                    continue
+                topic_id = str(topic_score.get("topic_id", ""))
+                if topic_id not in allowed_topic_ids:
+                    continue
+                try:
+                    best_mastery[topic_id] = max(
+                        best_mastery.get(topic_id, 0),
+                        max(0, min(100, int(topic_score.get("score", 0)))),
+                    )
+                except (TypeError, ValueError):
+                    continue
 
-    return schema.GradeResponse(
-        grade=auth_grade,
-        explanation=auth_explanation,
-        missing_topics=auth_missing,
+    for topic_id, score in current_mastery.items():
+        best_mastery[topic_id] = max(best_mastery.get(topic_id, 0), score)
+
+    best_mastery = {
+        topic_id: score
+        for topic_id, score in best_mastery.items()
+        if score > 0
+    }
+    topic_scores = [
+        {"topic_id": topic_id, "score": score}
+        for topic_id, score in best_mastery.items()
+    ]
+    current_grade = float(bot_engine.compute_weighted_grade(topic_scores))
+
+    state["mastery"] = current_mastery
+    state["best_mastery"] = best_mastery
+    state["current_grade"] = current_grade
+    session.current_grade = max(float(session.current_grade or 0.0), current_grade)
+
+
+def _build_grade_snapshot_from_state(
+    *,
+    session: models.SessionModel,
+    state: dict,
+    lecture_package: dict,
+    messages: list[dict],
+) -> dict:
+    topic_defs = lecture_package.get("topics") or bot_engine.parse_rubric_topics(lecture_package["rubric"])
+    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
+    best_mastery = _coerce_mastery_map(state.get("best_mastery"), set(topic_id_to_label))
+    evidence_notes = state.get("evidence_notes", {})
+
+    topic_scores = []
+    for topic in topic_defs:
+        topic_id = topic["topic_id"]
+        score = best_mastery.get(topic_id, 0)
+        if score <= 0:
+            continue
+        topic_scores.append({
+            "topic_id": topic_id,
+            "score": score,
+            "rationale": str(evidence_notes.get(topic_id, "")),
+        })
+
+    scored_topics = [topic_id_to_label[ts["topic_id"]] for ts in topic_scores]
+    missing_topics = [
+        topic["label"]
+        for topic in topic_defs
+        if topic["topic_id"] not in best_mastery
+    ]
+    sorted_scores = sorted(topic_scores, key=lambda ts: (-ts["score"], ts["topic_id"]))
+    strongest_topics = [
+        topic_id_to_label[ts["topic_id"]]
+        for ts in sorted_scores[:2]
+    ]
+    if not scored_topics:
+        explanation = (
+            "No topics are banked yet. Keep going with one lecture idea and show a clear distinction, explanation, or application."
+        )
+    elif len(scored_topics) == 1:
+        explanation = f"Best demonstrated understanding so far is in {scored_topics[0]}."
+    else:
+        explanation = (
+            f"Best demonstrated understanding so far covers {_join_labels(scored_topics)}. "
+            f"Strongest evidence is in {_join_labels(strongest_topics)}."
+        )
+
+    grade = max(
+        float(state.get("current_grade", 0.0) or 0.0),
+        float(session.current_grade or 0.0),
     )
+    payload = {
+        "candidate_grade": grade,
+        "accepted_as_current": True,
+        "topic_scores": topic_scores,
+        "explanation": explanation,
+        "scored_topics": scored_topics,
+        "missing_topics": missing_topics,
+    }
+    return {
+        "lecture_package": lecture_package,
+        "messages": messages,
+        "candidate_grade": grade,
+        "accepted_as_current": True,
+        "payload": payload,
+        "grade": grade,
+        "explanation": explanation,
+        "scored_topics": scored_topics,
+        "missing_topics": missing_topics,
+        "topic_scores": topic_scores,
+    }
 
 
-@app.post("/generate_report", response_model=schema.ReportResponse)
-def generate_report(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
-    """Generate a final session report using real LLM grading and report generation."""
-    session = _get_active_session(db, request.session_id)
-    state = session_manager.load_state(db, session.session_id)
-
-    settings = config_module.get_settings()
-    try:
-        lecture_package = lecture_loader.load_lecture_package(settings.lectures_dir, session.lecture_id)
-    except lecture_loader.LectureNotFoundError as e:
-        raise fa.HTTPException(status_code=404, detail=str(e))
-
-    all_msgs = (
-        db.query(models.MessageModel)
-        .filter(models.MessageModel.session_id == session.session_id)
-        .order_by(models.MessageModel.id.asc())
-        .all()
+def _compute_authoritative_grade_snapshot(
+    db: sqlalchemy_orm.Session,
+    *,
+    session: models.SessionModel,
+    state: dict,
+    lecture_package: dict | None = None,
+    messages: list[dict] | None = None,
+) -> dict:
+    lecture_package = lecture_package or _load_lecture_package_for_session(session)
+    messages = messages or _load_session_messages(db, session.session_id)
+    _update_backend_grade_state(
+        db,
+        session=session,
+        state=state,
+        lecture_package=lecture_package,
     )
-    messages = bot_engine.serialize_messages(all_msgs)
-
-    raw_grading = bot_engine.generate_topic_scores(
+    return _build_grade_snapshot_from_state(
+        session=session,
+        state=state,
         lecture_package=lecture_package,
         messages=messages,
-        state=state,
     )
 
-    candidate_grade = bot_engine.compute_weighted_grade(raw_grading["topic_scores"])
-    stored_grade = session.current_grade or 0.0
-    accepted_as_current = candidate_grade > stored_grade
 
-    if accepted_as_current:
-        session.current_grade = float(candidate_grade)
-        auth_grade = float(candidate_grade)
-        auth_explanation = raw_grading["explanation"]
-        auth_missing = raw_grading["missing_topics"]
-        auth_topic_scores = raw_grading["topic_scores"]
-    else:
-        auth_grade = float(session.current_grade or 0.0)
-        prior = _get_authoritative_grading_payload(db, session.session_id)
-        if prior:
-            auth_explanation = prior.get("explanation", "")
-            auth_missing = prior.get("missing_topics", [])
-            auth_topic_scores = prior.get("topic_scores", [])
-        else:
-            auth_explanation = raw_grading["explanation"]
-            auth_missing = raw_grading["missing_topics"]
-            auth_topic_scores = raw_grading["topic_scores"]
-
+def _generate_authoritative_report_result(
+    db: sqlalchemy_orm.Session,
+    *,
+    session: models.SessionModel,
+    state: dict,
+    grade_snapshot: dict,
+) -> schema.ReportResponse:
     timestamp_iso = dt.datetime.now(dt.timezone.utc).isoformat()
-
     grading_result = {
-        "final_grade": auth_grade,
-        "topic_scores": auth_topic_scores,
-        "explanation": auth_explanation,
-        "missing_topics": auth_missing,
-        "accepted_as_current": accepted_as_current,
+        "final_grade": grade_snapshot["grade"],
+        "topic_scores": grade_snapshot["topic_scores"],
+        "explanation": grade_snapshot["explanation"],
+        "scored_topics": grade_snapshot["scored_topics"],
+        "missing_topics": grade_snapshot["missing_topics"],
+        "accepted_as_current": grade_snapshot["accepted_as_current"],
     }
 
     report_result = bot_engine.generate_report(
-        lecture_package=lecture_package,
-        messages=messages,
+        lecture_package=grade_snapshot["lecture_package"],
+        messages=grade_snapshot["messages"],
         state=state,
         grading_result=grading_result,
         session_id=session.session_id,
@@ -306,20 +476,21 @@ def generate_report(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session
     )
 
     report_payload = {
-        "candidate_grade": candidate_grade,
-        "accepted_as_current": accepted_as_current,
-        "topic_scores": auth_topic_scores,
-        "explanation": auth_explanation,
-        "missing_topics": auth_missing,
+        "candidate_grade": grade_snapshot["candidate_grade"],
+        "accepted_as_current": grade_snapshot["accepted_as_current"],
+        "topic_scores": grade_snapshot["topic_scores"],
+        "explanation": grade_snapshot["explanation"],
+        "scored_topics": grade_snapshot["scored_topics"],
+        "missing_topics": grade_snapshot["missing_topics"],
         "report_text": report_result["report_text"],
     }
-    db.add(models.GradeEventModel(
+    _record_grade_event(
+        db,
         session_id=session.session_id,
         event_type="report",
-        grade=float(auth_grade),
-        payload_json=j_.dumps(report_payload, ensure_ascii=False),
-    ))
-    db.commit()
+        grade=grade_snapshot["grade"],
+        payload=report_payload,
+    )
 
     return schema.ReportResponse(
         report_text=report_result["report_text"],
@@ -329,9 +500,66 @@ def generate_report(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session
             lecture_id=session.lecture_id,
             started_at=session.started_at.isoformat(),
             timestamp=timestamp_iso,
-            final_grade=auth_grade,
+            final_grade=grade_snapshot["grade"],
         ),
     )
+
+
+def _build_timeout_closing_message(settings: config_module.Settings, final_grade: float) -> str:
+    grade_text = int(final_grade) if float(final_grade).is_integer() else round(final_grade, 1)
+    return (
+        f"Thanks for working through this session with me. "
+        f"The {settings.session_timeout_minutes}-minute session has ended. "
+        f"Your final grade for this session is {grade_text} / 100. "
+        "I've included your final report below."
+    )
+
+
+@app.post("/get_grade", response_model=schema.GradeResponse)
+def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
+    """Compute and return the current grade using real LLM grading."""
+    session = _get_active_session(db, request.session_id)
+    state = session_manager.load_state(db, session.session_id)
+    grade_snapshot = _compute_authoritative_grade_snapshot(
+        db,
+        session=session,
+        state=state,
+    )
+    _record_grade_event(
+        db,
+        session_id=session.session_id,
+        event_type="grade",
+        grade=grade_snapshot["candidate_grade"],
+        payload=grade_snapshot["payload"],
+    )
+    db.commit()
+
+    return schema.GradeResponse(
+        grade=grade_snapshot["grade"],
+        explanation=grade_snapshot["explanation"],
+        scored_topics=grade_snapshot["scored_topics"],
+        missing_topics=grade_snapshot["missing_topics"],
+    )
+
+
+@app.post("/generate_report", response_model=schema.ReportResponse)
+def generate_report(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
+    """Generate a final session report using real LLM grading and report generation."""
+    session = _get_active_session(db, request.session_id)
+    state = session_manager.load_state(db, session.session_id)
+    grade_snapshot = _compute_authoritative_grade_snapshot(
+        db,
+        session=session,
+        state=state,
+    )
+    report_response = _generate_authoritative_report_result(
+        db,
+        session=session,
+        state=state,
+        grade_snapshot=grade_snapshot,
+    )
+    db.commit()
+    return report_response
 
 
 @app.post("/restart_session", response_model=schema.StartSessionResponse)

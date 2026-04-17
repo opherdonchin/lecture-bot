@@ -23,6 +23,12 @@ class SendMessageRequest(pd.BaseModel):
 class SendMessageResponse(pd.BaseModel):
     message: str
     session_active: bool = True
+    ended_reason: str | None = None
+    final_grade: float | None = None
+    final_grade_explanation: str | None = None
+    final_scored_topics: list[str] = pd.Field(default_factory=list)
+    final_missing_topics: list[str] = pd.Field(default_factory=list)
+    final_report: "ReportResponse | None" = None
 
 
 class SessionIdRequest(pd.BaseModel):
@@ -38,6 +44,7 @@ class RestartSessionRequest(pd.BaseModel):
 class GradeResponse(pd.BaseModel):
     grade: float
     explanation: str
+    scored_topics: list[str]
     missing_topics: list[str]
 
 
@@ -53,3 +60,6 @@ class ReportJson(pd.BaseModel):
 class ReportResponse(pd.BaseModel):
     report_text: str
     report_json: ReportJson
+
+
+SendMessageResponse.model_rebuild()

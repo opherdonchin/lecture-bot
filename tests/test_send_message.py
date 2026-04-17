@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import app.db as db_module
+import app.bot_engine as bot_engine
 import app.models as models
 from app.main import app
 
@@ -38,7 +39,13 @@ def _mock_openai_dialogue(reply_text="Test reply."):
     mock_resp = mock.MagicMock()
     mock_resp.choices[0].message.content = j.dumps({
         "assistant_message": reply_text,
-        "updated_state": {"topics_covered": [], "mastery": {}, "turn_count": 1, "confidence": 0.0},
+        "updated_state": {
+            "topics_covered": [],
+            "mastery": {},
+            "evidence_notes": {},
+            "current_topic_id": None,
+            "tutor_comment": "",
+        },
     })
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.return_value = mock_resp
@@ -84,11 +91,82 @@ def test_messages_persisted(client):
     assert user_msg.content == "Hello"
 
 
+def test_send_message_banks_best_mastery_from_tutor_state(client):
+    session_id = start_session(client)
+
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "Good. What is the key distinction?",
+        "updated_state": {
+            "topics_covered": ["T1"],
+            "mastery": {"T1": 70},
+            "evidence_notes": {"T1": "student gave a real distinction"},
+            "current_topic_id": "T1",
+            "tutor_comment": "bank T1 and verify once more",
+        },
+    })
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+
+    assert response.status_code == 200
+    db = next(app.dependency_overrides[db_module.get_db]())
+    row = db.query(models.SessionStateModel).filter(
+        models.SessionStateModel.session_id == session_id
+    ).first()
+    state = j.loads(row.state_json)
+    assert state["mastery"]["T1"] == 70
+    assert state["best_mastery"]["T1"] == 70
+    assert state["current_grade"] == 38.0
+
+
 # ---------------------------------------------------------------------------
 # Timeout tests
 # ---------------------------------------------------------------------------
 
-def test_session_timeout_returns_400(client):
+def _mock_openai_report(report_text="Generated report."):
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = j.dumps({"report_text": report_text})
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+    return mock.patch("openai.OpenAI", return_value=mock_client)
+
+
+def _set_mastery_state(session_id, *, best_scores=None, current_scores=None):
+    db = next(app.dependency_overrides[db_module.get_db]())
+    session = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    row = db.query(models.SessionStateModel).filter(
+        models.SessionStateModel.session_id == session_id
+    ).first()
+    state = j.loads(row.state_json)
+
+    best_scores = best_scores or []
+    current_scores = current_scores if current_scores is not None else best_scores
+
+    state["best_mastery"] = {
+        f"T{i+1}": score
+        for i, score in enumerate(best_scores)
+    }
+    state["mastery"] = {
+        f"T{i+1}": score
+        for i, score in enumerate(current_scores)
+    }
+    state["topics_covered"] = [f"T{i+1}" for i, score in enumerate(current_scores) if score > 0]
+    state["current_grade"] = float(bot_engine.compute_weighted_grade([
+        {"topic_id": f"T{i+1}", "score": score}
+        for i, score in enumerate(best_scores)
+        if score > 0
+    ]))
+    row.state_json = j.dumps(state)
+    session.current_grade = state["current_grade"]
+    db.commit()
+
+
+def test_session_timeout_returns_final_report_and_closes_session(client):
     session_id = start_session(client)
     db = next(app.dependency_overrides[db_module.get_db]())
     session_row = db.query(models.SessionModel).filter(
@@ -98,9 +176,17 @@ def test_session_timeout_returns_400(client):
     session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=25)
     db.commit()
 
-    response = client.post("/send_message", json={"session_id": session_id, "message": "Late message"})
-    assert response.status_code == 400
-    assert "timed out" in response.json()["detail"].lower()
+    _set_mastery_state(session_id, best_scores=[100, 100])
+    with _mock_openai_report():
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Late message"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session_active"] is False
+    assert data["ended_reason"] == "timeout"
+    assert data["final_grade"] == 80.0
+    assert "session has ended" in data["message"].lower()
+    assert data["final_report"]["report_json"]["final_grade"] == 80.0
 
 
 def test_session_timeout_ends_session(client):
@@ -111,14 +197,41 @@ def test_session_timeout_ends_session(client):
     ).first()
     session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=25)
     db.commit()
+    _set_mastery_state(session_id, best_scores=[80])
 
-    client.post("/send_message", json={"session_id": session_id, "message": "Late message"})
+    with _mock_openai_report():
+        client.post("/send_message", json={"session_id": session_id, "message": "Late message"})
 
     db2 = next(app.dependency_overrides[db_module.get_db]())
     updated_row = db2.query(models.SessionModel).filter(
         models.SessionModel.session_id == session_id
     ).first()
     assert updated_row.ended_at is not None
+
+
+def test_session_timeout_warning_added_in_last_five_minutes(client):
+    session_id = start_session(client)
+    db = next(app.dependency_overrides[db_module.get_db]())
+    session_row = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=16)
+    db.commit()
+
+    with _mock_openai_dialogue(reply_text="Let's finish one last idea."):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session_active"] is True
+    assert "minutes left in this session" in data["message"]
+
+    db2 = next(app.dependency_overrides[db_module.get_db]())
+    row = db2.query(models.SessionStateModel).filter(
+        models.SessionStateModel.session_id == session_id
+    ).first()
+    state = j.loads(row.state_json)
+    assert state["timeout_warning_sent"] is True
 
 
 # ---------------------------------------------------------------------------

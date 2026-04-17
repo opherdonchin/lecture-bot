@@ -118,6 +118,59 @@ def test_sample_session_topics_fewer_than_count():
 
 
 # ---------------------------------------------------------------------------
+# build_opening_message
+# ---------------------------------------------------------------------------
+
+def test_build_opening_message_includes_sampled_topic_labels(monkeypatch):
+    lecture_package = {
+        "lecture_id": "lecture_01",
+        "config": {"title": "Lecture 1"},
+        "rubric": SAMPLE_RUBRIC,
+        "topics": [
+            {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
+            {"topic_id": "T2", "label": "Purpose of statistics", "importance": "core"},
+            {"topic_id": "T3", "label": "Definition and structure of data", "importance": "important"},
+        ],
+    }
+    monkeypatch.setattr(
+        bot_engine.config_module,
+        "get_settings",
+        lambda: type("Settings", (), {"opening_topic_choice_count": 3})(),
+    )
+    message = bot_engine.build_opening_message(
+        lecture_package,
+        sampled_topic_ids=["T1", "T2", "T3"],
+    )
+    assert "Welcome to the review bot for Lecture 1." in message
+    assert "Reality–Data–Model distinction, Purpose of statistics, or Definition and structure of data" in message
+
+
+def test_build_opening_message_falls_back_without_resolved_sampled_topics(monkeypatch):
+    lecture_package = {
+        "lecture_id": "lecture_01",
+        "config": {"title": "Lecture 1"},
+        "rubric": SAMPLE_RUBRIC,
+        "topics": [
+            {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
+        ],
+    }
+    monkeypatch.setattr(
+        bot_engine.config_module,
+        "get_settings",
+        lambda: type("Settings", (), {"opening_topic_choice_count": 3})(),
+    )
+    message = bot_engine.build_opening_message(
+        lecture_package,
+        sampled_topic_ids=["T99"],
+    )
+    assert message == (
+        "Welcome to the review bot for Lecture 1. "
+        "We can start wherever feels most useful. "
+        "What topic from this lecture would you like to begin with?"
+    )
+
+
+# ---------------------------------------------------------------------------
 # compute_weighted_grade
 # ---------------------------------------------------------------------------
 
@@ -179,6 +232,12 @@ OLD_STATE = {
     "topics_sampled": ["T1", "T2", "T3"],
     "topics_covered": [],
     "mastery": {},
+    "best_mastery": {},
+    "evidence_notes": {},
+    "current_topic_id": None,
+    "tutor_comment": "",
+    "current_grade": 0.0,
+    "timeout_warning_sent": False,
     "turn_count": 1,
     "confidence": 0.5,
     "lecture_title": "Lecture 1",
@@ -218,6 +277,41 @@ def test_sanitize_mastery_values_clamped():
     assert result["mastery"]["T2"] == 0
 
 
+def test_sanitize_best_mastery_preserved():
+    old_state = dict(OLD_STATE)
+    old_state["best_mastery"] = {"T1": 90}
+    result = bot_engine.sanitize_state_update(old_state, {"mastery": {"T1": 20}}, ALLOWED_IDS)
+    assert result["best_mastery"] == {"T1": 90}
+
+
+def test_sanitize_current_grade_preserved():
+    old_state = dict(OLD_STATE)
+    old_state["current_grade"] = 55.0
+    result = bot_engine.sanitize_state_update(old_state, {"mastery": {"T1": 100}}, ALLOWED_IDS)
+    assert result["current_grade"] == 55.0
+
+
+def test_sanitize_evidence_notes_filtered_and_merged():
+    old_state = dict(OLD_STATE)
+    old_state["evidence_notes"] = {"T1": "old note"}
+    llm_state = {"evidence_notes": {"T1": "new note", "T99": "bad"}}
+    result = bot_engine.sanitize_state_update(old_state, llm_state, ALLOWED_IDS)
+    assert result["evidence_notes"] == {"T1": "new note"}
+
+
+def test_sanitize_current_topic_id_filtered():
+    llm_state = {"current_topic_id": "T99"}
+    result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
+    assert result["current_topic_id"] is None
+
+
+def test_sanitize_tutor_comment_preserved_when_missing():
+    old_state = dict(OLD_STATE)
+    old_state["tutor_comment"] = "stay on T1"
+    result = bot_engine.sanitize_state_update(old_state, {}, ALLOWED_IDS)
+    assert result["tutor_comment"] == "stay on T1"
+
+
 def test_sanitize_confidence_clamped():
     llm_state = {"topics_covered": [], "mastery": {}, "confidence": 1.5}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
@@ -240,24 +334,33 @@ def test_sanitize_lecture_title_immutable():
 # build_dialogue_context
 # ---------------------------------------------------------------------------
 
-def _make_pkg(bot_notes="", slides="", handout="", notebook=""):
+def _make_pkg(bot_notes="", slides="", handout="", minutes="", notebook=""):
+    context_sections = []
+    if bot_notes:
+        context_sections.append({"key": "bot_notes", "label": "Bot Notes", "content": bot_notes})
+    if slides:
+        context_sections.append({"key": "slides", "label": "Slides", "content": slides})
+    if handout:
+        context_sections.append({"key": "handout", "label": "Handout", "content": handout})
+    if minutes:
+        context_sections.append({"key": "minutes", "label": "Instructional Minutes", "content": minutes})
+    if notebook:
+        context_sections.append({"key": "notebook", "label": "Notebook", "content": notebook})
     return {
         "lecture_id": "test",
         "config": {"title": "Test"},
         "rubric": "rubric content",
-        "bot_notes": bot_notes,
-        "slides": slides,
-        "handout": handout,
-        "notebook": notebook,
+        "context_sections": context_sections,
     }
 
 
 def test_build_dialogue_context_all_fit():
-    pkg = _make_pkg(bot_notes="BN", slides="SL", handout="HO", notebook="NB")
+    pkg = _make_pkg(bot_notes="BN", slides="SL", handout="HO", minutes="MN", notebook="NB")
     result = bot_engine.build_dialogue_context(pkg, max_chars=10000)
     assert "## Bot Notes" in result
     assert "## Slides" in result
     assert "## Handout" in result
+    assert "## Instructional Minutes" in result
     assert "## Notebook" in result
 
 
@@ -267,12 +370,13 @@ def test_build_dialogue_context_empty_sections_skipped():
     assert "## Slides" in result
     assert "## Bot Notes" not in result
     assert "## Handout" not in result
+    assert "## Instructional Minutes" not in result
     assert "## Notebook" not in result
 
 
 def test_build_dialogue_context_respects_budget():
     long_text = "x" * 5000
-    pkg = _make_pkg(bot_notes=long_text, slides=long_text, handout=long_text, notebook=long_text)
+    pkg = _make_pkg(bot_notes=long_text, slides=long_text, handout=long_text, minutes=long_text, notebook=long_text)
     result = bot_engine.build_dialogue_context(pkg, max_chars=8000)
     assert len(result) <= 8000
 
@@ -282,13 +386,15 @@ def test_build_dialogue_context_priority_order():
     bot_notes = "BN " * 100
     slides = "SL " * 100
     handout = "HO " * 100
+    minutes = "MN " * 100
     notebook = "NB " * 10000  # very large, should be truncated/dropped
-    pkg = _make_pkg(bot_notes=bot_notes, slides=slides, handout=handout, notebook=notebook)
+    pkg = _make_pkg(bot_notes=bot_notes, slides=slides, handout=handout, minutes=minutes, notebook=notebook)
     result = bot_engine.build_dialogue_context(pkg, max_chars=5000)
     assert len(result) <= 5000
     # bot_notes and slides should still be present
     assert "BN" in result
     assert "SL" in result
+    assert "MN" in result
 
 
 # ---------------------------------------------------------------------------
@@ -317,10 +423,7 @@ _LECTURE_PACKAGE_FOR_GRADING = {
     "lecture_id": "test",
     "config": {"title": "Test"},
     "rubric": _RUBRIC_FOR_GRADING,
-    "bot_notes": "",
-    "slides": "",
-    "handout": "",
-    "notebook": "",
+    "context_sections": [],
 }
 
 
@@ -409,43 +512,30 @@ def test_grading_validation_non_dict_entry_skipped():
 
 
 # ---------------------------------------------------------------------------
-# prompt templates
+# prompt loading
 # ---------------------------------------------------------------------------
 
-def test_render_prompt_template_replaces_placeholders():
-    rendered = prompt_loader.render_prompt_template(
-        "dialogue_system_prompt.txt",
-        {
-            "session_focus_topics": "T1: Topic 1",
-            "topics_covered_json": '["T1"]',
-            "mastery_json": '{"T1": 80}',
-            "rubric_text": "Rubric body",
-            "lecture_context": "Lecture body",
-            "next_turn_count": 3,
-            "lecture_title_json": '"Lecture 1"',
-        },
-    )
-
-    assert "{{" not in rendered
-    assert "Session focus topics: T1: Topic 1" in rendered
-    assert '"turn_count": 3' in rendered
-    assert '"lecture_title": "Lecture 1"' in rendered
+def test_load_prompt_template_reads_dialogue_prompt_markdown():
+    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
+    assert "You are a focused, natural, pedagogically intelligent lecture-review tutor" in loaded
 
 
-def test_render_prompt_template_raises_for_missing_values():
-    with pytest.raises(KeyError):
-        prompt_loader.render_prompt_template("dialogue_system_prompt.txt", {})
-
-
-def test_generate_reply_uses_rendered_dialogue_prompt():
+def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
     lecture_package = {
         "lecture_id": "lecture_01",
         "config": {"title": "Lecture 1"},
         "rubric": SAMPLE_RUBRIC,
-        "bot_notes": "Bot notes",
-        "slides": "Slides body",
-        "handout": "Handout body",
-        "notebook": "Notebook body",
+        "context_sections": [
+            {"key": "bot_notes", "label": "Bot Notes", "content": "Bot notes"},
+            {"key": "slides", "label": "Slides", "content": "Slides body"},
+            {"key": "handout", "label": "Handout", "content": "Handout body"},
+            {
+                "key": "minutes",
+                "label": "Instructional Minutes",
+                "content": '{"lecture_metadata": {"title": "Lecture 1"}}',
+            },
+            {"key": "notebook", "label": "Notebook", "content": "Notebook body"},
+        ],
         "topics": [
             {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
             {"topic_id": "T2", "label": "Purpose of statistics", "importance": "core"},
@@ -455,6 +545,12 @@ def test_generate_reply_uses_rendered_dialogue_prompt():
         "topics_sampled": ["T1"],
         "topics_covered": ["T1"],
         "mastery": {"T1": 80},
+        "best_mastery": {"T1": 92},
+        "evidence_notes": {"T1": "old note"},
+        "current_topic_id": "T1",
+        "tutor_comment": "stay on topic",
+        "current_grade": 55.0,
+        "timeout_warning_sent": False,
         "turn_count": 2,
         "confidence": 0.5,
         "lecture_title": 'Lecture "1"',
@@ -462,7 +558,9 @@ def test_generate_reply_uses_rendered_dialogue_prompt():
     mock_resp = mock.MagicMock()
     mock_resp.choices[0].message.content = (
         '{"assistant_message": "Next question", '
-        '"updated_state": {"topics_covered": ["T1"], "mastery": {"T1": 80}, "confidence": 0.5}}'
+        '"updated_state": {"topics_covered": ["T1"], "mastery": {"T1": 80}, '
+        '"evidence_notes": {"T1": "student made a real distinction"}, '
+        '"current_topic_id": "T1", "tutor_comment": "Keep pressing on T1."}}'
     )
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.return_value = mock_resp
@@ -473,14 +571,27 @@ def test_generate_reply_uses_rendered_dialogue_prompt():
             recent_messages=[],
             state=state,
             user_message="I think data are imperfect measurements.",
+            timing_context={
+                "minutes_remaining": 4,
+                "closing_mode": True,
+                "timeout_warning_sent": False,
+            },
         )
 
     create_kwargs = mock_client.chat.completions.create.call_args.kwargs
     system_prompt = create_kwargs["messages"][0]["content"]
-    assert "Session focus topics: T1: Reality–Data–Model distinction" in system_prompt
-    assert 'Topics covered so far: ["T1"]' in system_prompt
-    assert 'Mastery estimates so far: {"T1": 80}' in system_prompt
+    assert "You are a focused, natural, pedagogically intelligent lecture-review tutor" in system_prompt
+    assert "Runtime context" in system_prompt
+    assert '"topic_id": "T1"' in system_prompt
+    assert '"label": "Reality–Data–Model distinction"' in system_prompt
+    assert '"topics_covered": [' in system_prompt
+    assert '"best_mastery": {' in system_prompt
+    assert '"current_grade": 55.0' in system_prompt
+    assert '"session_timing": {' in system_prompt
+    assert '"closing_mode": true' in system_prompt
+    assert "## Instructional Minutes" in system_prompt
     assert '"turn_count": 3' in system_prompt
     assert '"lecture_title": "Lecture \\"1\\""' in system_prompt
     assert assistant_message == "Next question"
     assert updated_state["turn_count"] == 3
+    assert updated_state["evidence_notes"]["T1"] == "student made a real distinction"

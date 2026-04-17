@@ -13,7 +13,7 @@ _log = logging_.getLogger(__name__)
 
 _GRADE_WEIGHTS = [55, 25, 13, 4, 3]
 
-_TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)\.\s+(.+)$', re_.MULTILINE)
+_TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)(?:\.|\s+[—-])\s+(.+)$', re_.MULTILINE)
 _IMPORTANCE_RE = re_.compile(r'\*\*Importance:\*\*\s+(\w+)')
 
 _FALLBACK_DIALOGUE_MESSAGE = (
@@ -21,20 +21,45 @@ _FALLBACK_DIALOGUE_MESSAGE = (
     "Let's keep going with one focused question: "
     "what idea from this lecture seems most important to you, and why?"
 )
-_DIALOGUE_PROMPT_TEMPLATE = "dialogue_system_prompt.txt"
+_DIALOGUE_PROMPT_TEMPLATE = "dialogue_system_prompt.md"
 
 
 # ---------------------------------------------------------------------------
 # Public: opening message
 # ---------------------------------------------------------------------------
 
-def build_opening_message(lecture_package: dict) -> str:
+def _join_topic_labels(labels: list[str]) -> str:
+    if not labels:
+        return ""
+    if len(labels) == 1:
+        return labels[0]
+    if len(labels) == 2:
+        return f"{labels[0]} or {labels[1]}"
+    return f"{', '.join(labels[:-1])}, or {labels[-1]}"
+
+
+def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | None = None) -> str:
     title = lecture_package["config"].get("title", lecture_package["lecture_id"])
+    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
+
+    settings = config_module.get_settings()
+    sampled_labels = [
+        topic_id_to_label[topic_id]
+        for topic_id in (sampled_topic_ids or [])[:settings.opening_topic_choice_count]
+        if topic_id in topic_id_to_label
+    ]
+    if sampled_labels:
+        return (
+            f"Welcome to the review bot for {title}. "
+            "We can start wherever feels most useful. "
+            f"Want to begin with {_join_topic_labels(sampled_labels)}?"
+        )
+
     return (
         f"Welcome to the review bot for {title}. "
-        "I'll work with you through a short conceptual review of this lecture. "
-        "You can ask for your current grade or a final report at any time. "
-        "Let's begin: what do you think was one central idea of this lecture?"
+        "We can start wherever feels most useful. "
+        "What topic from this lecture would you like to begin with?"
     )
 
 
@@ -49,6 +74,7 @@ def generate_reply(
     recent_messages: list,
     state: dict,
     user_message: str,
+    timing_context: dict | None = None,
 ) -> tuple[str, dict]:
     """Generate a tutoring reply using OpenAI.
 
@@ -59,25 +85,12 @@ def generate_reply(
     topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
     allowed_topic_ids = {t["topic_id"] for t in topic_defs}
     context = build_dialogue_context(lecture_package, settings.max_dialogue_context_chars)
-
-    rubric_text = lecture_package["rubric"]
-    topics_sampled = state.get("topics_sampled", [])
-    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
-    sampled_labels = [
-        f"{tid}: {topic_id_to_label.get(tid, tid)}" for tid in topics_sampled
-    ]
-
-    system_prompt = prompt_loader.render_prompt_template(
-        _DIALOGUE_PROMPT_TEMPLATE,
-        {
-            "session_focus_topics": ", ".join(sampled_labels) if sampled_labels else "all topics",
-            "topics_covered_json": j_.dumps(state.get("topics_covered", []), ensure_ascii=False),
-            "mastery_json": j_.dumps(state.get("mastery", {}), ensure_ascii=False),
-            "rubric_text": rubric_text,
-            "lecture_context": context,
-            "next_turn_count": state.get("turn_count", 0) + 1,
-            "lecture_title_json": j_.dumps(state.get("lecture_title", ""), ensure_ascii=False),
-        },
+    system_prompt = build_dialogue_system_prompt(
+        lecture_package=lecture_package,
+        state=state,
+        topic_defs=topic_defs,
+        lecture_context=context,
+        timing_context=timing_context,
     )
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -151,17 +164,65 @@ def sample_session_topics(topic_defs: list[dict], session_id: str, count: int = 
     return rng.sample(topic_ids, k)
 
 
+def build_dialogue_system_prompt(
+    *,
+    lecture_package: dict,
+    state: dict,
+    topic_defs: list[dict],
+    lecture_context: str,
+    timing_context: dict | None = None,
+) -> str:
+    """Build the runtime system prompt around the committed markdown prompt."""
+    prompt_body = prompt_loader.load_prompt_template(_DIALOGUE_PROMPT_TEMPLATE).strip()
+    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
+    sampled_topic_ids = state.get("topics_sampled", [])
+    sampled_topics = [
+        {
+            "topic_id": tid,
+            "label": topic_id_to_label.get(tid, tid),
+        }
+        for tid in sampled_topic_ids
+    ]
+    current_state = {
+        "topics_sampled": list(sampled_topic_ids),
+        "topics_covered": list(state.get("topics_covered", [])),
+        "mastery": dict(state.get("mastery", {})),
+        "best_mastery": dict(state.get("best_mastery", {})),
+        "evidence_notes": dict(state.get("evidence_notes", {})),
+        "current_topic_id": state.get("current_topic_id"),
+        "tutor_comment": state.get("tutor_comment", ""),
+        "current_grade": state.get("current_grade", 0.0),
+        "turn_count": state.get("turn_count", 0) + 1,
+        "confidence": state.get("confidence", 0.0),
+        "lecture_title": state.get("lecture_title", ""),
+    }
+
+    injected_context = {
+        "lecture_title": lecture_package["config"].get("title", lecture_package["lecture_id"]),
+        "sampled_topics": sampled_topics,
+        "topic_structure_note": "Use the rubric text below as the equivalent topic-to-element map or rubric structure.",
+        "current_tutoring_state": current_state,
+        "session_timing": timing_context or {},
+        "rubric_text": lecture_package["rubric"],
+        "lecture_context": lecture_context,
+    }
+
+    return (
+        f"{prompt_body}\n\n"
+        "Runtime context\n\n"
+        "## Injected lecture/runtime data\n"
+        f"{j_.dumps(injected_context, indent=2, ensure_ascii=False)}"
+    )
+
+
 def build_dialogue_context(lecture_package: dict, max_chars: int) -> str:
     """Build lecture context string with deterministic truncation.
 
-    Priority order (most important first): bot_notes, slides, handout, notebook.
-    When budget is exceeded, notebook is trimmed first, then handout.
+    Use the configured context_sections order from lecture config / lectures defaults.
     """
     sections = [
-        ("## Bot Notes", lecture_package.get("bot_notes", "")),
-        ("## Slides", lecture_package.get("slides", "")),
-        ("## Handout", lecture_package.get("handout", "")),
-        ("## Notebook", lecture_package.get("notebook", "")),
+        (f"## {section['label']}", section.get("content", ""))
+        for section in lecture_package.get("context_sections", [])
     ]
     parts = []
     used = 0
@@ -201,24 +262,52 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
     Rules enforced:
     - topics_sampled: immutable, taken from old_state
     - lecture_title: immutable, taken from old_state
-    - topics_covered: subset of allowed_topic_ids
+    - timeout_warning_sent: backend-owned, preserved from old_state
+    - best_mastery: backend-owned, preserved from old_state
+    - current_grade: backend-owned, preserved from old_state
+    - topics_covered: cumulative subset of allowed_topic_ids
     - mastery: keys in allowed_topic_ids, values clamped int 0-100
+    - evidence_notes: keys in allowed_topic_ids, short strings
+    - current_topic_id: one allowed topic id or None
+    - tutor_comment: short string
     - turn_count: old_turn_count + 1
-    - confidence: clamped float 0.0-1.0
+    - confidence: preserved/clamped float 0.0-1.0 unless the model also returns it
     - unknown keys dropped
     """
     result = {
         "topics_sampled": list(old_state.get("topics_sampled", [])),
         "lecture_title": old_state.get("lecture_title", ""),
+        "timeout_warning_sent": bool(old_state.get("timeout_warning_sent", False)),
+        "best_mastery": {
+            k: max(0, min(100, int(v)))
+            for k, v in old_state.get("best_mastery", {}).items()
+            if isinstance(k, str) and k in allowed_topic_ids and isinstance(v, int | float)
+        },
+        "current_grade": float(old_state.get("current_grade", 0.0) or 0.0),
     }
 
-    result["topics_covered"] = [
+    prior_topics_covered = [
+        t for t in old_state.get("topics_covered", [])
+        if isinstance(t, str) and t in allowed_topic_ids
+    ]
+    new_topics_covered = [
         t for t in llm_state.get("topics_covered", [])
         if isinstance(t, str) and t in allowed_topic_ids
     ]
+    seen_topics = set()
+    result["topics_covered"] = []
+    for topic_id in prior_topics_covered + new_topics_covered:
+        if topic_id in seen_topics:
+            continue
+        seen_topics.add(topic_id)
+        result["topics_covered"].append(topic_id)
 
-    raw_mastery = llm_state.get("mastery", {})
-    result["mastery"] = {}
+    result["mastery"] = {
+        k: v
+        for k, v in old_state.get("mastery", {}).items()
+        if isinstance(k, str) and k in allowed_topic_ids and isinstance(v, int | float)
+    }
+    raw_mastery = llm_state.get("mastery")
     if isinstance(raw_mastery, dict):
         for k, v in raw_mastery.items():
             if isinstance(k, str) and k in allowed_topic_ids:
@@ -226,6 +315,27 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
                     result["mastery"][k] = max(0, min(100, int(v)))
                 except (ValueError, TypeError):
                     pass
+
+    result["evidence_notes"] = {
+        k: str(v)
+        for k, v in old_state.get("evidence_notes", {}).items()
+        if isinstance(k, str) and k in allowed_topic_ids
+    }
+    raw_evidence_notes = llm_state.get("evidence_notes")
+    if isinstance(raw_evidence_notes, dict):
+        for k, v in raw_evidence_notes.items():
+            if isinstance(k, str) and k in allowed_topic_ids:
+                result["evidence_notes"][k] = str(v)
+
+    raw_current_topic_id = llm_state.get("current_topic_id", old_state.get("current_topic_id"))
+    result["current_topic_id"] = (
+        raw_current_topic_id
+        if isinstance(raw_current_topic_id, str) and raw_current_topic_id in allowed_topic_ids
+        else None
+    )
+
+    raw_tutor_comment = llm_state.get("tutor_comment", old_state.get("tutor_comment", ""))
+    result["tutor_comment"] = str(raw_tutor_comment)
 
     result["turn_count"] = old_state.get("turn_count", 0) + 1
 
@@ -260,6 +370,7 @@ def generate_topic_scores(
         {
           "topic_scores": [{"topic_id": "T1", "score": 85, "rationale": "..."}],
           "explanation": "...",
+          "scored_topics": ["Topic 1"],
           "missing_topics": ["T8"]
         }
 
@@ -313,23 +424,36 @@ def generate_topic_scores(
         parsed = j_.loads(raw)
         raw_topic_scores = parsed.get("topic_scores", [])
         explanation = str(parsed.get("explanation", ""))
-        raw_missing = [str(t) for t in parsed.get("missing_topics", []) if isinstance(t, str)]
     except openai_.AuthenticationError:
         _log.exception("generate_topic_scores failed: OpenAI authentication error")
-        return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
+        return {
+            "topic_scores": [],
+            "explanation": "Grading unavailable.",
+            "scored_topics": [],
+            "missing_topics": [],
+        }
     except openai_.APIError:
         # Rate limits, timeouts, connection errors from the OpenAI API.
         _log.exception("generate_topic_scores failed: OpenAI API error")
-        return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
+        return {
+            "topic_scores": [],
+            "explanation": "Grading unavailable.",
+            "scored_topics": [],
+            "missing_topics": [],
+        }
     except Exception:
         # Catches malformed JSON, missing model output keys, and other unexpected
         # response-parsing failures. Our own validation code below is deliberately
         # outside this block so bugs there propagate as 500 instead of hiding as fallback.
         _log.exception("generate_topic_scores failed")
-        return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
+        return {
+            "topic_scores": [],
+            "explanation": "Grading unavailable.",
+            "scored_topics": [],
+            "missing_topics": [],
+        }
     # Our own validation logic — bugs here propagate as 500, not masked as fallback
     allowed_topic_ids = {t["topic_id"] for t in topic_defs}
-    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
     seen: dict = {}
     for ts in raw_topic_scores:
         if not isinstance(ts, dict):
@@ -347,14 +471,22 @@ def generate_topic_scores(
                 "score": score,
                 "rationale": str(ts.get("rationale", "")),
             }
+    topic_scores = list(seen.values())
+    scored_topic_ids = {ts["topic_id"] for ts in topic_scores}
+    scored_topics = [
+        topic["label"]
+        for topic in topic_defs
+        if topic["topic_id"] in scored_topic_ids
+    ]
     labelled_missing = [
-        topic_id_to_label.get(tid, tid)
-        for tid in raw_missing
-        if tid in allowed_topic_ids
+        topic["label"]
+        for topic in topic_defs
+        if topic["topic_id"] not in scored_topic_ids
     ]
     return {
-        "topic_scores": list(seen.values()),
+        "topic_scores": topic_scores,
         "explanation": explanation,
+        "scored_topics": scored_topics,
         "missing_topics": labelled_missing,
     }
 

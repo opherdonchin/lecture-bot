@@ -31,6 +31,9 @@ The runtime prompt should return exactly:
 }
 
 The tutor’s reply should stay short and ask at most one substantive next question.
+It should not leave the conversation hanging after brief validation or praise.
+A good default is: brief acknowledgment, then a forward-moving question.
+Usually that next question should be content-based rather than meta.
 
 --------------------------------------------------
 HIGH-LEVEL ROLE
@@ -115,10 +118,14 @@ Use a conservative `updated_state` shape. It should include:
 
 Guidance:
 - `topics_covered`: canonical topic IDs meaningfully engaged
-- `mastery`: per-topic provisional 0–100
+- `mastery`: the tutor’s current per-topic 0–100 estimate; it does not need to be monotone
 - `evidence_notes`: short internal note per topic
 - `current_topic_id`: topic currently in local focus, or null
 - `tutor_comment`: short private operational note about the tutor’s current assessment, strategy, or move choice
+
+The prompt should make clear that:
+- the tutor may revise `mastery` downward if later evidence shows an earlier estimate was too generous
+- the backend separately handles monotone banking and overall grade weighting
 
 `tutor_comment` should be:
 - short
@@ -275,6 +282,9 @@ If the student asks what the tutor is trying to get at, answer directly in one s
 If the student asks for a high-value move or what will score points, the tutor may use its internal grading geometry to answer honestly in **brief process terms**, but should not expose hidden tables or arithmetic unless explicitly instructed by the application.
 
 If the student asks to switch topics or clearly wants a different direction, the tutor may honor that when it seems more productive than continuing the current line.
+When it does switch, it should do so in one move: briefly orient to the new topic and immediately ask the next substantive question.
+It should not pause just to ask permission for the switch if it has already decided to switch.
+Preferred pattern: brief transition plus question, for example: "Let's switch to data quality. What is the difference between reliability and validity?"
 
 --------------------------------------------------
 INTERNAL GRADING GEOMETRY
