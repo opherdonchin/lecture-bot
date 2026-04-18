@@ -1,0 +1,281 @@
+from __future__ import annotations
+
+import pathlib
+
+import fastapi as fa
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+import app.admin_workflow as workflow
+import app.config as config_module
+
+
+app = fa.FastAPI(title="Lecture Bot Admin")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+templates = Jinja2Templates(directory="app/templates")
+security = HTTPBasic()
+
+
+def require_admin(credentials: HTTPBasicCredentials = fa.Depends(security)) -> str:
+    settings = config_module.get_settings()
+    if not settings.admin_username or not settings.admin_password:
+        raise fa.HTTPException(status_code=500, detail="Admin credentials are not configured.")
+    if credentials.username != settings.admin_username or credentials.password != settings.admin_password:
+        raise fa.HTTPException(
+            status_code=401,
+            detail="Incorrect admin username or password.",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+
+def _lectures_dir() -> pathlib.Path:
+    lectures_dir = config_module.get_settings().lectures_dir
+    lectures_dir.mkdir(parents=True, exist_ok=True)
+    return lectures_dir
+
+
+def _render_index(request: fa.Request, notice: str | None = None, error: str | None = None):
+    lectures_dir = _lectures_dir()
+    lecture_rows = []
+    for lecture_dir in workflow.list_lecture_dirs(lectures_dir):
+        config = workflow.load_lecture_config(lecture_dir)
+        summary = workflow.lecture_summary(config, lecture_dir)
+        lecture_rows.append(
+            {
+                "lecture_id": lecture_dir.name,
+                "title": config.get("title", lecture_dir.name),
+                "file_count": len(workflow.list_files(lecture_dir)),
+                "current_step": summary["current_step"],
+            }
+        )
+    return templates.TemplateResponse(
+        request,
+        "admin_index.html",
+        {
+            "notice": notice,
+            "error": error,
+            "lectures": lecture_rows,
+        },
+    )
+
+
+def _render_lecture(
+    request: fa.Request,
+    lecture_id: str,
+    notice: str | None = None,
+    error: str | None = None,
+    build_log: list[str] | None = None,
+):
+    lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
+    lecture_dir.mkdir(parents=True, exist_ok=True)
+    config = workflow.load_lecture_config(lecture_dir)
+    files = workflow.list_files(lecture_dir)
+    summary = workflow.lecture_summary(config, lecture_dir)
+    return templates.TemplateResponse(
+        request,
+        "admin_lecture.html",
+        {
+            "lecture_id": lecture_id,
+            "lecture_dir": lecture_dir,
+            "config": config,
+            "files": files,
+            "summary": summary,
+            "notice": notice,
+            "error": error,
+            "build_log": build_log or [],
+            "source_keys": workflow.SOURCE_KEYS,
+            "display_labels": workflow.DISPLAY_LABELS,
+            "target_by_key": workflow.TARGET_BY_KEY,
+            "bundle_stage_files": {
+                "minutes": workflow.required_bundle_files("minutes"),
+                "rubric": workflow.required_bundle_files("rubric"),
+            },
+        },
+    )
+
+
+@app.get("/", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+def admin_root(request: fa.Request):
+    return _render_index(request)
+
+
+@app.get("/lectures", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+def admin_lectures(request: fa.Request):
+    return _render_index(request)
+
+
+@app.post("/lectures", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+async def create_lecture(
+    request: fa.Request,
+    lecture_id: str = fa.Form(...),
+    title: str = fa.Form(""),
+    course: str = fa.Form(""),
+):
+    try:
+        lecture_dir = workflow.create_lecture_folder(_lectures_dir(), lecture_id, title, course)
+    except Exception as exc:
+        return _render_index(request, error=str(exc))
+    return _render_lecture(request, lecture_dir.name, notice="Lecture folder created.")
+
+
+@app.get("/lectures/{lecture_id}", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+def lecture_detail(request: fa.Request, lecture_id: str):
+    return _render_lecture(request, lecture_id)
+
+
+@app.post("/lectures/{lecture_id}/metadata", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+async def update_lecture_metadata(
+    request: fa.Request,
+    lecture_id: str,
+    title: str = fa.Form(""),
+    course: str = fa.Form(""),
+    active: str | None = fa.Form(None),
+):
+    lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
+    config = workflow.load_lecture_config(lecture_dir)
+    updated = workflow.update_metadata(config, title=title, course=course, active=active is not None)
+    workflow.save_lecture_config(lecture_dir, updated)
+    return _render_lecture(request, lecture_id, notice="Lecture metadata updated.")
+
+
+@app.post("/lectures/{lecture_id}/sources", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+async def update_sources(
+    request: fa.Request,
+    lecture_id: str,
+    slides_source: str = fa.Form(""),
+    handout_source: str = fa.Form(""),
+    notebook_source: str = fa.Form(""),
+    transcript_source: str = fa.Form(""),
+):
+    lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
+    config = workflow.load_lecture_config(lecture_dir)
+    updated = workflow.update_selected_sources(
+        config,
+        {
+            "slides": slides_source,
+            "handout": handout_source,
+            "notebook": notebook_source,
+            "transcript": transcript_source,
+        },
+    )
+    workflow.save_lecture_config(lecture_dir, updated)
+    return _render_lecture(request, lecture_id, notice="Selected source files updated.")
+
+
+@app.post("/lectures/{lecture_id}/upload", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+async def upload_file(
+    request: fa.Request,
+    lecture_id: str,
+    uploaded_file: fa.UploadFile = fa.File(...),
+):
+    lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
+    if not uploaded_file.filename:
+        return _render_lecture(request, lecture_id, error="Choose a file to upload.")
+    destination = lecture_dir / pathlib.Path(uploaded_file.filename).name
+    workflow.save_uploaded_file(destination, uploaded_file)
+    return _render_lecture(request, lecture_id, notice=f"Uploaded {destination.name}.")
+
+
+@app.post("/lectures/{lecture_id}/delete", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+async def delete_file(
+    request: fa.Request,
+    lecture_id: str,
+    filename: str = fa.Form(...),
+):
+    lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
+    config = workflow.load_lecture_config(lecture_dir)
+    try:
+        workflow.delete_file(lecture_dir, filename)
+    except Exception as exc:
+        return _render_lecture(request, lecture_id, error=str(exc))
+
+    updated = workflow.update_selected_sources(
+        config,
+        {
+            key: ""
+            if config.get("files", {}).get(key, {}).get("source") == filename
+            else config.get("files", {}).get(key, {}).get("source", "")
+            for key in workflow.SOURCE_KEYS
+        },
+    )
+    workflow.save_lecture_config(lecture_dir, updated)
+    return _render_lecture(request, lecture_id, notice=f"Deleted {filename}.")
+
+
+@app.post("/lectures/{lecture_id}/build/local", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+async def build_local(
+    request: fa.Request,
+    lecture_id: str,
+):
+    lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
+    config = workflow.load_lecture_config(lecture_dir)
+    try:
+        build_log = workflow.build_local_sources(lecture_dir, config)
+    except Exception as exc:
+        return _render_lecture(request, lecture_id, error=str(exc))
+    workflow.save_lecture_config(lecture_dir, config)
+    return _render_lecture(
+        request,
+        lecture_id,
+        notice="Local lecture files prepared. Next step: use the minutes prompt and upload the returned minutes.json.",
+        build_log=build_log,
+    )
+
+
+@app.get("/lectures/{lecture_id}/prompt/{stage}.txt", dependencies=[fa.Depends(require_admin)])
+def download_prompt(lecture_id: str, stage: str):
+    prompt_text = workflow.build_manual_prompt(stage)
+    filename = f"{lecture_id}_{stage}_prompt.txt"
+    return StreamingResponse(
+        iter([prompt_text.encode("utf-8")]),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/lectures/{lecture_id}/bundle/{stage}.zip", dependencies=[fa.Depends(require_admin)])
+def download_bundle(lecture_id: str, stage: str):
+    lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
+    bundle = workflow.build_bundle_bytes(lecture_dir, stage)
+    filename = f"{lecture_id}_{stage}_bundle.zip"
+    return StreamingResponse(
+        iter([bundle]),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/lectures/{lecture_id}/files/{filename}", dependencies=[fa.Depends(require_admin)])
+def download_lecture_file(lecture_id: str, filename: str):
+    lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
+    target = (lecture_dir / filename).resolve()
+    if target.parent != lecture_dir.resolve() or not target.exists():
+        raise fa.HTTPException(status_code=404, detail="File not found.")
+    return FileResponse(target)
+
+
+@app.post("/lectures/{lecture_id}/generated/{kind}", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+async def upload_generated_artifact(
+    request: fa.Request,
+    lecture_id: str,
+    kind: str,
+    uploaded_file: fa.UploadFile = fa.File(...),
+):
+    lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
+    config = workflow.load_lecture_config(lecture_dir)
+    if not uploaded_file.filename:
+        return _render_lecture(request, lecture_id, error="Choose a file to upload.")
+    try:
+        updated = workflow.save_generated_artifact(lecture_dir, config, kind, uploaded_file)
+        workflow.save_lecture_config(lecture_dir, updated)
+    except Exception as exc:
+        return _render_lecture(request, lecture_id, error=str(exc))
+
+    if kind == "minutes":
+        notice = "Saved minutes.json. Next step: download the rubric prompt and support bundle, then upload rubric.md."
+    else:
+        notice = "Saved rubric.md and refreshed topics in lecture_config.json."
+    return _render_lecture(request, lecture_id, notice=notice)

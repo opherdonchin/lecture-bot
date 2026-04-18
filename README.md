@@ -27,6 +27,7 @@ Then open http://127.0.0.1:8000/.
 | `pixi run test` | Run test suite |
 | `pixi run init-db` | Initialise SQLite database |
 | `pixi run build-lecture -- <lecture_id> --force` | Build lecture markdown, minutes, and rubric artifacts |
+| `pixi run admin-dev` | Start the separate admin lecture-setup app on port 8001 |
 
 ## Project structure
 
@@ -91,3 +92,28 @@ Running `pixi run build-lecture -- lecture_03 --force` will:
 - generate `minutes.json` from slides, handout, notebook, and transcript
 - generate `rubric.md` from slides, handout, notebook, and minutes
 - refresh `topics` inside `lecture_config.json` from the resulting rubric
+
+## Admin App
+
+The repo also includes a separate lecture-admin app for manual lecture setup. It is intended to be started only when needed:
+
+```bash
+pixi run admin-dev
+```
+
+Set admin credentials in `.env`:
+
+```env
+ADMIN_USERNAME=your_name
+ADMIN_PASSWORD=your_password
+```
+
+The admin app lets you:
+
+- create or reopen lecture folders
+- upload and delete files inside a lecture folder
+- choose which files are the selected source files
+- build the local markdown artifacts
+- download the exact prompt text and support bundle for the manual ChatGPT steps
+- upload `minutes.json` and `rubric.md` back into the correct lecture folder
+- refresh `topics` in `lecture_config.json` from the uploaded rubric

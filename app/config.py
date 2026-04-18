@@ -14,6 +14,8 @@ class Settings(ps.BaseSettings):
     session_warning_minutes: int = 5
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.4-mini"
+    admin_username: str | None = None
+    admin_password: str | None = None
     recent_message_limit: int = 10
     max_dialogue_context_chars: int = 120000
     max_grading_context_chars: int = 180000
