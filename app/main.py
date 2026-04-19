@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 import app.bot_engine as bot_engine
 import app.config as config_module
 import app.db as db_module
+import app.language_policy as language_policy
 import app.lecture_loader as lecture_loader
 import app.models as models
 import app.schema as schema
@@ -91,6 +92,14 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
 
     settings = config_module.get_settings()
     state = session_manager.load_state(db, request.session_id)
+
+    if not language_policy.is_english_text(request.message):
+        refusal_message = language_policy.ENGLISH_ONLY_STUDENT_MESSAGE
+        session_manager.append_message(db, request.session_id, "user", request.message)
+        session_manager.append_message(db, request.session_id, "assistant", refusal_message)
+        session_manager.save_state(db, request.session_id, state)
+        db.commit()
+        return schema.SendMessageResponse(message=refusal_message, session_active=True)
 
     # Enforce session timeout
     now = dt.datetime.now(dt.timezone.utc)

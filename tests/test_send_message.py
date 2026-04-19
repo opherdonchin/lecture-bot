@@ -314,3 +314,61 @@ def test_send_message_internal_fallback_used_when_no_api_key(client):
     ).first()
     state = j.loads(row.state_json)
     assert state["turn_count"] == 1
+
+
+def test_send_message_rejects_non_english_student_message_without_model_call(client):
+    session_id = start_session(client)
+
+    with mock.patch("openai.OpenAI", side_effect=AssertionError("model should not be called")):
+        response = client.post(
+            "/send_message",
+            json={"session_id": session_id, "message": "למה לדגום"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "Please write your answer in English." in data["message"]
+    assert data["session_active"] is True
+
+
+def test_send_message_forces_assistant_reply_to_english(client):
+    session_id = start_session(client)
+
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "שלום, אפשר להמשיך בעברית.",
+        "updated_state": {
+            "topics_covered": [],
+            "mastery": {},
+            "evidence_notes": {},
+            "current_topic_id": None,
+            "tutor_comment": "",
+        },
+        "decision_trace": {
+            "student_model": {
+                "understanding": "",
+                "uncertainty": "",
+                "failure_mode": "",
+            },
+            "evidence_target": {
+                "topic_id": "T1",
+                "element": "",
+                "target_type": "criterion",
+                "why_now": "",
+            },
+            "move_candidates": [],
+            "chosen_move": {
+                "move_type": "open_probe",
+                "reason": "",
+            },
+        },
+    })
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "Please continue in English. This tutor only works in English."

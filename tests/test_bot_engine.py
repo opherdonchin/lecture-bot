@@ -5,6 +5,7 @@ import unittest.mock as mock
 import pytest
 
 import app.bot_engine as bot_engine
+import app.language_policy as language_policy
 import app.prompt_loader as prompt_loader
 
 
@@ -195,6 +196,54 @@ def test_build_opening_message_falls_back_without_resolved_sampled_topics(monkey
         "We can start wherever feels most useful. "
         "What topic from this lecture would you like to begin with?"
     )
+
+
+def test_rewrite_opening_topic_selection_rewrites_prefix_match():
+    lecture_package = {
+        "lecture_id": "lecture_03",
+        "config": {"title": "Lecture 3"},
+        "rubric": SAMPLE_RUBRIC,
+        "topics": [
+            {"topic_id": "T1", "label": "Reading posterior output in ArviZ", "importance": "core"},
+            {"topic_id": "T2", "label": "Why sample, and what a posterior draw is", "importance": "core"},
+            {"topic_id": "T3", "label": "Point estimation from the posterior", "importance": "core"},
+        ],
+    }
+    state = {
+        "topics_sampled": ["T1", "T2", "T3"],
+        "turn_count": 0,
+        "current_topic_id": None,
+    }
+    rewritten = bot_engine.rewrite_opening_topic_selection(
+        lecture_package=lecture_package,
+        state=state,
+        user_message="Why sample",
+    )
+    assert "Treat my message as a topic selection" in rewritten
+    assert "Why sample, and what a posterior draw is" in rewritten
+
+
+def test_rewrite_opening_topic_selection_leaves_nonopening_turn_alone():
+    lecture_package = {
+        "lecture_id": "lecture_03",
+        "config": {"title": "Lecture 3"},
+        "rubric": SAMPLE_RUBRIC,
+        "topics": [
+            {"topic_id": "T2", "label": "Why sample, and what a posterior draw is", "importance": "core"},
+        ],
+    }
+    state = {
+        "topics_sampled": ["T2"],
+        "turn_count": 1,
+        "current_topic_id": "T2",
+    }
+    original = "Why sample"
+    rewritten = bot_engine.rewrite_opening_topic_selection(
+        lecture_package=lecture_package,
+        state=state,
+        user_message=original,
+    )
+    assert rewritten == original
 
 
 # ---------------------------------------------------------------------------
@@ -461,6 +510,14 @@ def test_sanitize_assistant_message_replaces_bare_topic_ids():
     assert "Posterior plots" in result
 
 
+def test_language_policy_accepts_short_english_topic_pick():
+    assert language_policy.is_english_text("Why sample")
+
+
+def test_language_policy_rejects_hebrew_text():
+    assert not language_policy.is_english_text("למה לדגום")
+
+
 # ---------------------------------------------------------------------------
 # validate_topic_scores (grading validation in generate_topic_scores)
 # We test the validation logic via a helper that simulates what the grading
@@ -582,6 +639,32 @@ def test_grading_validation_non_dict_entry_skipped():
 def test_load_prompt_template_reads_dialogue_prompt_markdown():
     loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
     assert "You are a focused, natural, pedagogically intelligent lecture-review tutor" in loaded
+
+
+def test_dialogue_prompt_requires_stepwise_decision_trace():
+    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
+    assert "The `decision_trace` must document these steps separately." in loaded
+    assert "* `step_1_student_model`" in loaded
+    assert "* `step_8_final_move`" in loaded
+    assert "`step_6_reply_check` should explicitly record" in loaded
+
+
+def test_dialogue_prompt_has_explicit_move_preference_order():
+    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
+    assert "Move preference order" in loaded
+    assert "1. `contrastive_prompt`" in loaded
+    assert "7. `compact_explanation`" in loaded
+    assert "prefer the earlier move in this list" in loaded
+
+
+def test_tutor_generation_prompt_requires_stepwise_trace_and_move_order():
+    loaded = prompt_loader.load_prompt_template("tutor_generation_prompt.md")
+    assert "each step be documented separately and sequentially" in loaded
+    assert "- `step_1_student_model`" in loaded
+    assert "- `step_8_final_move`" in loaded
+    assert "default move value ordering explicit" in loaded
+    assert "1. contrastive prompt" in loaded
+    assert "7. compact explanation" in loaded
 
 
 def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():

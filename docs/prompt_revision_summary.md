@@ -63,3 +63,60 @@
 - Existing checked-in lecture rubrics still contain some older "banked" language because they are generated artifacts; the generation pipeline is updated, but old rubric outputs were not regenerated in this pass.
 - `topics_covered` is now derived from a meaningful mastery foothold threshold. If the repo later needs a softer notion of "touched but not yet solid," that should be a separate field rather than overloading `topics_covered`.
 - The multipart-question guardrail is prompt-enforced rather than validator-enforced. That was a deliberate choice to avoid brittle surface heuristics.
+
+## Follow-up Adjustment
+
+- Removed the experimental backend-side low-reveal message shaping from [app/bot_engine.py](/home/opher/Repositories/lecture-bot/app/bot_engine.py:390).
+- Moved reveal-discipline back into the tutor prompt itself:
+  - [prompts/dialogue_system_prompt.md](/home/opher/Repositories/lecture-bot/prompts/dialogue_system_prompt.md:1)
+  - [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:1)
+
+Why:
+
+- The backend should stay simple.
+- The tutor itself should draft, critique, and revise its own reply for productivity and minimal revealingness.
+- The deeper problem was prompt permissiveness, not a lack of backend text surgery.
+
+## English-Only Policy
+
+- Added a backend English-only interaction policy using [app/language_policy.py](/home/opher/Repositories/lecture-bot/app/language_policy.py:1).
+- Student messages are now checked before tutoring in [app/main.py](/home/opher/Repositories/lecture-bot/app/main.py:83):
+  - non-English input gets an English refusal reply
+  - the tutor model is not called
+- Assistant text returned to the student is forced through English-only fallback handling in [app/bot_engine.py](/home/opher/Repositories/lecture-bot/app/bot_engine.py:390).
+- Added `langdetect` to the project dependencies in [pixi.toml](/home/opher/Repositories/lecture-bot/pixi.toml:1).
+
+Tradeoff:
+
+- The detector strongly rejects clearly non-English scripts and longer detected non-English text.
+- It intentionally allows short ASCII snippets so normal short English tutor turns like "Why sample" or "Next question" do not get rejected by accident.
+
+## Follow-up On Decision Trace And Move Ordering
+
+- Reworked the tutor prompt in [prompts/dialogue_system_prompt.md](/home/opher/Repositories/lecture-bot/prompts/dialogue_system_prompt.md:1) so the private `decision_trace` is now explicitly stepwise instead of a compressed retrospective summary.
+- The runtime prompt now requires these sequential trace fields:
+  - `step_1_student_model`
+  - `step_2_evidence_target`
+  - `step_3_move_candidates`
+  - `step_4_choice`
+  - `step_5_reply_draft`
+  - `step_6_reply_check`
+  - `step_7_revision`
+  - `step_8_final_move`
+- Clarified that later steps must use earlier steps and that the tutor should not collapse the trace into a neat after-the-fact summary.
+- Added an explicit default move preference order:
+  1. `contrastive_prompt`
+  2. `narrowing_question`
+  3. `partial_frame`
+  4. `hint`
+  5. `topic_switch`
+  6. `concise_reformulation`
+  7. `compact_explanation`
+- Sharpened the move heuristics so they say more clearly when a move is genuinely useful and when it is only tidying wording, repeating a prior demand, or revealing too much.
+- Mirrored those requirements in [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:1).
+- Added prompt-level regression checks in [tests/test_bot_engine.py](/home/opher/Repositories/lecture-bot/tests/test_bot_engine.py:640).
+
+Why:
+
+- The earlier trace format made debugging too lossy because it summarized results instead of showing the staged decision process.
+- The move list still looked too much like an unordered catalogue, which left room for shallow or implicit move preference.

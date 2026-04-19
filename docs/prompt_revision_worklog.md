@@ -247,3 +247,129 @@
 ### Unresolved choices
 
 - The guardrail against multipart questions is prompt-based rather than validator-enforced. That is deliberate for now; a reliable multipart-question detector would need more careful design than a naive punctuation heuristic.
+
+## Follow-up - Move Reveal Discipline Back Into The Prompt
+
+### What I inspected
+
+- the latest user feedback on glib answer-giving
+- the recent backend-side low-reveal message shaping in `app/bot_engine.py`
+- the current runtime tutor prompt and tutor-generation prompt
+
+### What I concluded
+
+- The backend-side answer-trimming logic was the wrong architectural direction.
+- The real issue is that the tutor prompt still allowed the model to choose a low-reveal move in its private trace while emitting a more revealing student-facing message.
+- The cleaner fix is prompt-level: require the tutor to draft the reply, critique it for reveal level and productivity, and revise it before emitting `assistant_message`.
+
+### What I changed
+
+- Removed backend-side low-reveal message shaping from `app/bot_engine.py`.
+- Kept the backend simple:
+  - bare topic-ID replacement
+  - unreliable time-claim softening
+  - state/contract validation
+- Strengthened `prompts/dialogue_system_prompt.md` so the tutor now explicitly:
+  - drafts the reply
+  - reviews it for productivity and reveal level
+  - checks whether it smuggles the answer before the question
+  - revises it if a less revealing reply would likely work
+- Updated `prompts/tutor_generation_prompt.md` so the generator now targets that stronger internal self-critique step.
+
+### Unresolved choices
+
+- This remains prompt-enforced rather than validator-enforced. That is intentional for simplicity, but it means behavior quality still depends on model compliance rather than a hard backend reject-and-repair loop.
+
+## Follow-up - English-Only Student And Tutor Messages
+
+### What I inspected
+
+- user request to enforce English-only student answers and tutor replies
+- current `send_message` flow in `app/main.py`
+- student-facing assistant text generation in `app/bot_engine.py`
+- available dependencies in `pixi.toml`
+
+### What I concluded
+
+- This is a good fit for the backend because it is a hard interaction policy rather than a tutoring-style preference.
+- The implementation should stay small:
+  - reject non-English student input before tutoring
+  - ensure assistant text returned to the student is English
+- A lightweight detector is sufficient if combined with a conservative script check.
+- Pure language-ID is too brittle on short English snippets such as "Why sample" or "Next question", so short ASCII phrases need a permissive path.
+
+### What I changed
+
+- Added `langdetect` as a lightweight dependency.
+- Added [app/language_policy.py](/home/opher/Repositories/lecture-bot/app/language_policy.py:1) with:
+  - disallowed-script detection
+  - lightweight English detection
+  - English fallback/refusal strings
+- Updated [app/main.py](/home/opher/Repositories/lecture-bot/app/main.py:83) so non-English student messages are refused immediately with an English-only reply and are not sent to the tutor model.
+- Updated [app/bot_engine.py](/home/opher/Repositories/lecture-bot/app/bot_engine.py:390) so assistant replies and generated report text are forced through English-only fallback handling before reaching the student.
+- Added regression tests covering:
+  - short English topic picks remain allowed
+  - Hebrew student input is refused
+  - non-English assistant output is replaced with an English fallback
+
+### Validation results
+
+- `pixi run pytest -q`
+- result: `105 passed`
+
+### Unresolved choices
+
+- The detector intentionally allows short ASCII snippets to avoid false positives on short English tutoring replies. That means some very short non-English Latin-script snippets could still slip through. This is an explicit tradeoff in favor of not breaking ordinary English interactions.
+
+## Follow-up - Stepwise Decision Trace And Move Ordering
+
+### What I inspected
+
+- `prompts/dialogue_system_prompt.md`
+- `prompts/tutor_generation_prompt.md`
+- prompt-focused tests in `tests/test_bot_engine.py`
+- the recent debugging discussion about repeated checks, vague one-sentence prompts, and lossy decision-trace summaries
+
+### What I concluded
+
+- The old `decision_trace` language encouraged a retrospective summary rather than a truly staged decision process.
+- That made it too hard to see whether the tutor failed at:
+  - modeling the student
+  - choosing the evidence target
+  - selecting among candidate moves
+  - reviewing the drafted reply
+- The move-family section also still behaved like an unordered catalogue.
+- We need both:
+  - a stepwise private trace with explicit sequential fields
+  - a default move value order plus sharper heuristics about when a move is genuinely useful
+
+### What I changed
+
+- Reworked the runtime prompt so `decision_trace` now mirrors the turn procedure step by step:
+  - `step_1_student_model`
+  - `step_2_evidence_target`
+  - `step_3_move_candidates`
+  - `step_4_choice`
+  - `step_5_reply_draft`
+  - `step_6_reply_check`
+  - `step_7_revision`
+  - `step_8_final_move`
+- Added explicit instructions that later steps must use earlier steps and that the tutor must not collapse the process into a neat retrospective summary.
+- Added an explicit default move preference order to the runtime prompt:
+  - `contrastive_prompt`
+  - `narrowing_question`
+  - `partial_frame`
+  - `hint`
+  - `topic_switch`
+  - `concise_reformulation`
+  - `compact_explanation`
+- Reworked each move-family description so it says more clearly:
+  - when the move is strongest
+  - when it is a weak or misleading use of that move
+  - what kind of pedagogical value it is meant to deliver
+- Mirrored those requirements in `prompts/tutor_generation_prompt.md`.
+- Added prompt-level regression checks in `tests/test_bot_engine.py`.
+
+### Unresolved choices
+
+- The backend still treats `decision_trace` permissively and does not validate the inner schema. That keeps the code simple, but it means the prompt remains the main enforcement point for trace structure.

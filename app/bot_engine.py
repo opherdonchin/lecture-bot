@@ -7,6 +7,7 @@ import re as re_
 import openai as openai_
 
 import app.config as config_module
+import app.language_policy as language_policy
 import app.prompt_loader as prompt_loader
 
 _log = logging_.getLogger(__name__)
@@ -41,6 +42,7 @@ _TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)(?:\.|\s+[—-])\s+(.+)$', re_.MULT
 _IMPORTANCE_RE = re_.compile(r'\*\*Importance:\*\*\s+(\w+)')
 _BARE_TOPIC_ID_RE = re_.compile(r"\b(T\d+)\b")
 _TIME_CLAIM_RE = re_.compile(r"\b\d+\s+minutes?\s+left\b", re_.IGNORECASE)
+_NON_ALNUM_RE = re_.compile(r"[^a-z0-9]+")
 
 _FALLBACK_DIALOGUE_MESSAGE = (
     "I'm having trouble updating the tutoring state cleanly. "
@@ -108,6 +110,57 @@ def _unique_topic_ids(topic_ids: list[str] | None) -> list[str]:
     return unique
 
 
+def _normalize_selection_text(text: str) -> str:
+    return _NON_ALNUM_RE.sub(" ", text.lower()).strip()
+
+
+def rewrite_opening_topic_selection(
+    *,
+    lecture_package: dict,
+    state: dict,
+    user_message: str,
+) -> str:
+    """Rewrite an opening-turn topic pick into explicit selection intent.
+
+    This prevents short menu replies like "Why sample" from being treated as
+    content answers to the topic itself.
+    """
+    if state.get("turn_count", 0) != 0:
+        return user_message
+    if state.get("current_topic_id") is not None:
+        return user_message
+
+    topic_defs = resolve_topic_defs(lecture_package)
+    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
+    sampled_labels = [
+        topic_id_to_label[topic_id]
+        for topic_id in _unique_topic_ids(state.get("topics_sampled", []))
+        if topic_id in topic_id_to_label
+    ]
+    normalized_user = _normalize_selection_text(user_message)
+    if not normalized_user:
+        return user_message
+
+    for label in sampled_labels:
+        normalized_label = _normalize_selection_text(label)
+        if not normalized_label:
+            continue
+        if normalized_user == normalized_label:
+            return (
+                f"I want to begin with the topic '{label}'. "
+                "Treat my message as a topic selection, not as a content answer. "
+                "Ask the first substantive question for that topic."
+            )
+        if len(normalized_user) >= 6 and normalized_label.startswith(normalized_user):
+            return (
+                f"I want to begin with the topic '{label}'. "
+                "Treat my message as a topic selection, not as a content answer. "
+                "Ask the first substantive question for that topic."
+            )
+
+    return user_message
+
+
 def resolve_topic_defs(lecture_package: dict) -> list[dict]:
     """Load canonical topic defs from lecture config or rubric."""
     return normalize_topic_defs(
@@ -162,6 +215,11 @@ def generate_reply(
     topic_defs = resolve_topic_defs(lecture_package)
     allowed_topic_ids = {t["topic_id"] for t in topic_defs}
     context = build_dialogue_context(lecture_package, settings.max_dialogue_context_chars)
+    normalized_user_message = rewrite_opening_topic_selection(
+        lecture_package=lecture_package,
+        state=state,
+        user_message=user_message,
+    )
     system_prompt = build_dialogue_system_prompt(
         lecture_package=lecture_package,
         state=state,
@@ -172,7 +230,7 @@ def generate_reply(
 
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(recent_messages)
-    messages.append({"role": "user", "content": user_message})
+    messages.append({"role": "user", "content": normalized_user_message})
 
     try:
         client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
@@ -346,7 +404,10 @@ def sanitize_assistant_message(
     sanitized = _BARE_TOPIC_ID_RE.sub(replace_topic_id, assistant_message).strip()
     if not timing_context or not timing_context.get("timing_reliable", False):
         sanitized = _TIME_CLAIM_RE.sub("time left", sanitized)
-    return sanitized
+    return language_policy.ensure_english_text(
+        sanitized,
+        language_policy.ENGLISH_ONLY_ASSISTANT_FALLBACK,
+    )
 
 
 def compute_weighted_grade(topic_scores: list[dict]) -> int:
@@ -719,7 +780,10 @@ def generate_report(
         )
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
-        report_text = str(parsed["report_text"])
+        report_text = language_policy.ensure_english_text(
+            str(parsed["report_text"]),
+            language_policy.ENGLISH_ONLY_REPORT_FALLBACK,
+        )
     except openai_.AuthenticationError:
         _log.exception("generate_report failed: OpenAI authentication error")
         report_text = fallback_report_text
