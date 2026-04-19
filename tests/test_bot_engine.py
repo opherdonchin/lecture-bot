@@ -427,7 +427,102 @@ def test_sanitize_decision_trace_stored_privately():
         ALLOWED_IDS,
         raw_decision_trace=raw_trace,
     )
-    assert result["private_decision_trace"]["evidence_target"]["topic_id"] == "T1"
+    assert result["private_decision_trace"]["step_6_chosen_topic"]["topic_id"] == "T1"
+    assert result["private_decision_trace"]["step_8_evidence_target"]["topic_id"] == "T1"
+    assert result["private_decision_trace"]["step_10_choice"]["chosen_move"] == "contrastive_prompt"
+
+
+def test_sanitize_stepwise_decision_trace_preserved():
+    llm_state = {"topics_covered": [], "mastery": {}}
+    raw_trace = {
+        "step_1_current_topic_option": {
+            "topic_id": "T1",
+            "why_consider": "current line still has value",
+        },
+        "step_2_alternative_topic_option": {
+            "topic_id": "T2",
+            "why_consider": "strong breadth alternative",
+        },
+        "step_3_current_topic_value": {
+            "topic_id": "T1",
+            "grade_value": 4,
+            "pedagogical_value": 3,
+            "engagement_value": 2,
+            "reason": "one more check could land",
+        },
+        "step_4_alternative_topic_value": {
+            "topic_id": "T2",
+            "grade_value": 3,
+            "pedagogical_value": 5,
+            "engagement_value": 4,
+            "reason": "better momentum",
+        },
+        "step_5_weighted_topic_comparison": {
+            "grade_weight": 3,
+            "pedagogical_weight": 5,
+            "engagement_weight": 4,
+            "current_topic_total": 29,
+            "alternative_topic_total": 41,
+            "preferred_topic_id": "T2",
+            "reason": "alternative topic wins overall",
+        },
+        "step_6_chosen_topic": {
+            "topic_id": "T2",
+            "choice_type": "switch",
+            "reason": "better overall value",
+        },
+        "step_7_student_model": {
+            "understanding": "basic prior role",
+            "uncertainty": "support constraints still blurry",
+            "failure_mode": "speaks generically",
+        },
+        "step_8_evidence_target": {
+            "topic_id": "T2",
+            "element": "support of beta prior",
+            "target_type": "criterion",
+            "why_now": "needed for the next check",
+        },
+        "step_9_move_candidates": [
+            {
+                "move_type": "contrastive_prompt",
+                "prompt_sketch": "Can the parameter be outside [0,1]?",
+                "revealing": 2,
+                "productive": 5,
+                "fit": 5,
+            }
+        ],
+        "step_10_choice": {
+            "chosen_move": "contrastive_prompt",
+            "reason": "best low-reveal move",
+        },
+        "step_11_reply_draft": {
+            "draft": "Can a coin probability ever be outside [0,1]?",
+        },
+        "step_12_reply_check": {
+            "most_productive": True,
+            "minimally_revealing": True,
+            "smuggles_answer": False,
+            "asks_one_contribution": True,
+        },
+        "step_13_revision": {
+            "revised": False,
+            "reason": "draft already fits",
+        },
+        "step_14_final_move": {
+            "move_type": "contrastive_prompt",
+            "reason": "same as chosen move after review",
+        },
+    }
+    result = bot_engine.sanitize_state_update(
+        OLD_STATE,
+        llm_state,
+        ALLOWED_IDS,
+        raw_decision_trace=raw_trace,
+    )
+    assert result["private_decision_trace"]["step_6_chosen_topic"]["topic_id"] == "T2"
+    assert result["private_decision_trace"]["step_7_student_model"]["understanding"] == "basic prior role"
+    assert result["private_decision_trace"]["step_12_reply_check"]["asks_one_contribution"] is True
+    assert result["private_decision_trace"]["step_14_final_move"]["chosen_move"] == "contrastive_prompt"
 
 
 # ---------------------------------------------------------------------------
@@ -512,6 +607,10 @@ def test_sanitize_assistant_message_replaces_bare_topic_ids():
 
 def test_language_policy_accepts_short_english_topic_pick():
     assert language_policy.is_english_text("Why sample")
+
+
+def test_language_policy_accepts_technical_english_noun_phrase():
+    assert language_policy.is_english_text("Normalized cerebellar volume")
 
 
 def test_language_policy_rejects_hebrew_text():
@@ -644,9 +743,14 @@ def test_load_prompt_template_reads_dialogue_prompt_markdown():
 def test_dialogue_prompt_requires_stepwise_decision_trace():
     loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
     assert "The `decision_trace` must document these steps separately." in loaded
-    assert "* `step_1_student_model`" in loaded
-    assert "* `step_8_final_move`" in loaded
-    assert "`step_6_reply_check` should explicitly record" in loaded
+    assert "* `step_1_current_topic_option`" in loaded
+    assert "* `step_14_final_move`" in loaded
+    assert "`step_12_reply_check` should explicitly record" in loaded
+    assert "Topic control" in loaded
+    assert "weighted current-versus-alternative totals" in loaded
+    assert "Move binding" in loaded
+    assert "must implement the same move family as `step_10_choice.chosen_move`" in loaded
+    assert "briefly tell the student that the session is in its final few minutes" in loaded
 
 
 def test_dialogue_prompt_has_explicit_move_preference_order():
@@ -660,11 +764,14 @@ def test_dialogue_prompt_has_explicit_move_preference_order():
 def test_tutor_generation_prompt_requires_stepwise_trace_and_move_order():
     loaded = prompt_loader.load_prompt_template("tutor_generation_prompt.md")
     assert "each step be documented separately and sequentially" in loaded
-    assert "- `step_1_student_model`" in loaded
-    assert "- `step_8_final_move`" in loaded
+    assert "- `step_1_current_topic_option`" in loaded
+    assert "- `step_14_final_move`" in loaded
+    assert "weighted current-versus-alternative comparison" in loaded
     assert "default move value ordering explicit" in loaded
     assert "1. contrastive prompt" in loaded
     assert "7. compact explanation" in loaded
+    assert "strong move-binding section" in loaded
+    assert "must change the move rather than keep the move and emit a different question" in loaded
 
 
 def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
@@ -718,6 +825,8 @@ def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
             user_message="I think data are imperfect measurements.",
             timing_context={
                 "minutes_remaining": 4,
+                "minutes_elapsed": 16,
+                "session_duration_minutes": 20,
                 "closing_mode": True,
                 "timeout_warning_sent": False,
             },
@@ -733,6 +842,8 @@ def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
     assert '"best_mastery": {' in system_prompt
     assert '"session_timing": {' in system_prompt
     assert '"closing_mode": true' in system_prompt
+    assert '"minutes_elapsed": 16' in system_prompt
+    assert '"session_duration_minutes": 20' in system_prompt
     assert "## Instructional Minutes" in system_prompt
     assert "## Notebook" not in system_prompt
     assert '"turn_count": 3' in system_prompt

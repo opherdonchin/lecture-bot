@@ -1,3 +1,4 @@
+import datetime as dt
 import json
 import unittest.mock as mock
 
@@ -176,6 +177,9 @@ def test_get_grade_returns_grade_structure(client):
     assert "explanation" in data
     assert "scored_topics" in data
     assert "missing_topics" in data
+    assert "minutes_elapsed" in data
+    assert "minutes_remaining" in data
+    assert "session_duration_minutes" in data
 
 
 def test_get_grade_invalid_session(client):
@@ -321,6 +325,45 @@ def test_generate_report_returns_report_structure(client):
     data = response.json()
     assert "report_text" in data
     assert "report_json" in data
+    assert "minutes_elapsed" in data["report_json"]
+    assert "minutes_remaining" in data["report_json"]
+    assert "session_duration_minutes" in data["report_json"]
+
+
+def test_get_grade_returns_session_timing_fields(client):
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[80])
+    db = next(app.dependency_overrides[db_module.get_db]())
+    session_row = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=7)
+    db.commit()
+
+    response = client.post("/get_grade", json={"session_id": session_id})
+    data = response.json()
+    assert data["minutes_elapsed"] >= 7
+    assert data["minutes_remaining"] <= 13
+    assert data["session_duration_minutes"] == 20
+
+
+def test_generate_report_includes_session_timing_fields(client):
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[80])
+    db = next(app.dependency_overrides[db_module.get_db]())
+    session_row = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=9)
+    db.commit()
+
+    with _mock_openai_report():
+        response = client.post("/generate_report", json={"session_id": session_id})
+
+    data = response.json()
+    assert data["report_json"]["minutes_elapsed"] >= 9
+    assert data["report_json"]["minutes_remaining"] <= 11
+    assert data["report_json"]["session_duration_minutes"] == 20
 
 
 def test_generate_report_invalid_session(client):

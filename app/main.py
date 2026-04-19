@@ -156,6 +156,7 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
     recent_messages = all_messages[-settings.recent_message_limit:]
 
     remaining_seconds = max(0.0, (timeout_at - now).total_seconds())
+    elapsed_seconds = max(0.0, (now - started_at).total_seconds())
     minutes_left = max(1, int((remaining_seconds + 59) // 60))
     should_warn_timeout = (
         remaining_seconds <= settings.session_warning_minutes * 60
@@ -163,10 +164,30 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
     )
     timing_context = {
         "minutes_remaining": minutes_left,
+        "minutes_elapsed": int(elapsed_seconds // 60),
+        "session_duration_minutes": settings.session_timeout_minutes,
         "closing_mode": remaining_seconds <= settings.session_warning_minutes * 60,
         "timeout_warning_sent": bool(state.get("timeout_warning_sent", False)),
         "timing_reliable": True,
     }
+
+    normalized_user_message = bot_engine.rewrite_opening_topic_selection(
+        lecture_package=lecture_package,
+        state=state,
+        user_message=request.message,
+    )
+    topic_defs = bot_engine.resolve_topic_defs(lecture_package)
+    lecture_context = bot_engine.build_dialogue_context(
+        lecture_package,
+        settings.max_dialogue_context_chars,
+    )
+    rendered_system_prompt = bot_engine.build_dialogue_system_prompt(
+        lecture_package=lecture_package,
+        state=state,
+        topic_defs=topic_defs,
+        lecture_context=lecture_context,
+        timing_context=timing_context,
+    )
 
     bot_reply, updated_state = bot_engine.generate_reply(
         lecture_package=lecture_package,
@@ -184,6 +205,19 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         session=session,
         state=updated_state,
         lecture_package=lecture_package,
+    )
+    _record_dialogue_turn_audit(
+        db,
+        session_id=request.session_id,
+        turn_index=int(updated_state.get("turn_count", state.get("turn_count", 0) + 1)),
+        state_before=state,
+        recent_messages=recent_messages,
+        normalized_user_message=normalized_user_message,
+        rendered_system_prompt=rendered_system_prompt,
+        settings=settings,
+        updated_state=updated_state,
+        bot_reply=bot_reply,
+        original_user_message=request.message,
     )
 
     session_manager.append_message(db, request.session_id, "user", request.message)
@@ -304,7 +338,96 @@ def _record_grade_event(
         event_type=event_type,
         grade=float(grade),
         payload_json=j_.dumps(payload, ensure_ascii=False),
+    ))    
+
+
+def _extract_trace_target_topic_id(updated_state: dict) -> str | None:
+    trace = updated_state.get("private_decision_trace")
+    if not isinstance(trace, dict):
+        return None
+    chosen_topic = trace.get("step_6_chosen_topic")
+    if isinstance(chosen_topic, dict):
+        topic_id = chosen_topic.get("topic_id")
+        if isinstance(topic_id, str) and topic_id:
+            return topic_id
+    step_target = trace.get("step_8_evidence_target")
+    if isinstance(step_target, dict):
+        topic_id = step_target.get("topic_id")
+        if isinstance(topic_id, str) and topic_id:
+            return topic_id
+    step_target = trace.get("step_2_evidence_target")
+    if isinstance(step_target, dict):
+        topic_id = step_target.get("topic_id")
+        if isinstance(topic_id, str) and topic_id:
+            return topic_id
+    legacy_target = trace.get("evidence_target")
+    if isinstance(legacy_target, dict):
+        topic_id = legacy_target.get("topic_id")
+        if isinstance(topic_id, str) and topic_id:
+            return topic_id
+    return None
+
+
+def _record_dialogue_turn_audit(
+    db: sqlalchemy_orm.Session,
+    *,
+    session_id: str,
+    turn_index: int,
+    state_before: dict,
+    recent_messages: list[dict],
+    normalized_user_message: str,
+    rendered_system_prompt: str,
+    settings: config_module.Settings,
+    updated_state: dict,
+    bot_reply: str,
+    original_user_message: str,
+) -> None:
+    repetition_markers = ("repeat", "repeating", "already asked", "already did", "again")
+    repetition_complaint = any(marker in original_user_message.lower() for marker in repetition_markers)
+    current_topic_before = state_before.get("current_topic_id")
+    current_topic_after = updated_state.get("current_topic_id")
+    db.add(models.DialogueTurnAuditModel(
+        session_id=session_id,
+        turn_index=int(turn_index),
+        effective_policy="default",
+        prompt_template_name="dialogue_system_prompt.md",
+        dialogue_model=settings.openai_model,
+        state_before_json=j_.dumps(state_before, ensure_ascii=False),
+        recent_messages_json=j_.dumps(recent_messages, ensure_ascii=False),
+        user_message=normalized_user_message,
+        rendered_system_prompt=rendered_system_prompt,
+        tutor_mode="content_answer",
+        action_hint_json="{}",
+        challenge_level=1,
+        current_topic_id=current_topic_before if isinstance(current_topic_before, str) else None,
+        target_topic_id=_extract_trace_target_topic_id(updated_state),
+        ended_with_content_question=bot_reply.strip().endswith("?"),
+        repetition_complaint=repetition_complaint,
+        switched_topics=(
+            isinstance(current_topic_before, str)
+            and isinstance(current_topic_after, str)
+            and current_topic_before != current_topic_after
+        ),
     ))
+
+
+def _build_session_timing_snapshot(
+    session: models.SessionModel,
+    settings: config_module.Settings,
+    *,
+    now: dt.datetime | None = None,
+) -> dict[str, int]:
+    now = now or dt.datetime.now(dt.timezone.utc)
+    started_at = session.started_at
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=dt.timezone.utc)
+    elapsed_seconds = max(0.0, (now - started_at).total_seconds())
+    remaining_seconds = max(0.0, settings.session_timeout_minutes * 60 - elapsed_seconds)
+    return {
+        "minutes_elapsed": int(elapsed_seconds // 60),
+        "minutes_remaining": int((remaining_seconds + 59) // 60) if remaining_seconds > 0 else 0,
+        "session_duration_minutes": settings.session_timeout_minutes,
+    }
 
 
 def _update_backend_grade_state(
@@ -462,6 +585,8 @@ def _generate_authoritative_report_result(
     grade_snapshot: dict,
 ) -> schema.ReportResponse:
     timestamp_iso = dt.datetime.now(dt.timezone.utc).isoformat()
+    settings = config_module.get_settings()
+    timing = _build_session_timing_snapshot(session, settings)
     grading_result = {
         "final_grade": grade_snapshot["grade"],
         "topic_scores": grade_snapshot["topic_scores"],
@@ -507,6 +632,9 @@ def _generate_authoritative_report_result(
             started_at=session.started_at.isoformat(),
             timestamp=timestamp_iso,
             final_grade=grade_snapshot["grade"],
+            minutes_elapsed=timing["minutes_elapsed"],
+            minutes_remaining=timing["minutes_remaining"],
+            session_duration_minutes=timing["session_duration_minutes"],
         ),
     )
 
@@ -526,6 +654,7 @@ def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.
     """Compute and return the current grade using real LLM grading."""
     session = _get_active_session(db, request.session_id)
     state = session_manager.load_state(db, session.session_id)
+    settings = config_module.get_settings()
     grade_snapshot = _compute_authoritative_grade_snapshot(
         db,
         session=session,
@@ -539,12 +668,16 @@ def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.
         payload=grade_snapshot["payload"],
     )
     db.commit()
+    timing = _build_session_timing_snapshot(session, settings)
 
     return schema.GradeResponse(
         grade=grade_snapshot["grade"],
         explanation=grade_snapshot["explanation"],
         scored_topics=grade_snapshot["scored_topics"],
         missing_topics=grade_snapshot["missing_topics"],
+        minutes_elapsed=timing["minutes_elapsed"],
+        minutes_remaining=timing["minutes_remaining"],
+        session_duration_minutes=timing["session_duration_minutes"],
     )
 
 

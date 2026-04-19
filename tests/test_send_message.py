@@ -47,22 +47,67 @@ def _mock_openai_dialogue(reply_text="Test reply."):
             "tutor_comment": "",
         },
         "decision_trace": {
-            "student_model": {
+            "step_1_current_topic_option": {
+                "topic_id": "T1",
+                "why_consider": "",
+            },
+            "step_2_alternative_topic_option": {
+                "topic_id": "T2",
+                "why_consider": "",
+            },
+            "step_3_current_topic_value": {
+                "topic_id": "T1",
+                "grade_value": 3,
+                "pedagogical_value": 3,
+                "engagement_value": 3,
+                "reason": "",
+            },
+            "step_4_alternative_topic_value": {
+                "topic_id": "T2",
+                "grade_value": 3,
+                "pedagogical_value": 3,
+                "engagement_value": 3,
+                "reason": "",
+            },
+            "step_5_weighted_topic_comparison": {
+                "grade_weight": 3,
+                "pedagogical_weight": 4,
+                "engagement_weight": 3,
+                "current_topic_total": 27,
+                "alternative_topic_total": 24,
+                "preferred_topic_id": "T1",
+                "reason": "",
+            },
+            "step_6_chosen_topic": {
+                "topic_id": "T1",
+                "choice_type": "stay",
+                "reason": "",
+            },
+            "step_7_student_model": {
                 "understanding": "",
                 "uncertainty": "",
                 "failure_mode": "",
             },
-            "evidence_target": {
+            "step_8_evidence_target": {
                 "topic_id": "T1",
                 "element": "",
                 "target_type": "criterion",
                 "why_now": "",
             },
-            "move_candidates": [],
-            "chosen_move": {
-                "move_type": "open_probe",
+            "step_9_move_candidates": [],
+            "step_10_choice": {
+                "chosen_move": "open_probe",
                 "reason": "",
             },
+            "step_11_reply_draft": {"draft": ""},
+            "step_12_reply_check": {
+                "most_productive": True,
+                "minimally_revealing": True,
+                "smuggles_answer": False,
+                "asks_one_contribution": True,
+            },
+            "step_13_revision": {"revised": False, "reason": ""},
+            "step_14_final_move": {"move_type": "open_probe", "reason": ""},
         },
     })
     mock_client = mock.MagicMock()
@@ -123,22 +168,67 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
             "tutor_comment": "bank T1 and verify once more",
         },
         "decision_trace": {
-            "student_model": {
+            "step_1_current_topic_option": {
+                "topic_id": "T1",
+                "why_consider": "already active",
+            },
+            "step_2_alternative_topic_option": {
+                "topic_id": "T2",
+                "why_consider": "possible breadth move",
+            },
+            "step_3_current_topic_value": {
+                "topic_id": "T1",
+                "grade_value": 4,
+                "pedagogical_value": 4,
+                "engagement_value": 3,
+                "reason": "",
+            },
+            "step_4_alternative_topic_value": {
+                "topic_id": "T2",
+                "grade_value": 3,
+                "pedagogical_value": 3,
+                "engagement_value": 3,
+                "reason": "",
+            },
+            "step_5_weighted_topic_comparison": {
+                "grade_weight": 3,
+                "pedagogical_weight": 4,
+                "engagement_weight": 3,
+                "current_topic_total": 37,
+                "alternative_topic_total": 27,
+                "preferred_topic_id": "T1",
+                "reason": "",
+            },
+            "step_6_chosen_topic": {
+                "topic_id": "T1",
+                "choice_type": "stay",
+                "reason": "",
+            },
+            "step_7_student_model": {
                 "understanding": "partial distinction",
                 "uncertainty": "still soft",
                 "failure_mode": "too verbal",
             },
-            "evidence_target": {
+            "step_8_evidence_target": {
                 "topic_id": "T1",
                 "element": "key distinction",
                 "target_type": "distinction",
                 "why_now": "one stronger check",
             },
-            "move_candidates": [],
-            "chosen_move": {
-                "move_type": "narrowing_question",
+            "step_9_move_candidates": [],
+            "step_10_choice": {
+                "chosen_move": "narrowing_question",
                 "reason": "best next check",
             },
+            "step_11_reply_draft": {"draft": "Good. What is the key distinction?"},
+            "step_12_reply_check": {
+                "most_productive": True,
+                "minimally_revealing": True,
+                "smuggles_answer": False,
+                "asks_one_contribution": True,
+            },
+            "step_13_revision": {"revised": False, "reason": ""},
+            "step_14_final_move": {"move_type": "narrowing_question", "reason": "best next check"},
         },
     })
     mock_client = mock.MagicMock()
@@ -156,7 +246,8 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
     assert state["mastery"]["T1"] == 70
     assert state["best_mastery"]["T1"] == 70
     assert state["current_grade"] == 38.0
-    assert state["private_decision_trace"]["evidence_target"]["topic_id"] == "T1"
+    assert state["private_decision_trace"]["step_6_chosen_topic"]["topic_id"] == "T1"
+    assert state["private_decision_trace"]["step_8_evidence_target"]["topic_id"] == "T1"
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +315,8 @@ def test_session_timeout_returns_final_report_and_closes_session(client):
     assert data["final_grade"] == 80.0
     assert "session has ended" in data["message"].lower()
     assert data["final_report"]["report_json"]["final_grade"] == 80.0
+    assert data["final_report"]["report_json"]["minutes_remaining"] == 0
+    assert data["final_report"]["report_json"]["session_duration_minutes"] == 20
 
 
 def test_session_timeout_ends_session(client):
@@ -372,3 +465,26 @@ def test_send_message_forces_assistant_reply_to_english(client):
     assert response.status_code == 200
     data = response.json()
     assert data["message"] == "Please continue in English. This tutor only works in English."
+
+
+def test_send_message_writes_dialogue_turn_audit_row(client):
+    session_id = start_session(client)
+
+    with _mock_openai_dialogue("What is one example?"):
+        response = client.post(
+            "/send_message",
+            json={"session_id": session_id, "message": "What counts as data"},
+        )
+
+    assert response.status_code == 200
+    db = next(app.dependency_overrides[db_module.get_db]())
+    audit_row = (
+        db.query(models.DialogueTurnAuditModel)
+        .filter(models.DialogueTurnAuditModel.session_id == session_id)
+        .one()
+    )
+    assert audit_row.turn_index == 1
+    assert audit_row.prompt_template_name == "dialogue_system_prompt.md"
+    assert audit_row.dialogue_model
+    assert "focused, natural, pedagogically intelligent lecture-review tutor" in audit_row.rendered_system_prompt
+    assert audit_row.user_message == "What counts as data"

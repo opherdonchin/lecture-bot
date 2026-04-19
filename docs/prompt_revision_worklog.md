@@ -373,3 +373,205 @@
 ### Unresolved choices
 
 - The backend still treats `decision_trace` permissively and does not validate the inner schema. That keeps the code simple, but it means the prompt remains the main enforcement point for trace structure.
+
+## Follow-up - Backend Alignment For Stepwise Decision Trace
+
+### What I inspected
+
+- Live post-restart session `040bb3b1-ca5e-467e-82e3-e46765ca1f3d`
+- `app/bot_engine.py` decision-trace parsing and sanitization
+- prompt contract in `prompts/dialogue_system_prompt.md`
+- tests in `tests/test_bot_engine.py` and `tests/test_send_message.py`
+
+### What I concluded
+
+- The post-restart session timestamp was actually correct because the database stores UTC.
+- The real bug was backend contract drift:
+  - the prompt required the new stepwise keys
+  - the backend sanitizer still only recognized the old compact keys
+- Because of that mismatch, a valid new-style trace would be dropped and stored as `private_decision_trace: null`.
+
+### What I changed
+
+- Updated `app/bot_engine._sanitize_decision_trace` to accept and sanitize the new stepwise trace schema.
+- Kept backward compatibility by upgrading old compact traces into the new stored stepwise shape.
+- Updated regression tests in:
+  - `tests/test_bot_engine.py`
+  - `tests/test_send_message.py`
+
+### Unresolved choices
+
+- The backend now aligns with the new trace shape, but it still treats the trace permissively rather than rejecting a missing or malformed trace outright. That remains a deliberate simplicity tradeoff for now.
+
+## Follow-up - Audit Rows And Looser English Detection
+
+### What I inspected
+
+- `dialogue_turn_audits` usage in the live app
+- `app/models.py`
+- `app/main.py`
+- `app/language_policy.py`
+- false English-only rejection in session `dbe5eeef-6df8-43a0-9aab-bb9ceeadd5a2`
+
+### What I concluded
+
+- `dialogue_turn_audits` existed in the database schema but the live app was not writing any rows.
+- The real conversation log plus `private_decision_trace` are usually enough for behavior review, but audit rows are still valuable for exact turn-forensics because they preserve the rendered system prompt, pre-turn state, and recent-message window the model actually saw.
+- The English-only detector was too strict for short technical noun phrases. `langdetect` was misclassifying clearly English biomedical phrases like `Normalized cerebellar volume`, and the backend was rejecting them before tutoring.
+
+### What I changed
+
+- Added `DialogueTurnAuditModel` in `app/models.py`.
+- Updated `app/main.py` so each normal tutor turn now writes a `dialogue_turn_audits` row containing:
+  - pre-turn state
+  - recent message window
+  - normalized user message shown to the model
+  - rendered system prompt
+  - current/target topic metadata
+  - a few lightweight turn flags
+- Loosened the English detector in `app/language_policy.py` so short ASCII technical phrases are accepted more often before language-ID is consulted.
+- Added regression tests for:
+  - technical English phrase acceptance
+  - dialogue-turn audit row creation
+
+### Unresolved choices
+
+- Audit rows currently store the normalized user message that the model saw, not the raw user message. The raw message remains available in the main `messages` log, which keeps the audit row focused on model-visible context.
+
+## Follow-up - Replay-Tested Move Binding
+
+### What I inspected
+
+- Session `c6ac5b60-b9c0-4311-aebe-a6a77bdc4ac9`, especially turns 6 and 7
+- Stored `dialogue_turn_audits` rows with rendered prompts and stepwise traces
+- Prompt behavior under replay against the live API using the exact audited bad-turn context
+
+### What I concluded
+
+- Mild prompt reminders about consistency were not enough.
+- In replay, the current prompt and weak binding variants still often produced the old failure:
+  - `step_4_choice` named one move
+  - `step_5_reply_draft` and `assistant_message` emitted a more generic question
+- Stronger wording that explicitly required the emitted message to realize the chosen move family materially improved behavior in replay:
+  - on the bad MLE turn, the model switched from generic `What does MLE maximize?` repetitions
+  - to explicit contrastive questions like `Is that a statement about the likelihood, or about a posterior?`
+
+### What I changed
+
+- Strengthened `prompts/dialogue_system_prompt.md` with a dedicated `Move binding` section.
+- Added explicit requirements that:
+  - the draft must concretely instantiate the chosen move
+  - `assistant_message` must implement the same move family
+  - the final move must describe the move actually realized in the emitted message
+  - if faithful realization is impossible, the tutor must change the move rather than emit a mismatched question
+- Mirrored those requirements in `prompts/tutor_generation_prompt.md`.
+- Added prompt-level regression checks in `tests/test_bot_engine.py`.
+
+### Unresolved choices
+
+- This improves binding between chosen move and emitted reply, but it does not by itself solve the deeper question of when the system should treat a concept as already sufficiently established. That remains a separate diagnostic issue.
+
+## Follow-up - Final-Minutes Awareness
+
+### What I inspected
+
+- Session `c6ac5b60-b9c0-4311-aebe-a6a77bdc4ac9`
+- timeout/timing injection in `app/main.py`
+- timing instructions in `prompts/dialogue_system_prompt.md`
+- timing guidance in `prompts/tutor_generation_prompt.md`
+
+### What I concluded
+
+- The backend was still passing reliable timing data and a `closing_mode` flag.
+- The tutor prompt no longer told the model to actually give a brief final-minutes warning when the session first entered the warning window.
+- That created bad optics: the tutor could keep asking normal content questions and then the session could end suddenly on the next request.
+- Adding elapsed and total session duration to the prompt context is useful because it helps the tutor understand where it is in the session arc, not just that it is "closing."
+
+### What I changed
+
+- Updated `app/main.py` to inject:
+  - `minutes_elapsed`
+  - `session_duration_minutes`
+  alongside `minutes_remaining`
+- Strengthened `prompts/dialogue_system_prompt.md` so that when:
+  - `closing_mode` is true
+  - and `timeout_warning_sent` is false
+  the tutor should briefly say the session is in its final few minutes, then pivot to one concrete last contribution
+- Added a rule not to repeat the warning once `timeout_warning_sent` is already true.
+- Mirrored that expectation in `prompts/tutor_generation_prompt.md`.
+- Added prompt-level regression checks in `tests/test_bot_engine.py`.
+
+### Unresolved choices
+
+- This keeps timing awareness prompt-level rather than backend-appending a warning sentence. That preserves the simpler architecture, but it still depends on the tutor following the prompt reliably.
+
+## Follow-up - Timing In Grade And Report Outputs
+
+### What I inspected
+
+- `app/schema.py`
+- grade/report assembly in `app/main.py`
+- grade/report tests in `tests/test_control_actions.py` and `tests/test_send_message.py`
+
+### What I concluded
+
+- Timing was already being computed for live tutoring turns, but it was not exposed in the current-grade API response or the final-report JSON.
+- Adding the same timing snapshot to both surfaces is useful and low-risk:
+  - `minutes_elapsed`
+  - `minutes_remaining`
+  - `session_duration_minutes`
+- The cleanest way to keep them consistent is a shared helper in `app/main.py`.
+
+### What I changed
+
+- Added `_build_session_timing_snapshot(...)` in `app/main.py`.
+- Extended `schema.GradeResponse` with:
+  - `minutes_elapsed`
+  - `minutes_remaining`
+  - `session_duration_minutes`
+- Extended `schema.ReportJson` with the same fields.
+- Updated `/get_grade` to return the timing snapshot.
+- Updated generated final reports to include the timing snapshot in `report_json`.
+- Added regression tests for:
+  - timing fields on `/get_grade`
+  - timing fields on `/generate_report`
+  - zero remaining minutes on timeout-generated final reports
+
+### Unresolved choices
+
+- The report text itself still does not explicitly mention elapsed or remaining time; this change adds the data to the structured report payload. If later you want the prose report text to mention timing too, that should be a separate prompt-level choice.
+
+## Follow-up - Topic-Control Trace Revision
+
+### What I inspected
+
+- `prompts/dialogue_system_prompt.md`
+- `prompts/tutor_generation_prompt.md`
+- `app/bot_engine.py`
+- `app/main.py`
+- trace-related tests in `tests/test_bot_engine.py` and `tests/test_send_message.py`
+
+### What I concluded
+
+- The move-selection trace had become inspectable, but topic choice was still too implicit.
+- That left the tutor free to keep polishing the current topic without explicitly comparing it to a plausible alternative.
+- If we want topic control to be debuggable, the trace needs a compact first-stage topic decision procedure before the student-model and move-selection stages.
+
+### What I changed
+
+- Expanded the runtime `decision_trace` to begin with explicit topic control:
+  - current topic option
+  - alternative topic option
+  - separate current-topic value scores
+  - separate alternative-topic value scores
+  - weighted topic comparison
+  - chosen topic
+- Moved the student model and evidence target later in the trace so they are explicitly grounded in the chosen topic.
+- Updated the tutor-generation prompt to require the same topic-control stage.
+- Extended backend trace sanitization to preserve the new fields while still upgrading older trace shapes forward.
+- Updated audit-topic extraction to prefer the chosen-topic step.
+- Updated regression tests to lock the new trace shape in place.
+
+### Unresolved choices
+
+- The weighted topic comparison currently records compact per-turn weights and totals rather than a more elaborate utility model. That seems like the right balance for inspection without making the trace bloated.

@@ -120,3 +120,122 @@ Why:
 
 - The earlier trace format made debugging too lossy because it summarized results instead of showing the staged decision process.
 - The move list still looked too much like an unordered catalogue, which left room for shallow or implicit move preference.
+
+## Backend Alignment For The New Trace Format
+
+- Updated [app/bot_engine.py](/home/opher/Repositories/lecture-bot/app/bot_engine.py:424) so the backend now accepts the new stepwise `decision_trace` schema required by the prompt.
+- The backend now stores stepwise trace fields such as:
+  - `step_1_student_model`
+  - `step_2_evidence_target`
+  - `step_3_move_candidates`
+  - `step_4_choice`
+  - `step_5_reply_draft`
+  - `step_6_reply_check`
+  - `step_7_revision`
+  - `step_8_final_move`
+- Kept backward compatibility by upgrading older compact traces into the new stored stepwise shape instead of dropping them.
+- Updated regression tests in:
+  - [tests/test_bot_engine.py](/home/opher/Repositories/lecture-bot/tests/test_bot_engine.py:396)
+  - [tests/test_send_message.py](/home/opher/Repositories/lecture-bot/tests/test_send_message.py:1)
+
+Why:
+
+- The prompt and backend had drifted apart.
+- After restart, fresh sessions were still showing `private_decision_trace: null` because the backend sanitizer only recognized the old compact trace fields.
+
+## Follow-up On Audit Rows And English Detection
+
+- Added live `dialogue_turn_audits` writes through [app/main.py](/home/opher/Repositories/lecture-bot/app/main.py:83) and [app/models.py](/home/opher/Repositories/lecture-bot/app/models.py:1).
+- Each normal tutor turn now records:
+  - pre-turn state
+  - recent messages
+  - normalized user message shown to the model
+  - rendered system prompt
+  - lightweight topic/turn metadata
+- Loosened English-only detection in [app/language_policy.py](/home/opher/Repositories/lecture-bot/app/language_policy.py:39) so short ASCII technical noun phrases are less likely to be falsely rejected.
+- Added regression tests in:
+  - [tests/test_bot_engine.py](/home/opher/Repositories/lecture-bot/tests/test_bot_engine.py:570)
+  - [tests/test_send_message.py](/home/opher/Repositories/lecture-bot/tests/test_send_message.py:337)
+
+Why:
+
+- You wanted real audit rows for turn-level inspection rather than relying only on reconstructed context.
+- The previous English-only threshold was too strict for scientific English phrases and created bad false positives in real sessions.
+
+## Follow-up On Move Binding
+
+- Strengthened [prompts/dialogue_system_prompt.md](/home/opher/Repositories/lecture-bot/prompts/dialogue_system_prompt.md:1) with a dedicated `Move binding` section.
+- The runtime prompt now explicitly requires:
+  - `step_5_reply_draft` must concretely instantiate `step_4_choice.chosen_move`
+  - `assistant_message` must implement the same move family as the chosen move
+  - `step_8_final_move` must describe the move actually realized by `assistant_message`
+  - if faithful realization is not possible, the tutor must change the move rather than keep the move and emit a different question
+- Mirrored those requirements in [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:1).
+- Added prompt-level regression checks in [tests/test_bot_engine.py](/home/opher/Repositories/lecture-bot/tests/test_bot_engine.py:644).
+
+Why:
+
+- Replay tests on the exact bad MLE turn showed that mild prompt wording did not fix the problem.
+- Stronger binding language did materially improve the emitted reply:
+  - from generic repeated `What does MLE maximize?`
+  - to explicit contrastive questions that actually matched the chosen move family.
+
+## Follow-up On Final-Minutes Awareness
+
+- Updated [app/main.py](/home/opher/Repositories/lecture-bot/app/main.py:161) so the runtime timing context now includes:
+  - `minutes_elapsed`
+  - `minutes_remaining`
+  - `session_duration_minutes`
+- Strengthened [prompts/dialogue_system_prompt.md](/home/opher/Repositories/lecture-bot/prompts/dialogue_system_prompt.md:465) so the tutor now:
+  - uses elapsed/remaining/total duration when timing is reliable
+  - briefly tells the student when the session has entered its final few minutes
+  - pivots to one concrete final goal instead of acting like there is unlimited time
+  - avoids repeating the warning after it has already been given once
+- Mirrored that requirement in [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:254).
+- Added regression checks in [tests/test_bot_engine.py](/home/opher/Repositories/lecture-bot/tests/test_bot_engine.py:644).
+
+Why:
+
+- In session `c6ac5b60-b9c0-4311-aebe-a6a77bdc4ac9`, the backend was already passing reliable timing data, but the prompt no longer instructed the tutor to actually warn the student when the session first entered the last five minutes.
+- Adding session duration context gives the tutor better temporal grounding and makes the final stretch feel less abrupt.
+
+## Follow-up On Timing In Grade And Report Outputs
+
+- Extended [app/schema.py](/home/opher/Repositories/lecture-bot/app/schema.py:1) so both current-grade responses and final-report JSON now include:
+  - `minutes_elapsed`
+  - `minutes_remaining`
+  - `session_duration_minutes`
+- Added a shared timing helper in [app/main.py](/home/opher/Repositories/lecture-bot/app/main.py:249) and used it for:
+  - `/get_grade`
+  - `/generate_report`
+  - timeout-triggered final reports
+- Added regression tests in:
+  - [tests/test_control_actions.py](/home/opher/Repositories/lecture-bot/tests/test_control_actions.py:169)
+  - [tests/test_send_message.py](/home/opher/Repositories/lecture-bot/tests/test_send_message.py:224)
+
+Why:
+
+- You wanted elapsed and remaining session time visible in the current-grade and final-report outputs, not only inside the tutor prompt context.
+
+## Follow-up On Topic Control
+
+- Reworked [prompts/dialogue_system_prompt.md](/home/opher/Repositories/lecture-bot/prompts/dialogue_system_prompt.md:1) so the private `decision_trace` now begins with an explicit topic-control stage before student modeling and move choice.
+- The trace now records:
+  - current topic option
+  - alternative topic option
+  - separate grade/pedagogical/engagement values for each
+  - a weighted current-versus-alternative comparison
+  - the chosen topic for the turn
+- Moved the student model and evidence target later in the sequence so they are explicitly written inside the chosen topic rather than implicitly inheriting the previous one.
+- Updated [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:1) to require the same topic-control logic.
+- Extended [app/bot_engine.py](/home/opher/Repositories/lecture-bot/app/bot_engine.py:430) to sanitize and store the richer trace shape, while still upgrading older stepwise and legacy traces into the new format.
+- Updated [app/main.py](/home/opher/Repositories/lecture-bot/app/main.py:344) so audit metadata now prefers the chosen-topic trace step when extracting the turn’s target topic.
+- Updated regression coverage in:
+  - [tests/test_bot_engine.py](/home/opher/Repositories/lecture-bot/tests/test_bot_engine.py:396)
+  - [tests/test_send_message.py](/home/opher/Repositories/lecture-bot/tests/test_send_message.py:1)
+
+Why:
+
+- We wanted topic choice to be as inspectable as reply construction.
+- The previous trace made it too easy for the tutor to stay on the current topic by default and only expose move-level reasoning.
+- Explicit current-versus-alternative topic comparison should make “stay or switch” decisions much easier to debug when a line gets over-polished.

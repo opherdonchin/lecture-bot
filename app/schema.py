@@ -46,6 +46,9 @@ class GradeResponse(pd.BaseModel):
     explanation: str
     scored_topics: list[str]
     missing_topics: list[str]
+    minutes_elapsed: int
+    minutes_remaining: int
+    session_duration_minutes: int
 
 
 class ReportJson(pd.BaseModel):
@@ -55,6 +58,9 @@ class ReportJson(pd.BaseModel):
     started_at: str
     timestamp: str
     final_grade: float
+    minutes_elapsed: int
+    minutes_remaining: int
+    session_duration_minutes: int
 
 
 class ReportResponse(pd.BaseModel):

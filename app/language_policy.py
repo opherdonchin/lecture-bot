@@ -50,10 +50,9 @@ def is_english_text(text: str) -> bool:
 
     lowered_tokens = [token.lower() for token in tokens]
 
-    # Very short English replies like "Why sample" or "posterior" are too short
-    # for reliable language-ID, so allow short ASCII/Latin snippets when they
-    # look like plausible English tutoring replies.
-    if alpha_chars < 24 and stripped.isascii():
+    # Short ASCII technical noun phrases are often misclassified by language-ID
+    # even when they are perfectly fine English tutoring replies.
+    if alpha_chars < 40 and stripped.isascii():
         return True
 
     if alpha_chars < 12:

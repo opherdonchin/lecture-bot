@@ -37,6 +37,12 @@ _DECISION_MOVE_TYPES = {
     "topic_switch",
     "self_correction_prompt",
 }
+_DECISION_TRACE_CHECK_KEYS = (
+    "most_productive",
+    "minimally_revealing",
+    "smuggles_answer",
+    "asks_one_contribution",
+)
 
 _TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)(?:\.|\s+[—-])\s+(.+)$', re_.MULTILINE)
 _IMPORTANCE_RE = re_.compile(r'\*\*Importance:\*\*\s+(\w+)')
@@ -425,29 +431,94 @@ def _sanitize_decision_trace(raw_trace: object, allowed_topic_ids: set[str]) -> 
     if not isinstance(raw_trace, dict):
         return None
 
-    student_model_raw = raw_trace.get("student_model", {})
-    evidence_target_raw = raw_trace.get("evidence_target", {})
-    move_candidates_raw = raw_trace.get("move_candidates", [])
-    chosen_move_raw = raw_trace.get("chosen_move", {})
+    def _sanitize_topic_option(raw_option: object) -> dict:
+        if not isinstance(raw_option, dict):
+            raw_option = {}
+        topic_id = str(raw_option.get("topic_id", "")).strip()
+        return {
+            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
+            "why_consider": str(raw_option.get("why_consider", "")).strip()[:240],
+        }
 
-    student_model = {
-        "understanding": str(student_model_raw.get("understanding", "")).strip()[:240],
-        "uncertainty": str(student_model_raw.get("uncertainty", "")).strip()[:240],
-        "failure_mode": str(student_model_raw.get("failure_mode", "")).strip()[:240],
-    }
+    def _sanitize_topic_value(raw_value: object) -> dict:
+        if not isinstance(raw_value, dict):
+            raw_value = {}
+        topic_id = str(raw_value.get("topic_id", "")).strip()
+        return {
+            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
+            "grade_value": _safe_rating(raw_value.get("grade_value", 1)),
+            "pedagogical_value": _safe_rating(raw_value.get("pedagogical_value", 1)),
+            "engagement_value": _safe_rating(raw_value.get("engagement_value", 1)),
+            "reason": str(raw_value.get("reason", "")).strip()[:240],
+        }
 
-    topic_id = str(evidence_target_raw.get("topic_id", "")).strip()
-    target_type = str(evidence_target_raw.get("target_type", "")).strip()
-    evidence_target = {
-        "topic_id": topic_id if topic_id in allowed_topic_ids else None,
-        "element": str(evidence_target_raw.get("element", "")).strip()[:160],
-        "target_type": target_type if target_type in _DECISION_TARGET_TYPES else "",
-        "why_now": str(evidence_target_raw.get("why_now", "")).strip()[:240],
-    }
+    def _sanitize_weighted_topic_comparison(raw_comparison: object) -> dict:
+        if not isinstance(raw_comparison, dict):
+            raw_comparison = {}
+        preferred_topic_id = str(raw_comparison.get("preferred_topic_id", "")).strip()
+        current_total_raw = raw_comparison.get("current_topic_total", 0)
+        alternative_total_raw = raw_comparison.get("alternative_topic_total", 0)
+        try:
+            current_topic_total = max(0, min(99, int(current_total_raw or 0)))
+        except (TypeError, ValueError):
+            current_topic_total = 0
+        try:
+            alternative_topic_total = max(0, min(99, int(alternative_total_raw or 0)))
+        except (TypeError, ValueError):
+            alternative_topic_total = 0
+        return {
+            "grade_weight": _safe_rating(raw_comparison.get("grade_weight", 1)),
+            "pedagogical_weight": _safe_rating(raw_comparison.get("pedagogical_weight", 1)),
+            "engagement_weight": _safe_rating(raw_comparison.get("engagement_weight", 1)),
+            "current_topic_total": current_topic_total,
+            "alternative_topic_total": alternative_topic_total,
+            "preferred_topic_id": preferred_topic_id if preferred_topic_id in allowed_topic_ids else None,
+            "reason": str(raw_comparison.get("reason", "")).strip()[:240],
+        }
 
-    move_candidates: list[dict] = []
-    if isinstance(move_candidates_raw, list):
-        for item in move_candidates_raw[:4]:
+    def _sanitize_chosen_topic(raw_topic: object) -> dict:
+        if not isinstance(raw_topic, dict):
+            raw_topic = {}
+        topic_id = str(raw_topic.get("topic_id", "")).strip()
+        choice_type = str(raw_topic.get("choice_type", "")).strip()
+        return {
+            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
+            "choice_type": choice_type if choice_type in {"stay", "switch"} else "",
+            "reason": str(raw_topic.get("reason", "")).strip()[:240],
+        }
+
+    def _sanitize_student_model(raw_model: object) -> dict:
+        if not isinstance(raw_model, dict):
+            raw_model = {}
+        return {
+            "understanding": str(raw_model.get("understanding", "")).strip()[:240],
+            "uncertainty": str(raw_model.get("uncertainty", "")).strip()[:240],
+            "failure_mode": str(raw_model.get("failure_mode", "")).strip()[:240],
+        }
+
+    def _sanitize_evidence_target(raw_target: object) -> dict:
+        if not isinstance(raw_target, dict):
+            raw_target = {}
+        topic_id = str(raw_target.get("topic_id", "")).strip()
+        target_type = str(raw_target.get("target_type", "")).strip()
+        return {
+            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
+            "element": str(raw_target.get("element", "")).strip()[:160],
+            "target_type": target_type if target_type in _DECISION_TARGET_TYPES else "",
+            "why_now": str(raw_target.get("why_now", "")).strip()[:240],
+        }
+
+    def _safe_rating(value: object) -> int:
+        try:
+            return max(1, min(5, int(value or 1)))
+        except (TypeError, ValueError):
+            return 1
+
+    def _sanitize_move_candidates(raw_candidates: object) -> list[dict]:
+        move_candidates: list[dict] = []
+        if not isinstance(raw_candidates, list):
+            return move_candidates
+        for item in raw_candidates[:4]:
             if not isinstance(item, dict):
                 continue
             move_type = str(item.get("move_type", "")).strip()
@@ -455,26 +526,191 @@ def _sanitize_decision_trace(raw_trace: object, allowed_topic_ids: set[str]) -> 
                 {
                     "move_type": move_type if move_type in _DECISION_MOVE_TYPES else "open_probe",
                     "prompt_sketch": str(item.get("prompt_sketch", "")).strip()[:200],
-                    "revealing": max(1, min(5, int(item.get("revealing", 1) or 1))),
-                    "productive": max(1, min(5, int(item.get("productive", 1) or 1))),
-                    "fit": max(1, min(5, int(item.get("fit", 1) or 1))),
+                    "revealing": _safe_rating(item.get("revealing", 1)),
+                    "productive": _safe_rating(item.get("productive", 1)),
+                    "fit": _safe_rating(item.get("fit", 1)),
                 }
             )
+        return move_candidates
 
-    chosen_move_type = str(chosen_move_raw.get("move_type", "")).strip()
-    chosen_move = {
-        "move_type": chosen_move_type if chosen_move_type in _DECISION_MOVE_TYPES else "open_probe",
-        "reason": str(chosen_move_raw.get("reason", "")).strip()[:240],
-    }
+    def _sanitize_choice(raw_choice: object) -> dict:
+        if not isinstance(raw_choice, dict):
+            raw_choice = {}
+        chosen_move_type = str(
+            raw_choice.get("chosen_move", raw_choice.get("move_type", ""))
+        ).strip()
+        return {
+            "chosen_move": chosen_move_type if chosen_move_type in _DECISION_MOVE_TYPES else "open_probe",
+            "reason": str(raw_choice.get("reason", "")).strip()[:240],
+        }
+
+    def _sanitize_reply_draft(raw_draft: object) -> dict:
+        if not isinstance(raw_draft, dict):
+            raw_draft = {}
+        return {
+            "draft": str(raw_draft.get("draft", "")).strip()[:280],
+        }
+
+    def _sanitize_reply_check(raw_check: object) -> dict:
+        if not isinstance(raw_check, dict):
+            raw_check = {}
+        return {
+            key: bool(raw_check.get(key, False))
+            for key in _DECISION_TRACE_CHECK_KEYS
+        }
+
+    def _sanitize_revision(raw_revision: object) -> dict:
+        if not isinstance(raw_revision, dict):
+            raw_revision = {}
+        return {
+            "revised": bool(raw_revision.get("revised", False)),
+            "reason": str(raw_revision.get("reason", "")).strip()[:240],
+        }
+
+    stepwise_present = any(key.startswith("step_") for key in raw_trace)
+
+    if "step_6_chosen_topic" in raw_trace or "step_14_final_move" in raw_trace:
+        trace = {
+            "step_1_current_topic_option": _sanitize_topic_option(raw_trace.get("step_1_current_topic_option")),
+            "step_2_alternative_topic_option": _sanitize_topic_option(raw_trace.get("step_2_alternative_topic_option")),
+            "step_3_current_topic_value": _sanitize_topic_value(raw_trace.get("step_3_current_topic_value")),
+            "step_4_alternative_topic_value": _sanitize_topic_value(raw_trace.get("step_4_alternative_topic_value")),
+            "step_5_weighted_topic_comparison": _sanitize_weighted_topic_comparison(raw_trace.get("step_5_weighted_topic_comparison")),
+            "step_6_chosen_topic": _sanitize_chosen_topic(raw_trace.get("step_6_chosen_topic")),
+            "step_7_student_model": _sanitize_student_model(raw_trace.get("step_7_student_model")),
+            "step_8_evidence_target": _sanitize_evidence_target(raw_trace.get("step_8_evidence_target")),
+            "step_9_move_candidates": _sanitize_move_candidates(raw_trace.get("step_9_move_candidates")),
+            "step_10_choice": _sanitize_choice(raw_trace.get("step_10_choice")),
+            "step_11_reply_draft": _sanitize_reply_draft(raw_trace.get("step_11_reply_draft")),
+            "step_12_reply_check": _sanitize_reply_check(raw_trace.get("step_12_reply_check")),
+            "step_13_revision": _sanitize_revision(raw_trace.get("step_13_revision")),
+            "step_14_final_move": _sanitize_choice(raw_trace.get("step_14_final_move")),
+        }
+        if (
+            not any(v for v in trace["step_6_chosen_topic"].values() if v)
+            and not any(trace["step_7_student_model"].values())
+            and not any(v for v in trace["step_8_evidence_target"].values() if v)
+            and not trace["step_9_move_candidates"]
+            and not trace["step_11_reply_draft"]["draft"]
+        ):
+            return None
+        return trace
+
+    if stepwise_present:
+        student_model = _sanitize_student_model(raw_trace.get("step_1_student_model"))
+        evidence_target = _sanitize_evidence_target(raw_trace.get("step_2_evidence_target"))
+        move_candidates = _sanitize_move_candidates(raw_trace.get("step_3_move_candidates"))
+        chosen_move = _sanitize_choice(raw_trace.get("step_4_choice"))
+        chosen_topic_id = evidence_target.get("topic_id")
+
+        if (
+            not any(student_model.values())
+            and not move_candidates
+            and not any(v for v in evidence_target.values() if v)
+        ):
+            return None
+
+        return {
+            "step_1_current_topic_option": {
+                "topic_id": chosen_topic_id,
+                "why_consider": "",
+            },
+            "step_2_alternative_topic_option": {
+                "topic_id": None,
+                "why_consider": "",
+            },
+            "step_3_current_topic_value": {
+                "topic_id": chosen_topic_id,
+                "grade_value": 1,
+                "pedagogical_value": 1,
+                "engagement_value": 1,
+                "reason": "",
+            },
+            "step_4_alternative_topic_value": {
+                "topic_id": None,
+                "grade_value": 1,
+                "pedagogical_value": 1,
+                "engagement_value": 1,
+                "reason": "",
+            },
+            "step_5_weighted_topic_comparison": {
+                "grade_weight": 1,
+                "pedagogical_weight": 1,
+                "engagement_weight": 1,
+                "current_topic_total": 0,
+                "alternative_topic_total": 0,
+                "preferred_topic_id": chosen_topic_id,
+                "reason": "",
+            },
+            "step_6_chosen_topic": {
+                "topic_id": chosen_topic_id,
+                "choice_type": "stay" if chosen_topic_id else "",
+                "reason": "",
+            },
+            "step_7_student_model": student_model,
+            "step_8_evidence_target": evidence_target,
+            "step_9_move_candidates": move_candidates,
+            "step_10_choice": chosen_move,
+            "step_11_reply_draft": _sanitize_reply_draft(raw_trace.get("step_5_reply_draft")),
+            "step_12_reply_check": _sanitize_reply_check(raw_trace.get("step_6_reply_check")),
+            "step_13_revision": _sanitize_revision(raw_trace.get("step_7_revision")),
+            "step_14_final_move": _sanitize_choice(raw_trace.get("step_8_final_move")),
+        }
+
+    student_model = _sanitize_student_model(raw_trace.get("student_model"))
+    evidence_target = _sanitize_evidence_target(raw_trace.get("evidence_target"))
+    move_candidates = _sanitize_move_candidates(raw_trace.get("move_candidates"))
+    chosen_move = _sanitize_choice(raw_trace.get("chosen_move"))
 
     if not any(student_model.values()) and not move_candidates and not any(v for v in evidence_target.values() if v):
         return None
 
+    # Backward-compatible upgrade path: store legacy traces in the new stepwise shape.
     return {
-        "student_model": student_model,
-        "evidence_target": evidence_target,
-        "move_candidates": move_candidates,
-        "chosen_move": chosen_move,
+        "step_1_current_topic_option": {
+            "topic_id": evidence_target.get("topic_id"),
+            "why_consider": "",
+        },
+        "step_2_alternative_topic_option": {
+            "topic_id": None,
+            "why_consider": "",
+        },
+        "step_3_current_topic_value": {
+            "topic_id": evidence_target.get("topic_id"),
+            "grade_value": 1,
+            "pedagogical_value": 1,
+            "engagement_value": 1,
+            "reason": "",
+        },
+        "step_4_alternative_topic_value": {
+            "topic_id": None,
+            "grade_value": 1,
+            "pedagogical_value": 1,
+            "engagement_value": 1,
+            "reason": "",
+        },
+        "step_5_weighted_topic_comparison": {
+            "grade_weight": 1,
+            "pedagogical_weight": 1,
+            "engagement_weight": 1,
+            "current_topic_total": 0,
+            "alternative_topic_total": 0,
+            "preferred_topic_id": evidence_target.get("topic_id"),
+            "reason": "",
+        },
+        "step_6_chosen_topic": {
+            "topic_id": evidence_target.get("topic_id"),
+            "choice_type": "stay" if evidence_target.get("topic_id") else "",
+            "reason": "",
+        },
+        "step_7_student_model": student_model,
+        "step_8_evidence_target": evidence_target,
+        "step_9_move_candidates": move_candidates,
+        "step_10_choice": chosen_move,
+        "step_11_reply_draft": {"draft": ""},
+        "step_12_reply_check": {key: False for key in _DECISION_TRACE_CHECK_KEYS},
+        "step_13_revision": {"revised": False, "reason": ""},
+        "step_14_final_move": chosen_move,
     }
 
 

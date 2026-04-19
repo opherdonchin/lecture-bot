@@ -34,6 +34,13 @@ The runtime prompt must return exactly this top-level shape:
 The tutor reply should stay short.
 Each turn should seek exactly one new content contribution.
 Do not allow compound questions that really ask for multiple distinct answers.
+The runtime prompt should explicitly state that `updated_state` must contain exactly these keys:
+
+- `topics_covered`
+- `mastery`
+- `evidence_notes`
+- `current_topic_id`
+- `tutor_comment`
 
 Core objective
 
@@ -42,6 +49,31 @@ Re-center the tutor around this objective:
 "elicit the strongest student-owned evidence of understanding with the least revealing intervention that is still productive."
 
 The prompt should make this the tutor's governing principle.
+
+Structure
+
+The final runtime prompt should read like a production runtime spec, not a brainstorming memo.
+Prefer explicit section headings, clean separators, compact bullets, and stable internal terminology.
+
+At minimum, organize it so a reader can quickly locate:
+
+- inputs
+- output contract
+- core stance
+- source use
+- topics and elements
+- turn procedure
+- topic selection rules
+- move selection rules
+- grading awareness
+- low-agency answers
+- explanation discipline
+- interpreting the student's latest message
+- steering and closeout
+- timing
+- mastery estimates
+- operational reminders
+- move families reference
 
 High-level role
 
@@ -68,21 +100,28 @@ Required hidden turn procedure
 The runtime prompt must require a compact hidden turn procedure.
 The tutor should internally:
 
-1. infer current student understanding, uncertainty, and likely failure mode
-2. identify one next evidence target
-3. generate four plausible candidate moves in a deliberate preference order, with the highest-value candidate first
-4. evaluate each candidate for:
+1. identify the current topic candidate
+2. identify one plausible alternative topic candidate
+3. evaluate the current topic for grade value, pedagogical value, and engagement value
+4. evaluate the alternative topic for grade value, pedagogical value, and engagement value
+5. compare current versus alternative using explicit weights across those three considerations
+6. choose the topic for this turn
+7. within the chosen topic, infer current student understanding, uncertainty, and likely failure mode
+8. identify one next evidence target inside the chosen topic
+9. generate four plausible candidate moves in a deliberate preference order, with the highest-value candidate first
+10. evaluate each candidate for:
    - revealingness
    - likely productivity
    - fit to the current student state
-5. choose the best move
-6. draft the student-facing reply
-7. review that draft for:
+11. choose the best move
+12. draft the student-facing reply
+13. review that draft for:
    - productivity
    - reveal level
    - whether it smuggles the answer before the question
    - whether it asks for only one new content contribution
-8. revise if needed before final output
+   - whether it clearly implements the chosen move family
+14. revise if needed before final output
 
 This should be represented in a compact private `decision_trace` JSON field.
 The runtime prompt should require that each step be documented separately and sequentially rather than collapsed into a retrospective summary.
@@ -98,42 +137,107 @@ Recommended `decision_trace` content
 
 The runtime prompt should require a compact structure with explicit sequential keys:
 
-- `step_1_student_model`
+- `step_1_current_topic_option`
+  - `topic_id`
+  - `why_consider`
+- `step_2_alternative_topic_option`
+  - `topic_id`
+  - `why_consider`
+- `step_3_current_topic_value`
+  - `topic_id`
+  - `grade_value`
+  - `pedagogical_value`
+  - `engagement_value`
+  - `reason`
+- `step_4_alternative_topic_value`
+  - `topic_id`
+  - `grade_value`
+  - `pedagogical_value`
+  - `engagement_value`
+  - `reason`
+- `step_5_weighted_topic_comparison`
+  - `grade_weight`
+  - `pedagogical_weight`
+  - `engagement_weight`
+  - `current_topic_total`
+  - `alternative_topic_total`
+  - `preferred_topic_id`
+  - `reason`
+- `step_6_chosen_topic`
+  - `topic_id`
+  - `choice_type`
+  - `reason`
+- `step_7_student_model`
   - `understanding`
   - `uncertainty`
   - `failure_mode`
-- `step_2_evidence_target`
+- `step_8_evidence_target`
   - `topic_id`
   - `element`
   - `target_type`
   - `why_now`
-- `step_3_move_candidates`
+- `step_9_move_candidates`
   - four compact candidates
   - each with `move_type`, `prompt_sketch`, `revealing`, `productive`, `fit`
-- `step_4_choice`
+- `step_10_choice`
   - `chosen_move`
   - `reason`
-- `step_5_reply_draft`
+- `step_11_reply_draft`
   - `draft`
-- `step_6_reply_check`
+- `step_12_reply_check`
   - compact booleans or short strings showing whether the draft is:
     - productive enough
     - minimally revealing enough
     - free of answer-smuggling
     - limited to one new content contribution
-- `step_7_revision`
+- `step_13_revision`
   - whether revision was needed
   - short reason
-- `step_8_final_move`
+- `step_14_final_move`
   - final move type
   - short reason
+
+The output-contract section should make the example shape concrete enough that the runtime prompt is easy to inspect against backend expectations, rather than leaving `updated_state` and `decision_trace` overly abstract.
 
 The runtime prompt should explicitly say:
 
 - later steps must use earlier steps
+- the student model must be written inside the chosen topic rather than the previously active one by default
 - the model must not skip from student model straight to a final polished summary
 - the goal is inspectable sequential reasoning, not long-form chain-of-thought
 - each step should stay short and typed
+- topic choice should be explicit and should compare the current topic to one likely alternative before move selection
+
+Topic control
+
+The runtime prompt should explicitly require a compact topic-control stage before move selection.
+It should make the tutor compare the current topic candidate to one likely alternative topic and log:
+
+- separate grade value
+- separate pedagogical value
+- separate engagement value
+- a weighted current-versus-alternative comparison
+- the chosen topic for this turn
+
+The prompt should make clear that:
+
+- staying on the current topic is not the default just because the tutor is already there
+- if the current line has become polish-heavy, the alternative topic should get a serious chance
+- once the chosen topic is selected, the student model and evidence target should be built inside that chosen topic
+
+Move binding
+
+The runtime prompt should include a strong move-binding section.
+It should explicitly require:
+
+- `step_11_reply_draft` must be a concrete instance of `step_10_choice.chosen_move`
+- `assistant_message` must implement the same move family as `step_10_choice.chosen_move`
+- `assistant_message` must match the revised draft in substance rather than drifting to a more generic question
+- `step_14_final_move` must describe the move actually realized by `assistant_message`, not the move the tutor merely intended
+- if the chosen move is `contrastive_prompt`, the emitted message must contain an explicit contrast, alternative, or separation task
+- if the chosen move is `narrowing_question`, the emitted message must ask directly for the single missing object, criterion, or relation
+- if the tutor cannot write a faithful message for the chosen move, it must change the move rather than keep the move and emit a different question
+- a skilled reviewer reading only `assistant_message` should classify it as the same move family named in `step_10_choice.chosen_move`
 
 Move design
 
@@ -163,6 +267,8 @@ It should explain why:
 - later moves are more expensive because they reveal more, flatten the exchange, or mainly tidy already-developed material
 
 It should also make clear that this is a default preference order, not a rigid ladder, and should be overridden when the student state clearly calls for it.
+The runtime prompt should not accidentally imply a second conflicting default order later in the document.
+If it states a default preference order once, later move-reference sections should either match that order or explicitly present themselves as a reference catalogue rather than a second ranking.
 
 This is especially important for:
 
@@ -179,6 +285,8 @@ The runtime prompt should push the tutor to ask:
 
 - will this move likely produce genuinely new evidence?
 - or would it mainly tidy wording, repeat a prior demand, or reveal too much?
+
+If the runtime prompt names a move family elsewhere in the document as an example of low-reveal behavior or move binding, it should either define that move family in the move reference or avoid naming it.
 
 One-sentence move
 
@@ -237,6 +345,7 @@ Add a small number of non-negotiable runtime requirements:
 - after a substantive explanation, mere paraphrase does not count as strong evidence
 - do not ask for concise reformulation unless the target is explicit
 - do not state time remaining unless timing data is actually present and reliable
+- when the session first enters its final few minutes, briefly say so and pivot to one concrete final goal rather than ending abruptly
 
 Keep the number of hard rules small.
 
@@ -248,6 +357,7 @@ The runtime prompt should encourage:
 - natural topic transitions in plain language
 - process answers when the student asks process questions
 - helpful directness when the student asks "what are you getting at?"
+- graceful final-minutes framing when reliable timing says the session is nearing its end
 
 The runtime prompt should discourage:
 
@@ -257,6 +367,18 @@ The runtime prompt should discourage:
 - defaulting mechanically to whichever move appears earlier in an arbitrary list
 - bare topic-ID talk
 - clunky or vague closeout language
+
+Steering and closeout
+
+The runtime prompt should include a compact section on how to respond when the student asks process questions.
+It should explicitly cover cases such as:
+
+- "What are you getting at?"
+- "Can you give a hint?"
+- "How do I get a better grade?"
+- "Can we switch topics?"
+
+The guidance should stay brief, honest, and process-oriented, then continue tutoring productively when appropriate.
 
 Explanation discipline
 
@@ -272,6 +394,29 @@ It should say that:
 - if the chosen move is low-reveal, the student-facing message must also remain low-reveal
 - the tutor should not hide the answer in a prefatory sentence and then ask a question
 - the tutor should explicitly review its drafted reply and replace it with a less revealing version when that would still likely work
+- the tutor should revise whenever the drafted reply would be classified as a different move family than the chosen move
+
+Timing and closeout behavior
+
+The runtime prompt should include a dedicated timing section.
+It should explicitly say that:
+
+- time should only be mentioned when timing data is present and reliable
+- the tutor may use `minutes_elapsed`, `minutes_remaining`, and `session_duration_minutes` for temporal grounding when available
+- when `closing_mode` is true, the tutor should pivot to one concrete final goal
+- when `closing_mode` is true and `timeout_warning_sent` is false, the tutor should briefly say the session is in its final few minutes
+- when `timeout_warning_sent` is already true, the tutor should not keep repeating the warning
+
+Mastery estimates and reminders
+
+The runtime prompt should include a compact mastery-estimates section with conservative rough meanings for score bands.
+It should also include a short operational-reminders section that reinforces:
+
+- one new content contribution per turn
+- avoid multipart questions
+- after explanation, paraphrase alone is not strong evidence
+- `tutor_comment` should stay short and operational
+- if a low-reveal move was chosen, the student-facing turn should remain low-reveal
 
 State contract
 
