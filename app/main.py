@@ -156,6 +156,7 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         "minutes_remaining": minutes_left,
         "closing_mode": remaining_seconds <= settings.session_warning_minutes * 60,
         "timeout_warning_sent": bool(state.get("timeout_warning_sent", False)),
+        "timing_reliable": True,
     }
 
     bot_reply, updated_state = bot_engine.generate_reply(
@@ -167,10 +168,6 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
     )
 
     if should_warn_timeout:
-        bot_reply = (
-            f"{bot_reply}\n\n"
-            f"We have about {minutes_left} minutes left in this session."
-        )
         updated_state["timeout_warning_sent"] = True
 
     _update_backend_grade_state(
@@ -226,7 +223,7 @@ def _get_authoritative_grading_payload(db: sqlalchemy_orm.Session, session_id: s
 
 
 def _topic_id_to_label_map(lecture_package: dict) -> dict[str, str]:
-    topic_defs = lecture_package.get("topics") or bot_engine.parse_rubric_topics(lecture_package["rubric"])
+    topic_defs = bot_engine.resolve_topic_defs(lecture_package)
     return {topic["topic_id"]: topic["label"] for topic in topic_defs}
 
 
@@ -358,7 +355,7 @@ def _build_grade_snapshot_from_state(
     lecture_package: dict,
     messages: list[dict],
 ) -> dict:
-    topic_defs = lecture_package.get("topics") or bot_engine.parse_rubric_topics(lecture_package["rubric"])
+    topic_defs = bot_engine.resolve_topic_defs(lecture_package)
     topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
     best_mastery = _coerce_mastery_map(state.get("best_mastery"), set(topic_id_to_label))
     evidence_notes = state.get("evidence_notes", {})
@@ -388,7 +385,7 @@ def _build_grade_snapshot_from_state(
     ]
     if not scored_topics:
         explanation = (
-            "No topics are banked yet. Keep going with one lecture idea and show a clear distinction, explanation, or application."
+            "No strong footholds yet. Keep going with one lecture idea and show a clear distinction, explanation, or application."
         )
     elif len(scored_topics) == 1:
         explanation = f"Best demonstrated understanding so far is in {scored_topics[0]}."

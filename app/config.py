@@ -17,8 +17,8 @@ class Settings(ps.BaseSettings):
     admin_username: str | None = None
     admin_password: str | None = None
     recent_message_limit: int = 10
-    max_dialogue_context_chars: int = 120000
-    max_grading_context_chars: int = 180000
+    max_dialogue_context_chars: int = 45000
+    max_grading_context_chars: int = 70000
     sampled_topic_count: int = 5
     opening_topic_choice_count: int = 3
 

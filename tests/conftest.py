@@ -59,7 +59,6 @@ def client(tmp_path, monkeypatch):
                     {"key": "slides", "path": "slides.md", "label": "Slides", "required": True},
                     {"key": "handout", "path": "handout.md", "label": "Handout", "required": True},
                     {"key": "minutes", "path": "minutes.json", "label": "Instructional Minutes", "required": True},
-                    {"key": "notebook", "path": "notebook.md", "label": "Notebook", "required": True},
                 ]
             }
         ),

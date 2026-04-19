@@ -1,4 +1,4 @@
-# Prompt: Generate instructional minutes JSON for rubric generation
+# Prompt: Generate selective instructional minutes JSON for rubric generation
 
 Use this prompt in a fresh chat. Upload exactly these lecture files before sending the prompt:
 
@@ -9,96 +9,81 @@ Use this prompt in a fresh chat. Upload exactly these lecture files before sendi
 
 ---
 
-You are producing a canonical file called **instructional_minutes.json** for later use in **lecture mastery rubric generation**.
+You are producing a canonical file called **instructional_minutes.json** for later use in **lecture mastery rubric generation** and **runtime tutoring context**.
 
-Your job is **not** to summarize the class as an event.
-Your job is to extract the **instructional content actually imparted in the lecture**, especially where the oral teaching deepened understanding beyond the static materials.
+Your job is not to summarize the lecture in full.
+Your job is to produce **selective teaching notes** that capture only the oral material that should actually change how the lecture is assessed or tutored.
 
-The downstream rubric will use this file to identify:
+Think of this file as:
 
-- what concepts were actually explained
-- what distinctions were sharpened orally
-- what confusions were resolved
-- what notebook / figure / formula / code interpretations were given orally
-- what warnings were given against common mistakes
-- what seemed central versus incidental
-- what kinds of understanding should later count as stronger or weaker evidence of mastery
+- a compact record of orally sharpened distinctions
+- a record of confusions that were actually resolved in class
+- a record of warnings against common mistakes
+- a record of oral interpretations of figures, formulas, code, plots, or worked examples that matter conceptually
+- a record of what felt central versus incidental
+
+Do not turn this into:
+
+- a second handout
+- a cleaned-up transcript
+- a detailed lecture reconstruction
+- a turn-by-turn chronology
 
 ## Output format
 
-Return **JSON only**.
+Return JSON only.
 Do not return markdown.
 Do not wrap the JSON in code fences.
 Do not add commentary before or after the JSON.
-
-## Why this file exists
-
-This file is meant to support a later **mastery rubric**, not to serve as lecture notes or transcript cleanup.
-
-That means the file should preserve:
-
-- conceptual deepening
-- orally sharpened distinctions
-- resolved confusions in generalized form
-- orally given interpretations of figures, formulas, plots, code, and examples
-- mastery-relevant takeaways
-
-And it should suppress:
-
-- event chronology for its own sake
-- logistics
-- greetings
-- jokes
-- transcript garbage
-- repetitive restatement
-- local classroom management
-- who said what
-- attendance-dependent details
-- exact wording unless the wording itself matters conceptually
 
 ## Source roles
 
 Treat the uploaded sources as serving different roles.
 
-- **Slides**: intended lecture structure, sequence, section boundaries, named concepts, figures, examples, and declared emphasis
+- **Slides**: lecture structure, sequence, section boundaries, named concepts, figures, examples, and declared emphasis
 - **Handout**: compact conceptual reconstruction of the lecture
-- **Notebook**: concrete demonstrations, code, plots, distributions, formulas, and worked examples
-- **Transcript**: oral clarification, elaboration, distinctions, student-triggered clarifications, warnings, and interpretation
+- **Notebook**: demonstrations, code, plots, formulas, and worked examples that may need interpretation
+- **Transcript**: oral clarification, emphasis, warnings, distinctions, student-triggered clarifications, and interpretation
 
-Follow the **lecture flow and scope** primarily from the slides and handout.
-Use the notebook to understand what was concretely demonstrated.
-Use the transcript to extract what was **actually explained orally beyond the static materials**.
+Follow the lecture's actual structure mainly from the slides and handout.
+Use the notebook only to understand demonstrations and interpretation targets.
+Use the transcript only to extract oral teaching that materially changes what should count as understanding.
 
 Do not let transcript noise override lecture structure.
 
 ## Core principles
 
 1. Use only the uploaded materials.
-2. Follow the lecture’s actual section order.
-3. Distinguish clearly between:
-   - what was already present in the static materials
-   - what was added or sharpened orally
-4. Generalize useful student questions into conceptual clarifications.
-5. Prefer conceptual value over transcript fidelity.
-6. Do not create trivia.
-7. Keep the file maximally useful for later rubric writing.
-8. If the transcript is garbled or uncertain, omit or downweight that content rather than guessing.
-9. If something was only mentioned briefly and not really explained, say so.
-10. If the notebook materially deepened a topic, preserve that.
+2. Be selective.
+3. Prefer conceptual value over transcript fidelity.
+4. Preserve oral teaching only when it materially sharpens assessment or tutoring.
+5. Generalize useful student questions into conceptual clarifications.
+6. Omit weak, garbled, or uncertain transcript content rather than guessing.
+7. If a topic was mostly static and not orally deepened, let that show.
+8. If something was only mentioned briefly, treat it as brief.
+9. Avoid trivia, anecdotes, greetings, logistics, and local classroom management.
+10. Keep the file compact enough to be useful at runtime.
 
-## Important mastery-oriented lens
+## Important boundedness rules
 
-The later rubric will care about evidence of understanding along lines such as:
+- Include at most **8 sections**.
+- Use short, information-dense bullets.
+- Keep most arrays to **0–4 items**.
+- Use empty arrays instead of padding with weak content.
+- If an oral point does not clearly affect mastery or tutoring, omit it.
+
+## Mastery-oriented lens
+
+The downstream rubric and tutor will care especially about:
 
 - criterion: what makes the concept what it is
 - distinction: how it differs from nearby confusions
-- explanation: why a claim or classification is correct
-- interpretation: what a figure / formula / code block / plot means
-- transfer: how the idea applies in a nearby case
-- warning / correction: what students are likely to get wrong
+- explanation: what the student should be able to explain in their own words
+- interpretation: what a figure / formula / plot / code block means
+- warning / correction: where students can sound right while still being wrong
 
-You are **not** assigning grades or mastery levels.
-But you **are** extracting the material that would let a later rubric writer define weak, partial, and strong evidence of mastery.
+You are not assigning grades.
+You are extracting the oral material that should influence what counts as weak, partial, and strong evidence.
 
 ## Required output schema
 
@@ -116,158 +101,119 @@ Return a JSON object with exactly this top-level structure:
       "transcript": ""
     }
   },
-  "lecture_wide_summary": {
-    "conceptual_arc": [],
-    "main_oral_deepenings": [],
-    "most_central_for_rubric": [],
-    "likely_not_assessable_directly": []
-  },
-  "sections": [
-    {
-      "section_id": "",
-      "section_title": "",
-      "time_range": {
-        "start": "",
-        "end": ""
-      },
-      "importance": "",
-      "static_match": [],
-      "oral_additions": [],
-      "sharpened_distinctions": [],
-      "resolved_confusions": [],
-      "oral_interpretations": [
-        {
-          "kind": "",
-          "item": "",
-          "takeaway": ""
-        }
-      ],
-      "warnings_common_mistakes": [],
-      "what_seemed_central": [],
-      "what_seemed_incidental": [],
-      "mastery_support": {
-        "criterion_points": [],
-        "distinction_points": [],
-        "explanation_points": [],
-        "interpretation_points": [],
-        "transfer_hooks": [],
-        "near_misses": []
-      },
-      "assessable_takeaways": [],
-      "not_for_direct_assessment": []
+  "teaching_notes": {
+    "central_arc": [],
+    "sections": [
+      {
+        "section_id": "",
+        "section_title": "",
+        "importance": "",
+        "teaching_goal": "",
+        "orally_sharpened_distinctions": [],
+        "resolved_confusions": [],
+        "warnings_common_mistakes": [],
+        "oral_interpretations": [
+          {
+            "kind": "",
+            "item": "",
+            "takeaway": ""
+          }
+        ],
+        "high_value_checks": [],
+        "incidental_or_do_not_assess": []
+      }
+    ],
+    "cross_section_priorities": {
+      "highest_value_distinctions": [],
+      "sound_right_but_wrong_risks": [],
+      "important_interpretations": [],
+      "brief_or_incidental_topics": []
     }
-  ],
-  "cross_section_synthesis": {
-    "concepts_substantially_deepened_orally": [],
-    "distinctions_likely_to_separate_weak_from_strong_understanding": [],
-    "confusions_that_should_probably_become_near_misses_in_the_rubric": [],
-    "figure_formula_code_plot_interpretations_that_should_influence_the_rubric": [],
-    "topics_that_were_brief_or_incidental": [],
-    "candidate_high_value_targets_for_short_review": []
   },
-  "rubric_handoff_notes": {
-    "where_static_materials_are_sufficient": [],
-    "where_minutes_are_essential": [],
-    "where_notebook_material_matters_for_mastery": [],
-    "where_students_could_sound_right_without_understanding": [],
-    "cautions_for_the_rubric_writer": []
+  "rubric_handoff": {
+    "static_materials_sufficient_for": [],
+    "minutes_matter_most_for": [],
+    "do_not_turn_into_direct_questions": []
   }
 }
 
 ## Field semantics
 
-### lecture_wide_summary.conceptual_arc
-3–8 bullets describing the overall conceptual movement of the lecture.
+### teaching_notes.central_arc
+3–6 bullets describing the lecture's main conceptual movement.
+Keep this high-level and selective.
 
-### lecture_wide_summary.main_oral_deepenings
-Only include content where the oral teaching materially sharpened, clarified, or extended the static materials.
+### teaching_notes.sections
+Use the lecture's real sections, not arbitrary transcript chunks.
+Include only sections where selective teaching notes are genuinely useful.
 
 ### sections[].importance
 Use one of:
+
 - "core"
 - "important"
 - "brief"
 
-This should reflect actual lecture emphasis, not just slide count.
+### sections[].teaching_goal
+One short sentence naming what this part of the lecture was trying to help students understand.
 
-### sections[].static_match
-What this section clearly covered in the slides / handout / notebook even without the transcript.
-
-### sections[].oral_additions
-What was genuinely added or materially clarified orally beyond the static materials.
-
-### sections[].sharpened_distinctions
-Distinctions that became clearer in speech than they would be from the static files alone.
-
-Examples:
-- reality vs data vs model
-- precision vs validity vs reliability
-- proxy vs true quantity
-- aleatory vs epistemic uncertainty
-- PDF vs CDF
-- kurtosis vs simple spread
-
-Do not force these exact examples if they are not actually supported by the uploaded files.
+### sections[].orally_sharpened_distinctions
+Only distinctions that were materially clearer because of oral teaching.
 
 ### sections[].resolved_confusions
 Generalized misunderstandings that were corrected.
-Do not preserve them as transcript dialogue.
-State them as conceptual clarifications.
+Do not preserve raw dialogue.
+
+### sections[].warnings_common_mistakes
+Warnings that should influence later tutoring or rubric design.
 
 ### sections[].oral_interpretations
-Use this only when the instructor’s oral explanation materially helped interpret:
+Use only when oral explanation materially helped interpret:
+
 - a figure
 - a formula
 - a code block
 - a plot
 - a worked example
+- a notebook demonstration
 
-Each entry should contain:
-- "kind": one of "figure", "formula", "code", "plot", "example", "notebook_demo"
-- "item": brief identifier
-- "takeaway": what the oral explanation helped the student understand
+Allowed `kind` values:
 
-### sections[].mastery_support
-This is the most important part for later rubric generation.
+- "figure"
+- "formula"
+- "code"
+- "plot"
+- "example"
+- "notebook_demo"
 
-Populate it with short, concrete bullets:
+### sections[].high_value_checks
+Short bullets describing the most valuable things a later tutor or rubric writer might actually check from this section.
+These are not full questions.
+They are evidence targets.
 
-- **criterion_points**: what students must understand to have the basic idea right
-- **distinction_points**: nearby confusions they must separate
-- **explanation_points**: what they should be able to explain in their own words
-- **interpretation_points**: what they should be able to interpret from figure / code / formula / plot material
-- **transfer_hooks**: nearby cases or checks that could test stronger understanding
-- **near_misses**: ways students could sound right while still being wrong or shallow
+### sections[].incidental_or_do_not_assess
+Items that may be contextually useful but should not become direct tutoring or rubric targets.
 
-### sections[].assessable_takeaways
-2–6 bullets stating what a later rubric writer should probably treat as assessable understanding from this section.
+### teaching_notes.cross_section_priorities
+Use this to surface the highest-value lecture-wide tutoring implications:
 
-### sections[].not_for_direct_assessment
-Brief items that may be useful context but should probably not become direct rubric targets.
+- distinctions that matter a lot
+- places students can sound right without understanding
+- interpretations of figures/code/formulas that deserve attention
+- topics that were brief enough to downweight
+
+### rubric_handoff
+Use this to tell the later rubric writer:
+
+- where slides/handout are already enough
+- where oral minutes really matter
+- what should not become direct assessment prompts
 
 ## Additional instructions
 
-- Align section boundaries to the lecture’s real sections, not to arbitrary transcript chunks.
-- Merge transcript material into section-level understanding rather than preserving turn-by-turn dialogue.
-- Preserve timestamps at the section level only.
-- Use short, information-dense bullets.
-- Use empty arrays rather than inventing content.
-- Do not include any field not in the schema.
-- Do not quote long stretches of transcript.
-- Do not include raw Q&A unless the conceptual point cannot be preserved otherwise.
-- Do not include “student asked…” unless that context is necessary; prefer the generalized clarification itself.
-- If the transcript contains uncertainty or ASR errors, omit those details.
-- If a topic was mostly static and not orally deepened, let that show.
-- If the oral teaching made a major difference to later mastery assessment, make that explicit.
-
-## Final rule
-
-This file should be the **best possible handoff artifact for later rubric generation**.
-
-That means it should be:
-- section-aligned
-- concept-first
-- mastery-relevant
-- faithful to the uploaded materials
-- stripped of transcript noise
-- structured enough that a later system can reliably use it
+- Preserve the lecture's actual sequence.
+- Do not quote long transcript passages.
+- Do not include who said what unless unavoidable.
+- Do not create extra fields.
+- Use empty arrays rather than speculative content.
+- If the notebook mattered only as a setup for oral interpretation, capture the interpretation, not the notebook in full.

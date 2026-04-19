@@ -24,10 +24,11 @@ Then open http://127.0.0.1:8000/.
 | Command | Purpose |
 |---|---|
 | `pixi run dev` | Start dev server with auto-reload |
+| `pixi run admin-dev` | Start the admin lecture-setup app on port 8001 |
+| `pixi run admin-stop` | Stop the admin lecture-setup app |
 | `pixi run test` | Run test suite |
 | `pixi run init-db` | Initialise SQLite database |
 | `pixi run build-lecture -- <lecture_id> --force` | Build lecture markdown, minutes, and rubric artifacts |
-| `pixi run admin-dev` | Start the separate admin lecture-setup app on port 8001 |
 
 ## Project structure
 

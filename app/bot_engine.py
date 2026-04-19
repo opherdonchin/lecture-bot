@@ -12,9 +12,35 @@ import app.prompt_loader as prompt_loader
 _log = logging_.getLogger(__name__)
 
 _GRADE_WEIGHTS = [55, 25, 13, 4, 3]
+_RUNTIME_CONTEXT_KEYS = ("bot_notes", "slides", "handout", "minutes")
+_DECISION_TARGET_TYPES = {
+    "criterion",
+    "distinction",
+    "explanation",
+    "application",
+    "practical_interpretation",
+    "self_correction",
+}
+_DECISION_MOVE_TYPES = {
+    "open_probe",
+    "narrowing_question",
+    "contrastive_prompt",
+    "criterion_check",
+    "explanation_check",
+    "application_check",
+    "practical_interpretation",
+    "hint",
+    "partial_frame",
+    "compact_explanation",
+    "concise_reformulation",
+    "topic_switch",
+    "self_correction_prompt",
+}
 
 _TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)(?:\.|\s+[—-])\s+(.+)$', re_.MULTILINE)
 _IMPORTANCE_RE = re_.compile(r'\*\*Importance:\*\*\s+(\w+)')
+_BARE_TOPIC_ID_RE = re_.compile(r"\b(T\d+)\b")
+_TIME_CLAIM_RE = re_.compile(r"\b\d+\s+minutes?\s+left\b", re_.IGNORECASE)
 
 _FALLBACK_DIALOGUE_MESSAGE = (
     "I'm having trouble updating the tutoring state cleanly. "
@@ -38,9 +64,60 @@ def _join_topic_labels(labels: list[str]) -> str:
     return f"{', '.join(labels[:-1])}, or {labels[-1]}"
 
 
+def normalize_topic_defs(topic_defs: list[dict] | None) -> list[dict]:
+    """Return canonical topic defs with duplicate topic IDs removed.
+
+    Some rubric sections repeat canonical `### Tn.` headings later in the file
+    (for example under evidence standards). We keep the first occurrence for
+    each topic ID so the lecture config, sampled topics, and grading views stay
+    aligned to one canonical topic list.
+    """
+    normalized: list[dict] = []
+    by_topic_id: dict[str, dict] = {}
+    for topic in topic_defs or []:
+        if not isinstance(topic, dict):
+            continue
+        topic_id = str(topic.get("topic_id", "")).strip()
+        label = str(topic.get("label", "")).strip()
+        if not topic_id or not label:
+            continue
+        importance = str(topic.get("importance", "unknown") or "unknown").strip()
+        existing = by_topic_id.get(topic_id)
+        if existing is None:
+            canonical_topic = {
+                "topic_id": topic_id,
+                "label": label,
+                "importance": importance,
+            }
+            normalized.append(canonical_topic)
+            by_topic_id[topic_id] = canonical_topic
+            continue
+        if existing["importance"] == "unknown" and importance != "unknown":
+            existing["importance"] = importance
+    return normalized
+
+
+def _unique_topic_ids(topic_ids: list[str] | None) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for topic_id in topic_ids or []:
+        if not isinstance(topic_id, str) or not topic_id or topic_id in seen:
+            continue
+        seen.add(topic_id)
+        unique.append(topic_id)
+    return unique
+
+
+def resolve_topic_defs(lecture_package: dict) -> list[dict]:
+    """Load canonical topic defs from lecture config or rubric."""
+    return normalize_topic_defs(
+        lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    )
+
+
 def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | None = None) -> str:
     title = lecture_package["config"].get("title", lecture_package["lecture_id"])
-    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    topic_defs = resolve_topic_defs(lecture_package)
     topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
 
     settings = config_module.get_settings()
@@ -82,7 +159,7 @@ def generate_reply(
     Falls back to a generic message if OpenAI fails or returns malformed output.
     """
     settings = config_module.get_settings()
-    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    topic_defs = resolve_topic_defs(lecture_package)
     allowed_topic_ids = {t["topic_id"] for t in topic_defs}
     context = build_dialogue_context(lecture_package, settings.max_dialogue_context_chars)
     system_prompt = build_dialogue_system_prompt(
@@ -107,8 +184,13 @@ def generate_reply(
         )
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
-        assistant_message = str(parsed["assistant_message"])
+        assistant_message = sanitize_assistant_message(
+            str(parsed["assistant_message"]),
+            topic_defs=topic_defs,
+            timing_context=timing_context,
+        )
         raw_updated_state = parsed.get("updated_state", {})
+        raw_decision_trace = parsed.get("decision_trace")
     except openai_.AuthenticationError:
         _log.exception("generate_reply failed: OpenAI authentication error")
         fallback_state = dict(state)
@@ -129,7 +211,12 @@ def generate_reply(
         fallback_state["turn_count"] = state.get("turn_count", 0) + 1
         return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
     # sanitize_state_update is our own code — bugs here propagate as 500, not masked
-    updated_state = sanitize_state_update(state, raw_updated_state, allowed_topic_ids)
+    updated_state = sanitize_state_update(
+        state,
+        raw_updated_state,
+        allowed_topic_ids,
+        raw_decision_trace=raw_decision_trace,
+    )
     return assistant_message, updated_state
 
 
@@ -153,12 +240,12 @@ def parse_rubric_topics(rubric_markdown: str) -> list[dict]:
         imp_match = _IMPORTANCE_RE.search(section_text)
         importance = imp_match.group(1) if imp_match else "unknown"
         topics.append({"topic_id": topic_id, "label": label, "importance": importance})
-    return topics
+    return normalize_topic_defs(topics)
 
 
 def sample_session_topics(topic_defs: list[dict], session_id: str, count: int = 5) -> list[str]:
     """Sample a deterministic subset of topic IDs seeded by session_id."""
-    topic_ids = [t["topic_id"] for t in topic_defs]
+    topic_ids = _unique_topic_ids([t["topic_id"] for t in normalize_topic_defs(topic_defs)])
     rng = random_.Random(session_id)
     k = min(count, len(topic_ids))
     return rng.sample(topic_ids, k)
@@ -175,7 +262,7 @@ def build_dialogue_system_prompt(
     """Build the runtime system prompt around the committed markdown prompt."""
     prompt_body = prompt_loader.load_prompt_template(_DIALOGUE_PROMPT_TEMPLATE).strip()
     topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
-    sampled_topic_ids = state.get("topics_sampled", [])
+    sampled_topic_ids = _unique_topic_ids(state.get("topics_sampled", []))
     sampled_topics = [
         {
             "topic_id": tid,
@@ -191,10 +278,7 @@ def build_dialogue_system_prompt(
         "evidence_notes": dict(state.get("evidence_notes", {})),
         "current_topic_id": state.get("current_topic_id"),
         "tutor_comment": state.get("tutor_comment", ""),
-        "current_grade": state.get("current_grade", 0.0),
         "turn_count": state.get("turn_count", 0) + 1,
-        "confidence": state.get("confidence", 0.0),
-        "lecture_title": state.get("lecture_title", ""),
     }
 
     injected_context = {
@@ -223,6 +307,7 @@ def build_dialogue_context(lecture_package: dict, max_chars: int) -> str:
     sections = [
         (f"## {section['label']}", section.get("content", ""))
         for section in lecture_package.get("context_sections", [])
+        if section.get("key") in _RUNTIME_CONTEXT_KEYS
     ]
     parts = []
     used = 0
@@ -245,6 +330,25 @@ def build_dialogue_context(lecture_package: dict, max_chars: int) -> str:
     return "\n\n".join(parts)
 
 
+def sanitize_assistant_message(
+    assistant_message: str,
+    *,
+    topic_defs: list[dict],
+    timing_context: dict | None = None,
+) -> str:
+    """Apply hard guardrails to the student-facing tutor message."""
+    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
+
+    def replace_topic_id(match):
+        topic_id = match.group(1)
+        return topic_id_to_label.get(topic_id, "this topic")
+
+    sanitized = _BARE_TOPIC_ID_RE.sub(replace_topic_id, assistant_message).strip()
+    if not timing_context or not timing_context.get("timing_reliable", False):
+        sanitized = _TIME_CLAIM_RE.sub("time left", sanitized)
+    return sanitized
+
+
 def compute_weighted_grade(topic_scores: list[dict]) -> int:
     """Compute the weighted student-facing grade from per-topic scores.
 
@@ -256,27 +360,88 @@ def compute_weighted_grade(topic_scores: list[dict]) -> int:
     return math_.floor(sum(w * s / 100 for w, s in zip(_GRADE_WEIGHTS, padded)))
 
 
-def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: set) -> dict:
+def _sanitize_decision_trace(raw_trace: object, allowed_topic_ids: set[str]) -> dict | None:
+    if not isinstance(raw_trace, dict):
+        return None
+
+    student_model_raw = raw_trace.get("student_model", {})
+    evidence_target_raw = raw_trace.get("evidence_target", {})
+    move_candidates_raw = raw_trace.get("move_candidates", [])
+    chosen_move_raw = raw_trace.get("chosen_move", {})
+
+    student_model = {
+        "understanding": str(student_model_raw.get("understanding", "")).strip()[:240],
+        "uncertainty": str(student_model_raw.get("uncertainty", "")).strip()[:240],
+        "failure_mode": str(student_model_raw.get("failure_mode", "")).strip()[:240],
+    }
+
+    topic_id = str(evidence_target_raw.get("topic_id", "")).strip()
+    target_type = str(evidence_target_raw.get("target_type", "")).strip()
+    evidence_target = {
+        "topic_id": topic_id if topic_id in allowed_topic_ids else None,
+        "element": str(evidence_target_raw.get("element", "")).strip()[:160],
+        "target_type": target_type if target_type in _DECISION_TARGET_TYPES else "",
+        "why_now": str(evidence_target_raw.get("why_now", "")).strip()[:240],
+    }
+
+    move_candidates: list[dict] = []
+    if isinstance(move_candidates_raw, list):
+        for item in move_candidates_raw[:4]:
+            if not isinstance(item, dict):
+                continue
+            move_type = str(item.get("move_type", "")).strip()
+            move_candidates.append(
+                {
+                    "move_type": move_type if move_type in _DECISION_MOVE_TYPES else "open_probe",
+                    "prompt_sketch": str(item.get("prompt_sketch", "")).strip()[:200],
+                    "revealing": max(1, min(5, int(item.get("revealing", 1) or 1))),
+                    "productive": max(1, min(5, int(item.get("productive", 1) or 1))),
+                    "fit": max(1, min(5, int(item.get("fit", 1) or 1))),
+                }
+            )
+
+    chosen_move_type = str(chosen_move_raw.get("move_type", "")).strip()
+    chosen_move = {
+        "move_type": chosen_move_type if chosen_move_type in _DECISION_MOVE_TYPES else "open_probe",
+        "reason": str(chosen_move_raw.get("reason", "")).strip()[:240],
+    }
+
+    if not any(student_model.values()) and not move_candidates and not any(v for v in evidence_target.values() if v):
+        return None
+
+    return {
+        "student_model": student_model,
+        "evidence_target": evidence_target,
+        "move_candidates": move_candidates,
+        "chosen_move": chosen_move,
+    }
+
+
+def sanitize_state_update(
+    old_state: dict,
+    llm_state: dict,
+    allowed_topic_ids: set,
+    *,
+    raw_decision_trace: object | None = None,
+) -> dict:
     """Sanitize a model-returned state update.
 
     Rules enforced:
     - topics_sampled: immutable, taken from old_state
-    - lecture_title: immutable, taken from old_state
     - timeout_warning_sent: backend-owned, preserved from old_state
     - best_mastery: backend-owned, preserved from old_state
     - current_grade: backend-owned, preserved from old_state
-    - topics_covered: cumulative subset of allowed_topic_ids
+    - topics_covered: cumulative topics with at least a meaningful foothold
     - mastery: keys in allowed_topic_ids, values clamped int 0-100
     - evidence_notes: keys in allowed_topic_ids, short strings
     - current_topic_id: one allowed topic id or None
     - tutor_comment: short string
     - turn_count: old_turn_count + 1
-    - confidence: preserved/clamped float 0.0-1.0 unless the model also returns it
+    - private_decision_trace: backend-stored, never shown to the student
     - unknown keys dropped
     """
     result = {
-        "topics_sampled": list(old_state.get("topics_sampled", [])),
-        "lecture_title": old_state.get("lecture_title", ""),
+        "topics_sampled": _unique_topic_ids(old_state.get("topics_sampled", [])),
         "timeout_warning_sent": bool(old_state.get("timeout_warning_sent", False)),
         "best_mastery": {
             k: max(0, min(100, int(v)))
@@ -285,22 +450,6 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
         },
         "current_grade": float(old_state.get("current_grade", 0.0) or 0.0),
     }
-
-    prior_topics_covered = [
-        t for t in old_state.get("topics_covered", [])
-        if isinstance(t, str) and t in allowed_topic_ids
-    ]
-    new_topics_covered = [
-        t for t in llm_state.get("topics_covered", [])
-        if isinstance(t, str) and t in allowed_topic_ids
-    ]
-    seen_topics = set()
-    result["topics_covered"] = []
-    for topic_id in prior_topics_covered + new_topics_covered:
-        if topic_id in seen_topics:
-            continue
-        seen_topics.add(topic_id)
-        result["topics_covered"].append(topic_id)
 
     result["mastery"] = {
         k: v
@@ -327,6 +476,23 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
             if isinstance(k, str) and k in allowed_topic_ids:
                 result["evidence_notes"][k] = str(v)
 
+    prior_topics_covered = [
+        t for t in old_state.get("topics_covered", [])
+        if isinstance(t, str) and t in allowed_topic_ids
+    ]
+    meaningful_topics = [
+        topic_id
+        for topic_id, score in result["mastery"].items()
+        if isinstance(score, int | float) and int(score) >= 45
+    ]
+    seen_topics = set()
+    result["topics_covered"] = []
+    for topic_id in prior_topics_covered + meaningful_topics:
+        if topic_id in seen_topics:
+            continue
+        seen_topics.add(topic_id)
+        result["topics_covered"].append(topic_id)
+
     raw_current_topic_id = llm_state.get("current_topic_id", old_state.get("current_topic_id"))
     result["current_topic_id"] = (
         raw_current_topic_id
@@ -338,13 +504,7 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
     result["tutor_comment"] = str(raw_tutor_comment)
 
     result["turn_count"] = old_state.get("turn_count", 0) + 1
-
-    raw_conf = llm_state.get("confidence", old_state.get("confidence", 0.0))
-    try:
-        conf = float(raw_conf)
-    except (TypeError, ValueError):
-        conf = 0.0
-    result["confidence"] = max(0.0, min(1.0, conf))
+    result["private_decision_trace"] = _sanitize_decision_trace(raw_decision_trace, allowed_topic_ids)
 
     return result
 
@@ -377,7 +537,7 @@ def generate_topic_scores(
     Falls back to empty scores on any failure.
     """
     settings = config_module.get_settings()
-    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    topic_defs = resolve_topic_defs(lecture_package)
     context = build_dialogue_context(lecture_package, settings.max_grading_context_chars)
     rubric_text = lecture_package["rubric"]
 

@@ -20,13 +20,14 @@ Treat the uploaded sources as serving different roles.
 - **Slides**: intended lecture structure, sequence, named concepts, figures, examples, and declared emphasis
 - **Handout**: compact conceptual reconstruction of the lecture and its terminology
 - **Notebook**: concrete demonstrations, code, plots, distributions, worked examples, and what students were expected to inspect
-- **Instructional minutes**: oral clarification beyond the slide text, verbally sharpened distinctions, resolved confusions, oral interpretations of figures/formulas/code, warnings against common mistakes, and signals about what seemed central versus incidental
+- **Instructional minutes**: selective teaching notes capturing oral clarification beyond the slide text, verbally sharpened distinctions, resolved confusions, oral interpretations of figures/formulas/code, warnings against common mistakes, and signals about what seemed central versus incidental
 
 Use all uploaded materials, but do not treat them identically.
 
 - Follow the **lecture flow and scope** primarily from the slides and handout.
 - Use the notebook to identify what was concretely demonstrated and therefore can support code/plot/figure-based mastery.
 - Use the instructional minutes to deepen the rubric wherever the lecture orally reached a stronger or subtler understanding than the static materials alone would imply.
+- Treat the instructional minutes as selective teaching notes, not as a second full lecture reconstruction.
 
 ## Core principles
 
@@ -48,11 +49,11 @@ This rubric should distinguish clearly between two levels:
 - **Topics**: the assessed, sampled, bankable units used for short-session breadth
 - **Elements**: the finer conceptual pieces inside a topic
 
-The future tutor may probe individual elements inside a topic, but **lecture-wide coverage, banking, and breadth logic should be based on topics, not on raw element count**.
+The future tutor may probe individual elements inside a topic, but **lecture-wide coverage and breadth logic should be based on topics, not on raw element count**.
 
 In other words:
 
-- topics are the bankable breadth units
+- topics are the lecture-wide breadth units
 - elements are the lower-level conceptual pieces inside them
 
 Each element must belong to exactly one topic.
@@ -108,7 +109,7 @@ Where relevant, let the summary reflect important oral clarification from the mi
 
 List the lecture’s main **topics**.
 
-Use **6–10 assessable topics**.
+Use **5–8 assessable topics**.
 
 Each topic should:
 - be coherent
@@ -126,6 +127,7 @@ For each topic, include:
 - common confusion or near-miss likely for this lecture
 
 Keep topics conceptually clean. Merge trivial duplicates.
+When adjacent ideas are usually probed together in a short dialogue, prefer one broader clean topic over two thin adjacent topics.
 
 ## 4. Elements within topics
 
@@ -163,7 +165,7 @@ Use the instructional minutes to sharpen what counts as real understanding versu
 
 ### Important calibration rule
 
-Treat **Full evidence** as enough evidence for the topic to count as **meaningfully mastered / banked** for session purposes.
+Treat **Full evidence** as enough evidence for the topic to count as **meaningfully mastered / solidly understood for session purposes**.
 
 Do **not** define Full evidence as exhaustive, perfect, or maximal mastery.
 The highest mastery levels should still leave room for unusually strong transfer, synthesis, precision, and independence beyond the threshold for a solid mastered topic.
@@ -201,7 +203,7 @@ Do **not**:
 - include implementation-facing decision logic that is not part of the mastery rubric itself
 
 Instead, include:
-- a clear statement of what it means for a topic to count as **meaningfully mastered / banked** for lecture-wide coverage
+- a clear statement of what it means for a topic to count as **meaningfully mastered / solidly understood** for lecture-wide coverage
 - concise **qualitative lecture-wide coverage anchors** aligned to increasing breadth across the lecture, such as:
   - strong foothold in one central lecture idea
   - meaningful early coverage across the lecture

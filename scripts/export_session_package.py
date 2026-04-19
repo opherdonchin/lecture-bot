@@ -10,6 +10,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import app.bot_engine as bot_engine
+import app.config as config_module
+
 DATABASE_PATH = REPO_ROOT / "data" / "lecture_bot.db"
 LECTURES_DIR = REPO_ROOT / "lectures"
 PROMPTS_DIR = REPO_ROOT / "prompts"
@@ -145,44 +148,16 @@ def load_session_bundle(conn: sqlite3.Connection, session: dict) -> dict:
 
 def build_rendered_prompt(lecture_id: str, state: dict | None) -> str:
     lecture_package = load_lecture_package(lecture_id)
-    topic_defs = lecture_package.get("topics") or []
-    prompt_state = state or {}
-    lecture_context = build_dialogue_context(lecture_package, 120000)
-    prompt_body = (PROMPTS_DIR / "dialogue_system_prompt.md").read_text(encoding="utf-8").strip()
-
-    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
-    sampled_topic_ids = prompt_state.get("topics_sampled", [])
-    sampled_topics = [
-        {"topic_id": topic_id, "label": topic_id_to_label.get(topic_id, topic_id)}
-        for topic_id in sampled_topic_ids
-    ]
-    current_state = {
-        "topics_sampled": list(sampled_topic_ids),
-        "topics_covered": list(prompt_state.get("topics_covered", [])),
-        "mastery": dict(prompt_state.get("mastery", {})),
-        "best_mastery": dict(prompt_state.get("best_mastery", {})),
-        "evidence_notes": dict(prompt_state.get("evidence_notes", {})),
-        "current_topic_id": prompt_state.get("current_topic_id"),
-        "tutor_comment": prompt_state.get("tutor_comment", ""),
-        "current_grade": prompt_state.get("current_grade", 0.0),
-        "turn_count": prompt_state.get("turn_count", 0) + 1,
-        "confidence": prompt_state.get("confidence", 0.0),
-        "lecture_title": prompt_state.get("lecture_title", ""),
-    }
-    injected_context = {
-        "lecture_title": lecture_package["config"].get("title", lecture_package["lecture_id"]),
-        "sampled_topics": sampled_topics,
-        "topic_structure_note": "Use the rubric text below as the equivalent topic-to-element map or rubric structure.",
-        "current_tutoring_state": current_state,
-        "session_timing": {},
-        "rubric_text": lecture_package["rubric"],
-        "lecture_context": lecture_context,
-    }
-    return (
-        f"{prompt_body}\n\n"
-        "Runtime context\n\n"
-        "## Injected lecture/runtime data\n"
-        f"{json.dumps(injected_context, indent=2, ensure_ascii=False)}"
+    settings = config_module.get_settings()
+    return bot_engine.build_dialogue_system_prompt(
+        lecture_package=lecture_package,
+        state=state or {},
+        topic_defs=bot_engine.resolve_topic_defs(lecture_package),
+        lecture_context=bot_engine.build_dialogue_context(
+            lecture_package,
+            settings.max_dialogue_context_chars,
+        ),
+        timing_context={},
     )
 
 
@@ -190,37 +165,11 @@ def write_json_bytes(payload: object) -> bytes:
     return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
 
 
-def build_dialogue_context(lecture_package: dict, max_chars: int) -> str:
-    sections = [
-        (f"## {section['label']}", section.get("content", ""))
-        for section in lecture_package.get("context_sections", [])
-    ]
-    parts: list[str] = []
-    used = 0
-    for header, content in sections:
-        text = content.strip()
-        if not text:
-            continue
-        section = f"{header}\n\n{text}"
-        sep_cost = 2 if parts else 0
-        cost = len(section) + sep_cost
-        if used + cost <= max_chars:
-            parts.append(section)
-            used += cost
-            continue
-        room = max_chars - used - sep_cost
-        if room > len(header) + 3:
-            parts.append(section[:room])
-        break
-    return "\n\n".join(parts)
-
-
 def collect_lecture_files(lecture_dir: pathlib.Path) -> list[tuple[pathlib.Path, str]]:
     wanted = [
         ("lecture_config.json", "lecture/lecture_config.json"),
         ("slides.md", "lecture/slides.md"),
         ("handout.md", "lecture/handout.md"),
-        ("notebook.md", "lecture/notebook.md"),
         ("rubric.md", "lecture/rubric.md"),
         ("minutes.json", "lecture/minutes.json"),
     ]
@@ -274,7 +223,6 @@ def build_manifest(
             "lecture/lecture_config.json",
             "lecture/slides.md",
             "lecture/handout.md",
-            "lecture/notebook.md",
             "lecture/rubric.md",
             "lecture/minutes.json",
         ],

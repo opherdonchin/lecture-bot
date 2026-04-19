@@ -2,6 +2,7 @@ import json
 import unittest.mock as mock
 
 import app.bot_engine as bot_engine
+import app.config as config_module
 import app.db as db_module
 import app.models as models
 from app.main import app
@@ -241,6 +242,22 @@ def test_get_grade_returns_labelled_scored_topics(client):
         "Topic 1",
         "Topic 2",
     ]
+
+
+def test_get_grade_deduplicates_repeated_topic_defs(client):
+    lectures_dir = config_module.get_settings().lectures_dir
+    config_path = lectures_dir / "lecture_01" / "lecture_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["topics"] = config["topics"] + config["topics"]
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[100, 100])
+    response = client.post("/get_grade", json={"session_id": session_id})
+
+    assert response.status_code == 200
+    assert response.json()["scored_topics"] == ["Topic 1", "Topic 2"]
+    assert response.json()["missing_topics"] == [f"Topic {i}" for i in range(3, 11)]
 
 
 def test_get_grade_uses_best_mastery_when_current_mastery_is_lower(client):

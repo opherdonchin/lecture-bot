@@ -23,12 +23,6 @@
       "path": "minutes.json",
       "label": "Instructional Minutes",
       "required": true
-    },
-    {
-      "key": "notebook",
-      "path": "notebook.md",
-      "label": "Notebook",
-      "required": true
     }
   ]
 }

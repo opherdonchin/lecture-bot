@@ -13,7 +13,6 @@ def write_lectures_defaults(root) -> None:
                 "context_files": [
                     {"key": "slides", "path": "slides.md", "label": "Slides", "required": True},
                     {"key": "minutes", "path": "minutes.json", "label": "Instructional Minutes", "required": True},
-                    {"key": "notebook", "path": "notebook.md", "label": "Notebook", "required": False},
                 ]
             }
         ),
@@ -49,7 +48,7 @@ def test_load_lecture_package_uses_root_context_defaults(tmp_path):
 
     package = lecture_loader.load_lecture_package(lectures_dir, "lecture_fixture")
 
-    assert [section["key"] for section in package["context_sections"]] == ["slides", "minutes", "notebook"]
+    assert [section["key"] for section in package["context_sections"]] == ["slides", "minutes"]
     assert package["minutes"] == '{"ok": true}\n'
 
 

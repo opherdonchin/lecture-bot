@@ -46,6 +46,24 @@ def _mock_openai_dialogue(reply_text="Test reply."):
             "current_topic_id": None,
             "tutor_comment": "",
         },
+        "decision_trace": {
+            "student_model": {
+                "understanding": "",
+                "uncertainty": "",
+                "failure_mode": "",
+            },
+            "evidence_target": {
+                "topic_id": "T1",
+                "element": "",
+                "target_type": "criterion",
+                "why_now": "",
+            },
+            "move_candidates": [],
+            "chosen_move": {
+                "move_type": "open_probe",
+                "reason": "",
+            },
+        },
     })
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.return_value = mock_resp
@@ -104,6 +122,24 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
             "current_topic_id": "T1",
             "tutor_comment": "bank T1 and verify once more",
         },
+        "decision_trace": {
+            "student_model": {
+                "understanding": "partial distinction",
+                "uncertainty": "still soft",
+                "failure_mode": "too verbal",
+            },
+            "evidence_target": {
+                "topic_id": "T1",
+                "element": "key distinction",
+                "target_type": "distinction",
+                "why_now": "one stronger check",
+            },
+            "move_candidates": [],
+            "chosen_move": {
+                "move_type": "narrowing_question",
+                "reason": "best next check",
+            },
+        },
     })
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.return_value = mock_resp
@@ -120,6 +156,7 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
     assert state["mastery"]["T1"] == 70
     assert state["best_mastery"]["T1"] == 70
     assert state["current_grade"] == 38.0
+    assert state["private_decision_trace"]["evidence_target"]["topic_id"] == "T1"
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +261,7 @@ def test_session_timeout_warning_added_in_last_five_minutes(client):
     assert response.status_code == 200
     data = response.json()
     assert data["session_active"] is True
-    assert "minutes left in this session" in data["message"]
+    assert data["message"] == "Let's finish one last idea."
 
     db2 = next(app.dependency_overrides[db_module.get_db]())
     row = db2.query(models.SessionStateModel).filter(

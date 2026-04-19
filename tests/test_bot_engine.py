@@ -70,6 +70,33 @@ def test_parse_rubric_topics_empty():
     assert topics == []
 
 
+def test_parse_rubric_topics_deduplicates_repeated_topic_headings():
+    rubric = """\
+### T1. Topic 1
+
+- **Importance:** core
+
+### T2. Topic 2
+
+- **Importance:** important
+
+## Evidence standards
+
+### T1. Topic 1
+
+Evidence text.
+
+### T2. Topic 2
+
+More evidence text.
+"""
+    topics = bot_engine.parse_rubric_topics(rubric)
+    assert topics == [
+        {"topic_id": "T1", "label": "Topic 1", "importance": "core"},
+        {"topic_id": "T2", "label": "Topic 2", "importance": "important"},
+    ]
+
+
 # ---------------------------------------------------------------------------
 # sample_session_topics
 # ---------------------------------------------------------------------------
@@ -236,42 +263,41 @@ OLD_STATE = {
     "evidence_notes": {},
     "current_topic_id": None,
     "tutor_comment": "",
+    "private_decision_trace": None,
     "current_grade": 0.0,
     "timeout_warning_sent": False,
     "turn_count": 1,
-    "confidence": 0.5,
-    "lecture_title": "Lecture 1",
 }
 ALLOWED_IDS = {"T1", "T2", "T3", "T4", "T5"}
 
 
 def test_sanitize_topics_sampled_immutable():
-    llm_state = {"topics_sampled": ["X9", "X10"], "topics_covered": [], "mastery": {}, "confidence": 0.5}
+    llm_state = {"topics_sampled": ["X9", "X10"], "topics_covered": [], "mastery": {}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["topics_sampled"] == ["T1", "T2", "T3"]
 
 
 def test_sanitize_turn_count_incremented():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 0.5, "turn_count": 99}
+    llm_state = {"topics_covered": [], "mastery": {}, "turn_count": 99}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["turn_count"] == OLD_STATE["turn_count"] + 1
 
 
 def test_sanitize_topics_covered_filtered():
-    llm_state = {"topics_covered": ["T1", "T99"], "mastery": {}, "confidence": 0.5}
+    llm_state = {"topics_covered": ["T1", "T99"], "mastery": {"T1": 45}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["topics_covered"] == ["T1"]
 
 
 def test_sanitize_mastery_keys_filtered():
-    llm_state = {"topics_covered": [], "mastery": {"T1": 80, "T99": 50}, "confidence": 0.5}
+    llm_state = {"topics_covered": [], "mastery": {"T1": 80, "T99": 50}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert "T1" in result["mastery"]
     assert "T99" not in result["mastery"]
 
 
 def test_sanitize_mastery_values_clamped():
-    llm_state = {"topics_covered": [], "mastery": {"T1": 150, "T2": -10}, "confidence": 0.5}
+    llm_state = {"topics_covered": [], "mastery": {"T1": 150, "T2": -10}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["mastery"]["T1"] == 100
     assert result["mastery"]["T2"] == 0
@@ -312,22 +338,47 @@ def test_sanitize_tutor_comment_preserved_when_missing():
     assert result["tutor_comment"] == "stay on T1"
 
 
-def test_sanitize_confidence_clamped():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 1.5}
-    result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
-    assert result["confidence"] == 1.0
-
-
 def test_sanitize_unknown_keys_dropped():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 0.5, "extra_field": "bad"}
+    llm_state = {"topics_covered": [], "mastery": {}, "extra_field": "bad"}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert "extra_field" not in result
 
 
-def test_sanitize_lecture_title_immutable():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 0.5, "lecture_title": "Changed"}
-    result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
-    assert result["lecture_title"] == "Lecture 1"
+def test_sanitize_decision_trace_stored_privately():
+    llm_state = {"topics_covered": [], "mastery": {}}
+    raw_trace = {
+        "student_model": {
+            "understanding": "partial distinction",
+            "uncertainty": "mixing up prior and likelihood",
+            "failure_mode": "label recognition only",
+        },
+        "evidence_target": {
+            "topic_id": "T1",
+            "element": "prior vs likelihood arrows",
+            "target_type": "distinction",
+            "why_now": "student is close but still blurry",
+        },
+        "move_candidates": [
+            {
+                "move_type": "contrastive_prompt",
+                "prompt_sketch": "Which arrow means prior and which means likelihood?",
+                "revealing": 2,
+                "productive": 4,
+                "fit": 5,
+            }
+        ],
+        "chosen_move": {
+            "move_type": "contrastive_prompt",
+            "reason": "best low-revealing clarification",
+        },
+    }
+    result = bot_engine.sanitize_state_update(
+        OLD_STATE,
+        llm_state,
+        ALLOWED_IDS,
+        raw_decision_trace=raw_trace,
+    )
+    assert result["private_decision_trace"]["evidence_target"]["topic_id"] == "T1"
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +412,7 @@ def test_build_dialogue_context_all_fit():
     assert "## Slides" in result
     assert "## Handout" in result
     assert "## Instructional Minutes" in result
-    assert "## Notebook" in result
+    assert "## Notebook" not in result
 
 
 def test_build_dialogue_context_empty_sections_skipped():
@@ -395,6 +446,19 @@ def test_build_dialogue_context_priority_order():
     assert "BN" in result
     assert "SL" in result
     assert "MN" in result
+
+
+def test_sanitize_assistant_message_replaces_bare_topic_ids():
+    message = "You've got T3. Let's move to T4 next."
+    topic_defs = [
+        {"topic_id": "T3", "label": "Posterior draws", "importance": "core"},
+        {"topic_id": "T4", "label": "Posterior plots", "importance": "core"},
+    ]
+    result = bot_engine.sanitize_assistant_message(message, topic_defs=topic_defs, timing_context=None)
+    assert "T3" not in result
+    assert "T4" not in result
+    assert "Posterior draws" in result
+    assert "Posterior plots" in result
 
 
 # ---------------------------------------------------------------------------
@@ -534,7 +598,6 @@ def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
                 "label": "Instructional Minutes",
                 "content": '{"lecture_metadata": {"title": "Lecture 1"}}',
             },
-            {"key": "notebook", "label": "Notebook", "content": "Notebook body"},
         ],
         "topics": [
             {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
@@ -552,8 +615,7 @@ def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
         "current_grade": 55.0,
         "timeout_warning_sent": False,
         "turn_count": 2,
-        "confidence": 0.5,
-        "lecture_title": 'Lecture "1"',
+        "private_decision_trace": None,
     }
     mock_resp = mock.MagicMock()
     mock_resp.choices[0].message.content = (
@@ -586,12 +648,11 @@ def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
     assert '"label": "Reality–Data–Model distinction"' in system_prompt
     assert '"topics_covered": [' in system_prompt
     assert '"best_mastery": {' in system_prompt
-    assert '"current_grade": 55.0' in system_prompt
     assert '"session_timing": {' in system_prompt
     assert '"closing_mode": true' in system_prompt
     assert "## Instructional Minutes" in system_prompt
+    assert "## Notebook" not in system_prompt
     assert '"turn_count": 3' in system_prompt
-    assert '"lecture_title": "Lecture \\"1\\""' in system_prompt
     assert assistant_message == "Next question"
     assert updated_state["turn_count"] == 3
     assert updated_state["evidence_notes"]["T1"] == "student made a real distinction"
