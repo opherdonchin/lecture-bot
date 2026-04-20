@@ -36,6 +36,8 @@ dev-bg = "bash -lc 'nohup uvicorn app.main:app --reload --host 0.0.0.0 --port 80
 admin-dev = "uvicorn app.admin_main:app --reload --host 0.0.0.0 --port 8001 --root-path /bot-admin"
 stats-dev = "bash -lc 'LECTURE_BOT_STUDENT_ROOT_PATH=/stats uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --root-path /stats'"
 stats-admin-dev = "bash -lc 'LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin uvicorn app.admin_main:app --reload --host 0.0.0.0 --port 8001 --root-path /stats-admin'"
+serve = "scripts/serve_student.sh"
+admin-serve = "scripts/serve_admin.sh"
 admin-stop = '''bash -lc '
 pids=$(lsof -tiTCP:8001 -sTCP:LISTEN 2>/dev/null || true)
 

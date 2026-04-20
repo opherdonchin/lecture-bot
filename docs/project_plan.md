@@ -123,7 +123,7 @@ Current target:
 
 Important deployment note:
 
-* Prefix-aware URLs are supported through `LECTURE_BOT_STUDENT_ROOT_PATH`, `LECTURE_BOT_ADMIN_ROOT_PATH`, and matching Uvicorn `--root-path` values.
+* Prefix-aware URLs are supported through `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH`; production startup should use `pixi run serve` and `pixi run admin-serve` so Uvicorn receives matching `--root-path` values.
 
 ---
 

@@ -6,9 +6,10 @@ This document describes the current repository state for a clean Ubuntu 24.04 LT
 
 - Student app entrypoint: `app.main:app`.
 - Admin app entrypoint: `app.admin_main:app`.
-- Current production launch is direct Uvicorn through Pixi.
-- No production Pixi task or service file is committed.
-- Prefix-aware URLs are supported through `LECTURE_BOT_STUDENT_ROOT_PATH`, `LECTURE_BOT_ADMIN_ROOT_PATH`, and matching Uvicorn `--root-path` values.
+- Canonical production startup is through `pixi run serve` and `pixi run admin-serve`.
+- Those tasks call committed scripts that launch Uvicorn with the matching `--root-path`.
+- Example systemd unit templates are committed under `deploy/systemd/`.
+- Prefix-aware URLs are configured through `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH`.
 
 ## Server Packages
 
@@ -31,7 +32,11 @@ cd lecture-bot
 pixi install
 ```
 
-Copy private runtime material after cloning:
+Start from the committed environment template, then copy private runtime material after cloning:
+
+```bash
+cp .env.example .env
+```
 
 - `.env`
 - lecture packages under `lectures/<lecture_id>/`
@@ -42,7 +47,7 @@ The public repo only tracks `lectures/config.json` and `lectures/.gitkeep`; actu
 
 ## Environment
 
-Create `.env` in the repository root, or set equivalent environment variables in systemd.
+Create `.env` in the repository root from [.env.example](../.env.example), or set equivalent environment variables in systemd.
 
 ```env
 OPENAI_API_KEY=
@@ -51,8 +56,8 @@ DATABASE_URL=sqlite:///data/lecture_bot.db
 LECTURES_DIR=lectures
 ADMIN_USERNAME=
 ADMIN_PASSWORD=
-SESSION_TIMEOUT_MINUTES=20
-SESSION_WARNING_MINUTES=5
+LECTURE_BOT_STUDENT_ROOT_PATH=/bot
+LECTURE_BOT_ADMIN_ROOT_PATH=/bot-admin
 ```
 
 `pydantic-settings` loads `.env` relative to the current working directory, so set `WorkingDirectory` to the repository root in systemd.
@@ -62,6 +67,8 @@ For production, prefer persistent paths outside the git working tree and point t
 ```env
 DATABASE_URL=sqlite:////srv/lecture-bot/data/lecture_bot.db
 LECTURES_DIR=/srv/lecture-bot/lectures
+LECTURE_BOT_STUDENT_ROOT_PATH=/stats
+LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin
 ```
 
 Create the parent directories first and make them writable by the service user.
@@ -76,69 +83,59 @@ pixi run init-db
 
 This creates SQLAlchemy tables for the configured `DATABASE_URL`. The script also creates repo-local `data/`, but if `DATABASE_URL` points elsewhere, create that external parent directory yourself before running the command.
 
-## Manual Production Launch
+## Canonical Production Launch
 
 Student app:
 
 ```bash
-pixi run uvicorn app.main:app --host 127.0.0.1 --port 8000
+pixi run serve
 ```
 
 Admin app, only when needed:
 
 ```bash
-pixi run uvicorn app.admin_main:app --host 127.0.0.1 --port 8001
+pixi run admin-serve
 ```
 
-Use `127.0.0.1` behind Nginx so the apps are not directly exposed on the public interface.
+Use `127.0.0.1` behind Nginx so the apps are not directly exposed on the public interface. The scripts default to `127.0.0.1`, ports `8000` and `8001`, and repo prefixes `/bot` and `/bot-admin`.
+
+For the intended production prefixes:
+
+```bash
+LECTURE_BOT_STUDENT_ROOT_PATH=/stats pixi run serve
+LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin pixi run admin-serve
+```
+
+Optional startup-script environment variables:
+
+- `LECTURE_BOT_STUDENT_HOST`, default `127.0.0.1`
+- `LECTURE_BOT_STUDENT_PORT`, default `8000`
+- `LECTURE_BOT_ADMIN_HOST`, default `127.0.0.1`
+- `LECTURE_BOT_ADMIN_PORT`, default `8001`
 
 ## Example systemd Units
 
-Create `/etc/systemd/system/lecture-bot.service`:
+Example templates are committed at:
 
-```ini
-[Unit]
-Description=Lecture Bot student app
-After=network-online.target
-Wants=network-online.target
+- [deploy/systemd/lecture-bot.service.example](../deploy/systemd/lecture-bot.service.example)
+- [deploy/systemd/lecture-bot-admin.service.example](../deploy/systemd/lecture-bot-admin.service.example)
 
-[Service]
-Type=simple
-User=lecturebot
-Group=lecturebot
-WorkingDirectory=/srv/lecture-bot/app-repo
-Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/lecturebot/.pixi/bin/pixi run uvicorn app.main:app --host 127.0.0.1 --port 8000
-Restart=on-failure
-RestartSec=5
+They use `/srv/lecture-bot` as the working directory, `/etc/lecture-bot/stats.env` as the environment file, and the canonical Pixi tasks as `ExecStart`.
 
-[Install]
-WantedBy=multi-user.target
+Example `/etc/lecture-bot/stats.env`:
+
+```env
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.4-mini
+DATABASE_URL=sqlite:////srv/lecture-bot/data/lecture_bot.db
+LECTURES_DIR=/srv/lecture-bot/lectures
+ADMIN_USERNAME=
+ADMIN_PASSWORD=
+LECTURE_BOT_STUDENT_ROOT_PATH=/stats
+LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin
 ```
 
-Create `/etc/systemd/system/lecture-bot-admin.service` if the admin app should be available:
-
-```ini
-[Unit]
-Description=Lecture Bot admin app
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=lecturebot
-Group=lecturebot
-WorkingDirectory=/srv/lecture-bot/app-repo
-Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/lecturebot/.pixi/bin/pixi run uvicorn app.admin_main:app --host 127.0.0.1 --port 8001
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Adjust user, paths, and Pixi path for the actual server. Then:
+Copy the example units to `/etc/systemd/system/`, adjust user, paths, and Pixi path for the actual server, then:
 
 ```bash
 sudo systemctl daemon-reload
@@ -161,17 +158,21 @@ journalctl -u lecture-bot-admin.service -f
 
 ## Nginx Shape
 
-For the current code, the simplest working Nginx shape is to serve the student app at the origin root and put the admin app on a separate host or route that does not require rewriting generated links.
+For the intended production prefixes, proxy `/stats/` to the student process and `/stats-admin/` to the admin process. The app processes still listen locally without the public prefix; the startup scripts pass Uvicorn the selected `--root-path`.
 
-Example root-mounted student app:
+Example student location:
 
 ```nginx
 server {
     listen 80;
     server_name example.edu;
 
-    location / {
-        proxy_pass http://127.0.0.1:8000;
+    location = /stats {
+        return 308 /stats/;
+    }
+
+    location /stats/ {
+        proxy_pass http://127.0.0.1:8000/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -195,14 +196,11 @@ Intended production override:
 - student app: `/stats`
 - admin app: `/stats-admin`
 
-Set `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH` before app import, and launch Uvicorn with matching `--root-path` values:
+Set `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH` before app import, and use the canonical startup tasks so Uvicorn receives matching `--root-path` values:
 
 ```bash
-LECTURE_BOT_STUDENT_ROOT_PATH=/stats pixi run uvicorn app.main:app \
-  --host 127.0.0.1 --port 8000 --root-path /stats
-
-LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin pixi run uvicorn app.admin_main:app \
-  --host 127.0.0.1 --port 8001 --root-path /stats-admin
+LECTURE_BOT_STUDENT_ROOT_PATH=/stats pixi run serve
+LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin pixi run admin-serve
 ```
 
 The templates generate prefixed static URLs, admin links/forms, and student API URLs. The browser chat frontend reads its API endpoints from the server-rendered `window.APP_ROUTES` object. See [path_prefix_change_note.md](path_prefix_change_note.md) for the focused implementation note.

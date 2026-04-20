@@ -36,14 +36,11 @@ LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin
 Launch Uvicorn with matching root paths:
 
 ```bash
-LECTURE_BOT_STUDENT_ROOT_PATH=/stats pixi run uvicorn app.main:app \
-  --host 127.0.0.1 --port 8000 --root-path /stats
-
-LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin pixi run uvicorn app.admin_main:app \
-  --host 127.0.0.1 --port 8001 --root-path /stats-admin
+LECTURE_BOT_STUDENT_ROOT_PATH=/stats pixi run serve
+LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin pixi run admin-serve
 ```
 
-The matching setting and Uvicorn `--root-path` are both intentional: the app setting controls generated URLs, and the ASGI root path tells the server/proxy context what public prefix is in use.
+The production tasks call `scripts/serve_student.sh` and `scripts/serve_admin.sh`, which pass the matching Uvicorn `--root-path` internally. The matching setting and Uvicorn root path are both intentional: the app setting controls generated URLs, and the ASGI root path tells the server/proxy context what public prefix is in use.
 
 ## Running repo defaults
 
@@ -52,16 +49,6 @@ Pixi tasks use the committed prefixes:
 ```bash
 pixi run dev
 pixi run admin-dev
-```
-
-Equivalent explicit commands:
-
-```bash
-pixi run uvicorn app.main:app \
-  --host 0.0.0.0 --port 8000 --root-path /bot
-
-pixi run uvicorn app.admin_main:app \
-  --host 0.0.0.0 --port 8001 --root-path /bot-admin
 ```
 
 Nginx can proxy:
@@ -78,14 +65,11 @@ pixi run stats-dev
 pixi run stats-admin-dev
 ```
 
-Equivalent explicit commands:
+Production-style tasks for the same public prefixes:
 
 ```bash
-LECTURE_BOT_STUDENT_ROOT_PATH=/stats pixi run uvicorn app.main:app \
-  --host 0.0.0.0 --port 8000 --root-path /stats
-
-LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin pixi run uvicorn app.admin_main:app \
-  --host 0.0.0.0 --port 8001 --root-path /stats-admin
+LECTURE_BOT_STUDENT_ROOT_PATH=/stats pixi run serve
+LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin pixi run admin-serve
 ```
 
 Nginx can proxy:
@@ -97,5 +81,5 @@ Nginx can proxy:
 
 - The student and admin apps are still separate processes/apps.
 - The selected `LECTURE_BOT_STUDENT_ROOT_PATH` or `LECTURE_BOT_ADMIN_ROOT_PATH` must be present in the environment before the corresponding app module is imported.
-- Keep Uvicorn `--root-path` aligned with the selected setting to avoid mismatched generated URLs and request scope.
-- This change does not add deployment automation or Nginx config; it only removes the application-level root-path blocker.
+- Use the committed startup scripts or Pixi production tasks so Uvicorn `--root-path` stays aligned with the selected setting.
+- This change does not add deployment automation or generated Nginx config; it only removes the application-level root-path blocker.

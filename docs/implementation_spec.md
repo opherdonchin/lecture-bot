@@ -81,10 +81,10 @@ The app reads only processed markdown/text outputs.
 
 - The current student app entrypoint is `app.main:app`.
 - The current admin app entrypoint is `app.admin_main:app`.
-- Current launch is direct Uvicorn, for example `pixi run uvicorn app.main:app --host 127.0.0.1 --port 8000`.
+- Canonical production launch uses `pixi run serve` for the student app and `pixi run admin-serve` for the admin app.
 - The committed public path defaults are `/bot` for students and `/bot-admin` for admin.
 - The intended production public paths are `/stats` for students and `/stats-admin` for admin.
-- Prefixes are configurable with `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH`, with matching Uvicorn `--root-path` values.
+- Prefixes are configurable with `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH`; the canonical startup scripts pass matching Uvicorn `--root-path` values.
 
 ### Repository conventions
 - Repository code/spec may remain public.

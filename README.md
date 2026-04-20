@@ -24,6 +24,7 @@ Run commands from the repository root so `.env`, `lectures/`, `data/`, `app/`, a
 
 ```bash
 pixi install
+cp .env.example .env
 pixi run init-db
 pixi run dev
 ```
@@ -40,6 +41,8 @@ For real tutoring behavior, set `OPENAI_API_KEY` in `.env` or the process enviro
 | `pixi run admin-dev` | Start the separate admin app with auto-reload on `0.0.0.0:8001` and root path `/bot-admin`. |
 | `pixi run stats-dev` | Start the student app with auto-reload and root path `/stats`. |
 | `pixi run stats-admin-dev` | Start the admin app with auto-reload and root path `/stats-admin`. |
+| `pixi run serve` | Start the student app for production-style use through `scripts/serve_student.sh`. |
+| `pixi run admin-serve` | Start the admin app for production-style use through `scripts/serve_admin.sh`. |
 | `pixi run stop` | Stop a process listening on port `8000`. |
 | `pixi run admin-stop` | Stop a process listening on port `8001`. |
 | `pixi run test` | Run the pytest suite. |
@@ -47,14 +50,14 @@ For real tutoring behavior, set `OPENAI_API_KEY` in `.env` or the process enviro
 | `pixi run python scripts/build_lecture_package.py <lecture_id> --force` | Build or rebuild a lecture package from source files. |
 | `pixi run python scripts/grade_moodle.py ...` | Run the Moodle grading helper script. |
 
-There is currently no named Pixi production task. The current production launch command is a direct Uvicorn invocation, for example:
+Production startup should use the committed Pixi tasks or their underlying scripts:
 
 ```bash
-pixi run uvicorn app.main:app --host 127.0.0.1 --port 8000 --root-path /bot
-pixi run uvicorn app.admin_main:app --host 127.0.0.1 --port 8001 --root-path /bot-admin
+pixi run serve
+pixi run admin-serve
 ```
 
-Use the admin process only when the admin UI is needed. See [docs/path_prefix_change_note.md](docs/path_prefix_change_note.md) for prefix configuration and [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) for Ubuntu, systemd, and Nginx notes.
+Use the admin process only when the admin UI is needed. The tasks read host, port, and root path from environment variables and pass the matching Uvicorn `--root-path` internally. See [docs/path_prefix_change_note.md](docs/path_prefix_change_note.md) for prefix configuration and [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) for Ubuntu, systemd, and Nginx notes.
 
 ## Student Routes
 
@@ -107,6 +110,8 @@ Admin uploads write directly under the configured `LECTURES_DIR`. With the defau
 ## Environment Variables
 
 Settings are loaded by `pydantic-settings` from real environment variables and from `.env` in the current working directory. In normal use, run from the repository root and keep `.env` there.
+
+Use [.env.example](.env.example) as the committed starting point for local or deployment environment files. Do not commit `.env` or secret values.
 
 | Variable | Required? | Purpose |
 |---|---:|---|
@@ -212,7 +217,12 @@ Production override example:
 - student app: `/stats`
 - admin app: `/stats-admin`
 
-Configure prefixes with `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH`, and launch Uvicorn with matching `--root-path` values. See [docs/path_prefix_change_note.md](docs/path_prefix_change_note.md) for exact commands and caveats.
+Configure prefixes with `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH`. The canonical production commands launch Uvicorn with the matching `--root-path` automatically:
+
+```bash
+LECTURE_BOT_STUDENT_ROOT_PATH=/stats pixi run serve
+LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin pixi run admin-serve
+```
 
 ## Tests
 

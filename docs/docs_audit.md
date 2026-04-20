@@ -79,8 +79,8 @@ The README now states that tests mock OpenAI calls, use temporary SQLite databas
 
 - `docs/deployment_ubuntu.md`
   - Added dedicated Ubuntu 24.04 deployment guidance.
-  - Included direct Uvicorn production launch commands and example systemd units.
-  - Documented Nginx shape and the current `/stats` blocker.
+  - Updated production launch guidance to use committed Pixi startup tasks and example systemd unit templates.
+  - Documented Nginx shape and `/stats` prefix deployment.
   - Documented persistent filesystem layout and smoke checks.
 
 - `docs/docs_audit.md`
@@ -100,7 +100,7 @@ The README now states that tests mock OpenAI calls, use temporary SQLite databas
 
 ## Remaining Uncertainties
 
-- There is no committed production Pixi task or committed systemd unit. The docs therefore use direct `pixi run uvicorn ...` commands and example systemd units.
+- Production Pixi tasks and systemd unit templates are now committed; the docs no longer rely on direct production Uvicorn commands.
 - I did not inspect private `.env` values. The docs list variable names and purposes only.
 - Moodle grading behavior was not audited end to end; only the presence of `scripts/grade_moodle.py` and the configured Pixi task were noted.
 - Root-level `app.log` and `admin.log` are tracked legacy/dev log files. Production should prefer journald or private log paths and should not write sensitive runtime logs into tracked files.

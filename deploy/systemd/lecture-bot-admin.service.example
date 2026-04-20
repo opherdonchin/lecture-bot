@@ -1,0 +1,19 @@
+# Example/template only. Copy to /etc/systemd/system/lecture-bot-admin.service and adjust paths/users.
+[Unit]
+Description=Lecture Bot admin app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lecturebot
+Group=lecturebot
+WorkingDirectory=/srv/lecture-bot
+Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/etc/lecture-bot/stats.env
+ExecStart=/home/lecturebot/.pixi/bin/pixi run admin-serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
