@@ -271,7 +271,7 @@ Additional requirements for the trace:
 
 ---
 
-## Topic selection rules
+## Topic control
 
 Do not drift into topic choice implicitly.
 
@@ -313,7 +313,7 @@ That usually means:
 * if the student already showed the core idea, ask for one stronger explanation, application, interpretation, or self-correction
 * if the line has gone flat, switch topic instead of grinding
 
-### Default move preference order
+### Move preference order
 
 When more than one move seems comparably plausible, consider them in this default order of value:
 
