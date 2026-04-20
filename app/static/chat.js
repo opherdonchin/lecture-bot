@@ -254,28 +254,85 @@ function appendGradeMessage(data) {
     row.appendChild(exp);
   }
 
-  if (data.scored_topics && data.scored_topics.length > 0) {
-    const scored = document.createElement("p");
-    scored.className = "grade-missing";
-    scored.textContent = "Scored topics: " + data.scored_topics.join(", ");
-    row.appendChild(scored);
-  }
-
-  if (data.missing_topics && data.missing_topics.length > 0) {
-    const miss = document.createElement("p");
-    miss.className = "grade-missing";
-    miss.textContent = "Topics not yet covered: " + data.missing_topics.join(", ");
-    row.appendChild(miss);
-  } else {
-    const ok = document.createElement("p");
-    ok.className = "grade-missing";
-    ok.textContent = "All topics covered.";
-    row.appendChild(ok);
-  }
+  appendInfoList(
+    row,
+    "Stronger areas",
+    data.scored_topics || [],
+    "No strong footholds yet."
+  );
+  appendInfoList(
+    row,
+    "Still to cover",
+    data.missing_topics || [],
+    "All sampled topics have some coverage."
+  );
 
   transcript.appendChild(row);
   renderMath(row);
   transcript.scrollTop = transcript.scrollHeight;
+}
+
+function appendInfoList(container, label, items, emptyText) {
+  const block = document.createElement("div");
+  block.className = "info-block";
+
+  const title = document.createElement("div");
+  title.className = "info-title";
+  title.textContent = label;
+  block.appendChild(title);
+
+  if (items && items.length > 0) {
+    const list = document.createElement("ul");
+    list.className = "info-list";
+    for (const item of items) {
+      const li = document.createElement("li");
+      li.textContent = item;
+      list.appendChild(li);
+    }
+    block.appendChild(list);
+  } else {
+    const empty = document.createElement("p");
+    empty.className = "info-empty";
+    empty.textContent = emptyText;
+    block.appendChild(empty);
+  }
+
+  container.appendChild(block);
+}
+
+function appendStructuredReportText(container, reportText) {
+  const lines = reportText.split(/\r?\n/);
+  let currentList = null;
+
+  function closeList() {
+    currentList = null;
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      closeList();
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      if (!currentList) {
+        currentList = document.createElement("ul");
+        currentList.className = "report-list";
+        container.appendChild(currentList);
+      }
+      const li = document.createElement("li");
+      li.textContent = line.replace(/^[-*]\s+/, "");
+      currentList.appendChild(li);
+      continue;
+    }
+
+    closeList();
+    const block = document.createElement("div");
+    block.className = /:\s*$/.test(line) ? "report-section-title" : "report-line";
+    block.textContent = line;
+    container.appendChild(block);
+  }
 }
 
 async function generateReport() {
@@ -316,15 +373,7 @@ function appendReportMessage(data) {
   row.appendChild(header);
 
   const reportText = data.report_text || "[No report text returned]";
-  const paragraphs = reportText.split(/\n{2,}/);
-  for (const para of paragraphs) {
-    const trimmed = para.trim();
-    if (trimmed) {
-      const p = document.createElement("p");
-      p.textContent = trimmed;
-      row.appendChild(p);
-    }
-  }
+  appendStructuredReportText(row, reportText);
 
   // Download button
   const dl = document.createElement("button");

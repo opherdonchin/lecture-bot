@@ -62,14 +62,10 @@ _DIALOGUE_PROMPT_TEMPLATE = "dialogue_system_prompt.md"
 # Public: opening message
 # ---------------------------------------------------------------------------
 
-def _join_topic_labels(labels: list[str]) -> str:
+def _format_opening_topic_choices(labels: list[str]) -> str:
     if not labels:
         return ""
-    if len(labels) == 1:
-        return labels[0]
-    if len(labels) == 2:
-        return f"{labels[0]} or {labels[1]}"
-    return f"{', '.join(labels[:-1])}, or {labels[-1]}"
+    return "\n".join(f"- {label}" for label in labels)
 
 
 def normalize_topic_defs(topic_defs: list[dict] | None) -> list[dict]:
@@ -186,10 +182,13 @@ def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | 
         if topic_id in topic_id_to_label
     ]
     if sampled_labels:
+        topic_choices = _format_opening_topic_choices(sampled_labels)
         return (
             f"Welcome to the review bot for {title}. "
-            "We can start wherever feels most useful. "
-            f"Want to begin with {_join_topic_labels(sampled_labels)}?"
+            "We can start wherever feels most useful.\n"
+            "A few good places to start are:\n"
+            f"{topic_choices}\n\n"
+            "Which would you like to begin with?"
         )
 
     return (
@@ -971,36 +970,59 @@ def generate_report(
     rubric_text = lecture_package["rubric"]
     final_grade = grading_result.get("final_grade", 0)
     explanation = grading_result.get("explanation", "")
+    scored_topics = grading_result.get("scored_topics", [])
     missing_topics = grading_result.get("missing_topics", [])
     topic_scores = grading_result.get("topic_scores", [])
 
     topic_summary = ", ".join(
         f"{ts['topic_id']}={ts['score']}" for ts in topic_scores
     ) if topic_scores else "none assessed"
+    scored_summary = ", ".join(scored_topics) if scored_topics else "no strong footholds yet"
+    missing_summary = ", ".join(missing_topics) if missing_topics else "none"
 
     system_prompt = (
         "You are writing a final mastery report for a student's tutoring session.\n"
-        "Write a clear, professional 2–3 paragraph report based on the assessment provided.\n"
-        "Focus on: what the student demonstrated, where they showed strength, where growth is needed.\n"
+        "Write a quick-read, professional report based on the assessment provided.\n"
+        "Use short section headings and bullet points, not dense paragraphs.\n"
+        "Keep it brief and easy to scan.\n"
         "Do not include a grade number — the backend will add that separately.\n\n"
         f"Final grade earned: {final_grade}/100\n"
         f"Topic scores: {topic_summary}\n"
         f"Assessment: {explanation}\n"
-        f"Topics not covered: {missing_topics}\n\n"
+        f"Stronger areas so far: {scored_summary}\n"
+        f"Topics not covered: {missing_summary}\n\n"
         "Rubric for reference:\n"
         f"{rubric_text}\n\n"
+        "Return `report_text` as plain text with exactly these section headings:\n"
+        "Summary:\n"
+        "Stronger areas:\n"
+        "Next steps:\n"
+        "Coverage:\n"
+        "Under each heading, use 1-3 short bullet points that start with '- '.\n"
+        "Do not write multi-paragraph prose.\n\n"
         "Return JSON only:\n"
-        '{"report_text": "your 2-3 paragraph report"}'
+        '{"report_text": "your bullet-point report"}'
     )
 
     conversation_text = "\n\n".join(
         f"[{msg['role'].upper()}]: {msg['content']}" for msg in messages
     )
 
+    fallback_next_step = (
+        f"Strengthen coverage in {missing_topics[0]}."
+        if missing_topics else
+        "Keep pushing for one more clean distinction, explanation, or application."
+    )
     fallback_report_text = (
-        f"Session report for {student_id}. "
-        f"Final grade: {final_grade}/100. "
-        f"{explanation}"
+        "Summary:\n"
+        f"- {explanation or 'This session produced some usable evidence, but the picture is still incomplete.'}\n"
+        "Stronger areas:\n"
+        f"- {scored_summary}.\n"
+        "Next steps:\n"
+        f"- {fallback_next_step}\n"
+        "Coverage:\n"
+        f"- Covered: {scored_summary}.\n"
+        f"- Not yet covered: {missing_summary}."
     )
 
     try:

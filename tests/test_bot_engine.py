@@ -170,7 +170,11 @@ def test_build_opening_message_includes_sampled_topic_labels(monkeypatch):
         sampled_topic_ids=["T1", "T2", "T3"],
     )
     assert "Welcome to the review bot for Lecture 1." in message
-    assert "Reality–Data–Model distinction, Purpose of statistics, or Definition and structure of data" in message
+    assert "A few good places to start are:" in message
+    assert "- Reality–Data–Model distinction" in message
+    assert "- Purpose of statistics" in message
+    assert "- Definition and structure of data" in message
+    assert "Which would you like to begin with?" in message
 
 
 def test_build_opening_message_falls_back_without_resolved_sampled_topics(monkeypatch):
@@ -196,6 +200,49 @@ def test_build_opening_message_falls_back_without_resolved_sampled_topics(monkey
         "We can start wherever feels most useful. "
         "What topic from this lecture would you like to begin with?"
     )
+
+
+def test_generate_report_fallback_uses_scannable_bullets(monkeypatch):
+    lecture_package = {
+        "lecture_id": "lecture_01",
+        "config": {"title": "Lecture 1"},
+        "rubric": SAMPLE_RUBRIC,
+    }
+    grading_result = {
+        "final_grade": 80,
+        "explanation": "Strongest evidence is in model-vs-data distinctions.",
+        "scored_topics": ["Reality–Data–Model distinction", "Purpose of statistics"],
+        "missing_topics": ["Definition and structure of data"],
+        "topic_scores": [
+            {"topic_id": "T1", "score": 90},
+            {"topic_id": "T2", "score": 70},
+        ],
+    }
+    monkeypatch.setattr(
+        bot_engine.config_module,
+        "get_settings",
+        lambda: type("Settings", (), {"openai_api_key": "test-key", "openai_model": "test-model"})(),
+    )
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("boom")
+    monkeypatch.setattr(bot_engine.openai_, "OpenAI", lambda **kwargs: mock_client)
+
+    result = bot_engine.generate_report(
+        lecture_package=lecture_package,
+        messages=[{"role": "user", "content": "Hello"}],
+        state={},
+        grading_result=grading_result,
+        session_id="session-1",
+        student_id="student-1",
+        timestamp_iso="2026-04-19T12:00:00+00:00",
+    )
+
+    assert "Summary:" in result["report_text"]
+    assert "Stronger areas:" in result["report_text"]
+    assert "Next steps:" in result["report_text"]
+    assert "Coverage:" in result["report_text"]
+    assert "- Reality–Data–Model distinction, Purpose of statistics." in result["report_text"]
+    assert "- Not yet covered: Definition and structure of data." in result["report_text"]
 
 
 def test_rewrite_opening_topic_selection_rewrites_prefix_match():
