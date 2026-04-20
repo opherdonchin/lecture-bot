@@ -31,9 +31,11 @@ system-dev-stop = "systemctl --user stop lecture-bot.service"
 system-dev-restart = "systemctl --user restart lecture-bot.service"
 system-dev-status = "systemctl --user status lecture-bot.service --no-pager -l"
 system-dev-logs = "journalctl --user -u lecture-bot.service -b --no-pager"
-dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
-dev-bg = "bash -lc 'nohup uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > app.log 2>&1 < /dev/null & disown; echo Started app in background. Logs: app.log'"
-admin-dev = "uvicorn app.admin_main:app --reload --host 0.0.0.0 --port 8001"
+dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --root-path /bot"
+dev-bg = "bash -lc 'nohup uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --root-path /bot > app.log 2>&1 < /dev/null & disown; echo Started app in background. Logs: app.log'"
+admin-dev = "uvicorn app.admin_main:app --reload --host 0.0.0.0 --port 8001 --root-path /bot-admin"
+stats-dev = "bash -lc 'LECTURE_BOT_STUDENT_ROOT_PATH=/stats uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --root-path /stats'"
+stats-admin-dev = "bash -lc 'LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin uvicorn app.admin_main:app --reload --host 0.0.0.0 --port 8001 --root-path /stats-admin'"
 admin-stop = '''bash -lc '
 pids=$(lsof -tiTCP:8001 -sTCP:LISTEN 2>/dev/null || true)
 

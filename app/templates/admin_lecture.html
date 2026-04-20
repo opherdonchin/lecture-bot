@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>{{ lecture_id }} Admin</title>
-    <link rel="stylesheet" href="/static/style.css" />
-    <link rel="stylesheet" href="/static/admin.css" />
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
   </head>
   <body>
     <main class="admin-shell">
       <div class="topbar">
-        <a href="/lectures" class="back-link">All Lecture Folders</a>
+        <a href="{{ url_path('admin_lectures') }}" class="back-link">All Lecture Folders</a>
         <span class="muted">{{ lecture_dir }}</span>
       </div>
 
@@ -32,7 +32,7 @@
 
       <section class="card admin-card">
         <h2>Lecture Metadata</h2>
-        <form method="post" action="/lectures/{{ lecture_id }}/metadata" class="grid-form">
+        <form method="post" action="{{ url_path('update_lecture_metadata', lecture_id=lecture_id) }}" class="grid-form">
           <label>
             <span>Title</span>
             <input type="text" name="title" value="{{ config.title }}" />
@@ -52,7 +52,7 @@
       <section class="columns">
         <section class="card admin-card">
           <h2>Files In Folder</h2>
-          <form method="post" action="/lectures/{{ lecture_id }}/upload" enctype="multipart/form-data" class="upload-form">
+          <form method="post" action="{{ url_path('upload_file', lecture_id=lecture_id) }}" enctype="multipart/form-data" class="upload-form">
             <input type="file" name="uploaded_file" required />
             <button type="submit">Upload File</button>
           </form>
@@ -66,9 +66,9 @@
                 <p>{{ file.size_bytes }} bytes</p>
               </div>
               <div class="inline-actions">
-                <a href="/lectures/{{ lecture_id }}/files/{{ file.name }}">Download</a>
+                <a href="{{ url_path('download_lecture_file', lecture_id=lecture_id, filename=file.name) }}">Download</a>
                 {% if file.name != "lecture_config.json" %}
-                <form method="post" action="/lectures/{{ lecture_id }}/delete">
+                <form method="post" action="{{ url_path('delete_file', lecture_id=lecture_id) }}">
                   <input type="hidden" name="filename" value="{{ file.name }}" />
                   <button type="submit" class="danger">Delete</button>
                 </form>
@@ -84,7 +84,7 @@
 
         <section class="card admin-card">
           <h2>Select Source Files</h2>
-          <form method="post" action="/lectures/{{ lecture_id }}/sources" class="grid-form">
+          <form method="post" action="{{ url_path('update_sources', lecture_id=lecture_id) }}" class="grid-form">
             {% for key in source_keys %}
             <label>
               <span>{{ display_labels[key] }}</span>
@@ -117,7 +117,7 @@
       <section class="card admin-card">
         <div class="section-header">
           <h2>Build Workflow</h2>
-          <form method="post" action="/lectures/{{ lecture_id }}/build/local">
+          <form method="post" action="{{ url_path('build_local', lecture_id=lecture_id) }}">
             <button type="submit">Build / Continue</button>
           </form>
         </div>
@@ -146,15 +146,15 @@
         <h2>Minutes Step</h2>
         <p>Copy the prompt, upload the support files to ChatGPT, and ask it to return a downloadable file named <code>{{ target_by_key['minutes'] }}</code>.</p>
         <div class="inline-actions">
-          <a href="/lectures/{{ lecture_id }}/prompt/minutes.txt">Download Prompt</a>
-          <a href="/lectures/{{ lecture_id }}/bundle/minutes.zip">Download Zip Bundle</a>
+          <a href="{{ url_path('download_prompt', lecture_id=lecture_id, stage='minutes') }}">Download Prompt</a>
+          <a href="{{ url_path('download_bundle', lecture_id=lecture_id, stage='minutes') }}">Download Zip Bundle</a>
         </div>
         <div class="download-list">
           {% for filename in bundle_stage_files['minutes'] %}
-          <a href="/lectures/{{ lecture_id }}/files/{{ filename }}">{{ filename }}</a>
+          <a href="{{ url_path('download_lecture_file', lecture_id=lecture_id, filename=filename) }}">{{ filename }}</a>
           {% endfor %}
         </div>
-        <form method="post" action="/lectures/{{ lecture_id }}/generated/minutes" enctype="multipart/form-data" class="upload-form">
+        <form method="post" action="{{ url_path('upload_generated_artifact', lecture_id=lecture_id, kind='minutes') }}" enctype="multipart/form-data" class="upload-form">
           <input type="file" name="uploaded_file" required />
           <button type="submit">Upload minutes.json</button>
         </form>
@@ -169,15 +169,15 @@
         <h2>Rubric Step</h2>
         <p>Copy the rubric prompt, upload the support files to ChatGPT, and ask it to return a downloadable file named <code>{{ target_by_key['rubric'] }}</code>.</p>
         <div class="inline-actions">
-          <a href="/lectures/{{ lecture_id }}/prompt/rubric.txt">Download Prompt</a>
-          <a href="/lectures/{{ lecture_id }}/bundle/rubric.zip">Download Zip Bundle</a>
+          <a href="{{ url_path('download_prompt', lecture_id=lecture_id, stage='rubric') }}">Download Prompt</a>
+          <a href="{{ url_path('download_bundle', lecture_id=lecture_id, stage='rubric') }}">Download Zip Bundle</a>
         </div>
         <div class="download-list">
           {% for filename in bundle_stage_files['rubric'] %}
-          <a href="/lectures/{{ lecture_id }}/files/{{ filename }}">{{ filename }}</a>
+          <a href="{{ url_path('download_lecture_file', lecture_id=lecture_id, filename=filename) }}">{{ filename }}</a>
           {% endfor %}
         </div>
-        <form method="post" action="/lectures/{{ lecture_id }}/generated/rubric" enctype="multipart/form-data" class="upload-form">
+        <form method="post" action="{{ url_path('upload_generated_artifact', lecture_id=lecture_id, kind='rubric') }}" enctype="multipart/form-data" class="upload-form">
           <input type="file" name="uploaded_file" required />
           <button type="submit">Upload rubric.md</button>
         </form>

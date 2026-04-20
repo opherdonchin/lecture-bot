@@ -28,7 +28,7 @@ pixi run init-db
 pixi run dev
 ```
 
-Then open <http://127.0.0.1:8000/>.
+Then open <http://127.0.0.1:8000/bot/>.
 
 For real tutoring behavior, set `OPENAI_API_KEY` in `.env` or the process environment. Without a valid key, dialogue and report generation use fallback paths and lecture-artifact generation fails.
 
@@ -36,8 +36,10 @@ For real tutoring behavior, set `OPENAI_API_KEY` in `.env` or the process enviro
 
 | Command | Purpose |
 |---|---|
-| `pixi run dev` | Start the student app with auto-reload on `0.0.0.0:8000`. |
-| `pixi run admin-dev` | Start the separate admin app with auto-reload on `0.0.0.0:8001`. |
+| `pixi run dev` | Start the student app with auto-reload on `0.0.0.0:8000` and root path `/bot`. |
+| `pixi run admin-dev` | Start the separate admin app with auto-reload on `0.0.0.0:8001` and root path `/bot-admin`. |
+| `pixi run stats-dev` | Start the student app with auto-reload and root path `/stats`. |
+| `pixi run stats-admin-dev` | Start the admin app with auto-reload and root path `/stats-admin`. |
 | `pixi run stop` | Stop a process listening on port `8000`. |
 | `pixi run admin-stop` | Stop a process listening on port `8001`. |
 | `pixi run test` | Run the pytest suite. |
@@ -48,11 +50,11 @@ For real tutoring behavior, set `OPENAI_API_KEY` in `.env` or the process enviro
 There is currently no named Pixi production task. The current production launch command is a direct Uvicorn invocation, for example:
 
 ```bash
-pixi run uvicorn app.main:app --host 127.0.0.1 --port 8000
-pixi run uvicorn app.admin_main:app --host 127.0.0.1 --port 8001
+pixi run uvicorn app.main:app --host 127.0.0.1 --port 8000 --root-path /bot
+pixi run uvicorn app.admin_main:app --host 127.0.0.1 --port 8001 --root-path /bot-admin
 ```
 
-Use the admin process only when the admin UI is needed. See [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) for Ubuntu, systemd, Nginx, and `/stats` notes.
+Use the admin process only when the admin UI is needed. See [docs/path_prefix_change_note.md](docs/path_prefix_change_note.md) for prefix configuration and [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) for Ubuntu, systemd, and Nginx notes.
 
 ## Student Routes
 
@@ -110,6 +112,8 @@ Settings are loaded by `pydantic-settings` from real environment variables and f
 |---|---:|---|
 | `OPENAI_API_KEY` | Required for real tutor/report calls and generated lecture artifacts | API key used by the OpenAI SDK. |
 | `OPENAI_MODEL` | No | Model name. Defaults to `gpt-5.4-mini`. |
+| `LECTURE_BOT_STUDENT_ROOT_PATH` | No | Public root path for generated student URLs. Defaults to `/bot`; production can use `/stats`. |
+| `LECTURE_BOT_ADMIN_ROOT_PATH` | No | Public root path for generated admin URLs. Defaults to `/bot-admin`; production can use `/stats-admin`. |
 | `DATABASE_URL` | No | SQLAlchemy URL. Defaults to `sqlite:///data/lecture_bot.db`. |
 | `LECTURES_DIR` | No | Directory for lecture packages. Defaults to `lectures`. |
 | `ADMIN_USERNAME` | Required for admin app | HTTP Basic Auth username. |
@@ -196,16 +200,19 @@ Keep private and copy after cloning `main`:
 
 ## Path Prefix Status
 
-The intended public path is `/stats` and the intended admin path is `/stats/stats-admin`.
+The app supports configurable path prefixes while keeping the student and admin FastAPI apps separate.
 
-Current code assumes it is served at the domain root:
+Committed defaults:
 
-- `app/static/chat.js` calls absolute endpoints such as `/lectures`, `/start_session`, and `/send_message`.
-- templates use root-relative asset URLs such as `/static/style.css`.
-- admin templates use root-relative form actions and links such as `/lectures/...`.
-- the student and admin apps are separate FastAPI apps and the admin app is not mounted under the student app.
+- student app: `/bot`
+- admin app: `/bot-admin`
 
-Result: the app does not currently support a clean `/stats` prefix by itself. A proxy that strips `/stats` is not enough, because the HTML and JavaScript still send the browser to root-level `/static`, `/lectures`, and API paths. Deploying cleanly at `/stats` and `/stats/stats-admin` needs code changes to generate prefix-aware URLs and route the admin app under the intended prefix, or an awkward Nginx workaround that exposes root-level endpoint aliases.
+Production override example:
+
+- student app: `/stats`
+- admin app: `/stats-admin`
+
+Configure prefixes with `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH`, and launch Uvicorn with matching `--root-path` values. See [docs/path_prefix_change_note.md](docs/path_prefix_change_note.md) for exact commands and caveats.
 
 ## Tests
 

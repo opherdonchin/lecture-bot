@@ -1,6 +1,6 @@
 # Ubuntu 24.04 Deployment Notes
 
-This document describes the current repository state for a clean Ubuntu 24.04 LTS server. It is operational for root-mounted deployment today, and it calls out the code changes still needed for the intended `/stats` and `/stats/stats-admin` public paths.
+This document describes the current repository state for a clean Ubuntu 24.04 LTS server. The apps support configurable path prefixes, with repo defaults at `/bot` and `/bot-admin` and the intended production override at `/stats` and `/stats-admin`.
 
 ## Current Verdict
 
@@ -8,7 +8,7 @@ This document describes the current repository state for a clean Ubuntu 24.04 LT
 - Admin app entrypoint: `app.admin_main:app`.
 - Current production launch is direct Uvicorn through Pixi.
 - No production Pixi task or service file is committed.
-- The code currently assumes root-relative public URLs and does not cleanly support `/stats`.
+- Prefix-aware URLs are supported through `LECTURE_BOT_STUDENT_ROOT_PATH`, `LECTURE_BOT_ADMIN_ROOT_PATH`, and matching Uvicorn `--root-path` values.
 
 ## Server Packages
 
@@ -181,31 +181,31 @@ server {
 }
 ```
 
-## `/stats` Status And Blocker
+## `/stats` Path Prefix Deployment
 
-The intended public paths are:
+The app now supports configurable path prefixes while keeping the student and admin FastAPI apps separate.
+
+Committed defaults:
+
+- student app: `/bot`
+- admin app: `/bot-admin`
+
+Intended production override:
 
 - student app: `/stats`
-- admin app: `/stats/stats-admin`
+- admin app: `/stats-admin`
 
-The current code does not support that cleanly:
+Set `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH` before app import, and launch Uvicorn with matching `--root-path` values:
 
-- `app/templates/chat.html` uses `/static/...`.
-- `app/static/chat.js` fetches `/lectures`, `/start_session`, `/send_message`, `/get_grade`, `/generate_report`, and `/restart_session`.
-- admin templates use root-relative links and forms such as `/lectures` and `/lectures/{lecture_id}/upload`.
-- admin is a separate FastAPI app, not mounted below the student app.
+```bash
+LECTURE_BOT_STUDENT_ROOT_PATH=/stats pixi run uvicorn app.main:app \
+  --host 127.0.0.1 --port 8000 --root-path /stats
 
-An Nginx `location /stats/ { proxy_pass ... }` that strips the prefix will still serve HTML containing root-relative URLs. The browser will then request root-level `/static`, `/lectures`, and API paths. That is not a clean `/stats` deployment.
+LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin pixi run uvicorn app.admin_main:app \
+  --host 127.0.0.1 --port 8001 --root-path /stats-admin
+```
 
-Before deploying at `/stats`, the app should be changed to generate prefix-aware URLs. Likely work includes:
-
-- make static asset URLs and frontend API URLs respect a configured base path or `root_path`
-- use `request.url_for(...)` or a shared injected base path in templates
-- avoid root-relative admin form actions and links
-- decide whether admin is mounted under one combined FastAPI app or proxied as a separate app with a prefix-aware admin base path
-- add tests for the `/stats` and `/stats/stats-admin` URL behavior
-
-Until then, either deploy at root or accept an explicit Nginx workaround that exposes root-level aliases for every static/API/admin path. The workaround is operationally fragile and is not recommended as the long-term production shape.
+The templates generate prefixed static URLs, admin links/forms, and student API URLs. The browser chat frontend reads its API endpoints from the server-rendered `window.APP_ROUTES` object. See [path_prefix_change_note.md](path_prefix_change_note.md) for the focused implementation note.
 
 ## Runtime Files And Permissions
 

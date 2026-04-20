@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Lecture Admin</title>
-    <link rel="stylesheet" href="/static/style.css" />
-    <link rel="stylesheet" href="/static/admin.css" />
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
   </head>
   <body>
     <main class="admin-shell">
@@ -26,7 +26,7 @@
 
       <section class="card admin-card">
         <h2>Create Lecture Folder</h2>
-        <form method="post" action="/lectures" class="grid-form">
+        <form method="post" action="{{ url_path('create_lecture') }}" class="grid-form">
           <label>
             <span>Lecture ID</span>
             <input type="text" name="lecture_id" placeholder="lecture_04" required />
@@ -48,7 +48,7 @@
         {% if lectures %}
         <div class="folder-list">
           {% for lecture in lectures %}
-          <a class="folder-row" href="/lectures/{{ lecture.lecture_id }}">
+          <a class="folder-row" href="{{ url_path('lecture_detail', lecture_id=lecture.lecture_id) }}">
             <div>
               <strong>{{ lecture.lecture_id }}</strong>
               <p>{{ lecture.title }}</p>

@@ -1,4 +1,13 @@
 let sessionId = null;
+const appRoutes = window.APP_ROUTES || {};
+
+function appRoute(name) {
+  const url = appRoutes[name];
+  if (!url) {
+    throw new Error("Missing app route: " + name);
+  }
+  return url;
+}
 
 function renderMath(el) {
   if (typeof renderMathInElement !== "undefined") {
@@ -17,7 +26,7 @@ const studentIdInput = document.getElementById("studentId");
 const lectureIdInput = document.getElementById("lectureId");
 
 // Populate lecture dropdown on load
-fetch("/lectures")
+fetch(appRoute("list_lectures"))
   .then(r => r.json())
   .then(lectures => {
     lectures.forEach(id => {
@@ -124,7 +133,7 @@ async function startSession() {
   }
 
   try {
-    const res = await fetch("/start_session", {
+    const res = await fetch(appRoute("start_session"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ student_id, lecture_id }),
@@ -173,7 +182,7 @@ async function sendMessage() {
   const thinkingRow = appendThinking();
 
   try {
-    const res = await fetch("/send_message", {
+    const res = await fetch(appRoute("send_message"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId, message }),
@@ -218,7 +227,7 @@ async function getGrade() {
   const thinkingRow = appendThinking();
 
   try {
-    const res = await fetch("/get_grade", {
+    const res = await fetch(appRoute("get_grade"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId }),
@@ -343,7 +352,7 @@ async function generateReport() {
   const thinkingRow = appendThinking();
 
   try {
-    const res = await fetch("/generate_report", {
+    const res = await fetch(appRoute("generate_report"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId }),
@@ -427,7 +436,7 @@ async function restartSession() {
   if (!sessionId) { showError("No active session to restart."); return; }
 
   try {
-    const res = await fetch("/restart_session", {
+    const res = await fetch(appRoute("restart_session"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

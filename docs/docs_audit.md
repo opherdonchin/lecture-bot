@@ -2,6 +2,8 @@
 
 Date: 2026-04-20
 
+Update: the path-prefix blocker identified in this audit has since been addressed. See `docs/path_prefix_change_note.md` for the current `/bot`, `/bot-admin`, `/stats`, and `/stats-admin` behavior.
+
 ## Scope
 
 This audit checked the current repository against the operational claims in the docs, focusing on:
@@ -11,7 +13,7 @@ This audit checked the current repository against the operational claims in the 
 - admin UI behavior
 - production launch commands
 - Ubuntu deployment assumptions
-- intended `/stats` and `/stats/stats-admin` paths
+- intended `/stats` and `/stats-admin` paths
 - runtime files and private material
 - tests and lecture-package flow
 
@@ -55,14 +57,14 @@ Older docs mentioned Fedora as the deployment server. The target is now clean Ub
 
 ### `/stats` support was unclear
 
-The code currently assumes root-relative URLs:
+At the time of this audit, the code assumed root-relative URLs:
 
 - `app/templates/chat.html` links `/static/style.css` and `/static/chat.js`
 - `app/static/chat.js` fetches root paths such as `/lectures` and `/send_message`
 - admin templates use root-relative links/forms such as `/lectures`
 - the admin app is not mounted under the student app
 
-The docs now explicitly state that the intended `/stats` and `/stats/stats-admin` deployment is blocked by code changes, not merely by missing Nginx configuration.
+That blocker has since been fixed with prefix-aware URL generation and configurable root-path settings.
 
 ### Tests were not described precisely
 

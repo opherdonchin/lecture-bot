@@ -16,30 +16,52 @@ import app.models as models
 import app.schema as schema
 import app.session_manager as session_manager
 
-app = fa.FastAPI(title="Lecture Bot")
+app = fa.FastAPI(title="Lecture Bot", root_path=config_module.get_settings().student_root_path)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 
-@app.get("/favicon.ico", include_in_schema=False)
+def _url_path(request: fa.Request, route_name: str, **path_params: str) -> str:
+    return request.url_for(route_name, **path_params).path
+
+
+def _student_route_config(request: fa.Request) -> dict[str, str]:
+    return {
+        "list_lectures": _url_path(request, "list_lectures"),
+        "start_session": _url_path(request, "start_session"),
+        "send_message": _url_path(request, "send_message"),
+        "get_grade": _url_path(request, "get_grade"),
+        "generate_report": _url_path(request, "generate_report"),
+        "restart_session": _url_path(request, "restart_session"),
+    }
+
+
+@app.get("/favicon.ico", include_in_schema=False, name="favicon")
 async def favicon():
     return FileResponse("app/static/bot.svg")
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, name="student_root")
 def root(request: fa.Request):
     """Serve the chat UI."""
-    return templates.TemplateResponse(request, "chat.html")
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        {
+            "url_path": lambda route_name, **path_params: _url_path(request, route_name, **path_params),
+            "app_routes": _student_route_config(request),
+        },
+    )
 
 
-@app.get("/health")
+@app.get("/health", name="health")
 def health():
     """Health check endpoint."""
     return {"status": "ok"}
 
 
-@app.get("/lectures", response_model=list[str])
+@app.get("/lectures", response_model=list[str], name="list_lectures")
 def list_lectures():
     """List available lecture IDs."""
     lectures_dir = config_module.get_settings().lectures_dir
@@ -52,7 +74,7 @@ def list_lectures():
 
 
 # API endpoints
-@app.post("/start_session", response_model=schema.StartSessionResponse)
+@app.post("/start_session", response_model=schema.StartSessionResponse, name="start_session")
 def start_session(request: schema.StartSessionRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
     """Start a new tutoring session."""
     settings = config_module.get_settings()
@@ -80,7 +102,7 @@ def start_session(request: schema.StartSessionRequest, db: sqlalchemy_orm.Sessio
     return schema.StartSessionResponse(session_id=session.session_id, message=opening_message)
 
 
-@app.post("/send_message", response_model=schema.SendMessageResponse)
+@app.post("/send_message", response_model=schema.SendMessageResponse, name="send_message")
 def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
     """Send a message in an active session."""
     session = db.query(models.SessionModel).filter(models.SessionModel.session_id == request.session_id).first()
@@ -649,7 +671,7 @@ def _build_timeout_closing_message(settings: config_module.Settings, final_grade
     )
 
 
-@app.post("/get_grade", response_model=schema.GradeResponse)
+@app.post("/get_grade", response_model=schema.GradeResponse, name="get_grade")
 def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
     """Compute and return the current grade using real LLM grading."""
     session = _get_active_session(db, request.session_id)
@@ -681,7 +703,7 @@ def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.
     )
 
 
-@app.post("/generate_report", response_model=schema.ReportResponse)
+@app.post("/generate_report", response_model=schema.ReportResponse, name="generate_report")
 def generate_report(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
     """Generate a final session report using real LLM grading and report generation."""
     session = _get_active_session(db, request.session_id)
@@ -701,7 +723,7 @@ def generate_report(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session
     return report_response
 
 
-@app.post("/restart_session", response_model=schema.StartSessionResponse)
+@app.post("/restart_session", response_model=schema.StartSessionResponse, name="restart_session")
 def restart_session(request: schema.RestartSessionRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
     """End the current session and create a fresh one for the same student/lecture."""
     old_session = _get_active_session(db, request.session_id)

@@ -116,13 +116,14 @@ Current target:
 * Ubuntu 24.04 LTS server
 * systemd + Uvicorn + Nginx
 * SQLite database
-* public student path intended as `/stats`
-* admin path intended as `/stats/stats-admin`
+* repo-default student path `/bot`
+* repo-default admin path `/bot-admin`
+* production student path intended as `/stats`
+* production admin path intended as `/stats-admin`
 
-Important current limitation:
+Important deployment note:
 
-* The app still assumes root-relative URLs in templates and frontend JavaScript.
-* A clean `/stats` deployment needs prefix-aware URL changes before it can be considered supported.
+* Prefix-aware URLs are supported through `LECTURE_BOT_STUDENT_ROOT_PATH`, `LECTURE_BOT_ADMIN_ROOT_PATH`, and matching Uvicorn `--root-path` values.
 
 ---
 

@@ -8,6 +8,8 @@ import pydantic_settings as ps
 class Settings(ps.BaseSettings):
     app_name: str = "lecture-bot"
     app_env: str = "dev"
+    student_root_path: str = pd.Field(default="/bot", validation_alias="LECTURE_BOT_STUDENT_ROOT_PATH")
+    admin_root_path: str = pd.Field(default="/bot-admin", validation_alias="LECTURE_BOT_ADMIN_ROOT_PATH")
     database_url: str = pd.Field(default="sqlite:///data/lecture_bot.db")
     lectures_dir: pathlib_.Path = pd.Field(default=pathlib_.Path("lectures"))
     session_timeout_minutes: int = 20
@@ -21,6 +23,16 @@ class Settings(ps.BaseSettings):
     max_grading_context_chars: int = 70000
     sampled_topic_count: int = 5
     opening_topic_choice_count: int = 3
+
+    @pd.field_validator("student_root_path", "admin_root_path")
+    @classmethod
+    def normalize_root_path(cls, value: str) -> str:
+        root_path = value.strip()
+        if root_path in ("", "/"):
+            return ""
+        if not root_path.startswith("/"):
+            root_path = f"/{root_path}"
+        return root_path.rstrip("/")
 
     model_config = ps.SettingsConfigDict(
         env_file=".env",

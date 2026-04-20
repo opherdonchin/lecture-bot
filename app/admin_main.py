@@ -12,7 +12,7 @@ import app.admin_workflow as workflow
 import app.config as config_module
 
 
-app = fa.FastAPI(title="Lecture Bot Admin")
+app = fa.FastAPI(title="Lecture Bot Admin", root_path=config_module.get_settings().admin_root_path)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 security = HTTPBasic()
@@ -37,6 +37,17 @@ def _lectures_dir() -> pathlib.Path:
     return lectures_dir
 
 
+def _url_path(request: fa.Request, route_name: str, **path_params: str) -> str:
+    return request.url_for(route_name, **path_params).path
+
+
+def _template_context(request: fa.Request, values: dict):
+    return {
+        **values,
+        "url_path": lambda route_name, **path_params: _url_path(request, route_name, **path_params),
+    }
+
+
 def _render_index(request: fa.Request, notice: str | None = None, error: str | None = None):
     lectures_dir = _lectures_dir()
     lecture_rows = []
@@ -54,11 +65,14 @@ def _render_index(request: fa.Request, notice: str | None = None, error: str | N
     return templates.TemplateResponse(
         request,
         "admin_index.html",
-        {
-            "notice": notice,
-            "error": error,
-            "lectures": lecture_rows,
-        },
+        _template_context(
+            request,
+            {
+                "notice": notice,
+                "error": error,
+                "lectures": lecture_rows,
+            },
+        ),
     )
 
 
@@ -77,37 +91,40 @@ def _render_lecture(
     return templates.TemplateResponse(
         request,
         "admin_lecture.html",
-        {
-            "lecture_id": lecture_id,
-            "lecture_dir": lecture_dir,
-            "config": config,
-            "files": files,
-            "summary": summary,
-            "notice": notice,
-            "error": error,
-            "build_log": build_log or [],
-            "source_keys": workflow.SOURCE_KEYS,
-            "display_labels": workflow.DISPLAY_LABELS,
-            "target_by_key": workflow.TARGET_BY_KEY,
-            "bundle_stage_files": {
-                "minutes": workflow.required_bundle_files("minutes"),
-                "rubric": workflow.required_bundle_files("rubric"),
+        _template_context(
+            request,
+            {
+                "lecture_id": lecture_id,
+                "lecture_dir": lecture_dir,
+                "config": config,
+                "files": files,
+                "summary": summary,
+                "notice": notice,
+                "error": error,
+                "build_log": build_log or [],
+                "source_keys": workflow.SOURCE_KEYS,
+                "display_labels": workflow.DISPLAY_LABELS,
+                "target_by_key": workflow.TARGET_BY_KEY,
+                "bundle_stage_files": {
+                    "minutes": workflow.required_bundle_files("minutes"),
+                    "rubric": workflow.required_bundle_files("rubric"),
+                },
             },
-        },
+        ),
     )
 
 
-@app.get("/", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+@app.get("/", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_root")
 def admin_root(request: fa.Request):
     return _render_index(request)
 
 
-@app.get("/lectures", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+@app.get("/lectures", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_lectures")
 def admin_lectures(request: fa.Request):
     return _render_index(request)
 
 
-@app.post("/lectures", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+@app.post("/lectures", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="create_lecture")
 async def create_lecture(
     request: fa.Request,
     lecture_id: str = fa.Form(...),
@@ -121,12 +138,12 @@ async def create_lecture(
     return _render_lecture(request, lecture_dir.name, notice="Lecture folder created.")
 
 
-@app.get("/lectures/{lecture_id}", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+@app.get("/lectures/{lecture_id}", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="lecture_detail")
 def lecture_detail(request: fa.Request, lecture_id: str):
     return _render_lecture(request, lecture_id)
 
 
-@app.post("/lectures/{lecture_id}/metadata", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+@app.post("/lectures/{lecture_id}/metadata", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="update_lecture_metadata")
 async def update_lecture_metadata(
     request: fa.Request,
     lecture_id: str,
@@ -141,7 +158,7 @@ async def update_lecture_metadata(
     return _render_lecture(request, lecture_id, notice="Lecture metadata updated.")
 
 
-@app.post("/lectures/{lecture_id}/sources", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+@app.post("/lectures/{lecture_id}/sources", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="update_sources")
 async def update_sources(
     request: fa.Request,
     lecture_id: str,
@@ -165,7 +182,7 @@ async def update_sources(
     return _render_lecture(request, lecture_id, notice="Selected source files updated.")
 
 
-@app.post("/lectures/{lecture_id}/upload", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+@app.post("/lectures/{lecture_id}/upload", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_file")
 async def upload_file(
     request: fa.Request,
     lecture_id: str,
@@ -179,7 +196,7 @@ async def upload_file(
     return _render_lecture(request, lecture_id, notice=f"Uploaded {destination.name}.")
 
 
-@app.post("/lectures/{lecture_id}/delete", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+@app.post("/lectures/{lecture_id}/delete", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="delete_file")
 async def delete_file(
     request: fa.Request,
     lecture_id: str,
@@ -205,7 +222,7 @@ async def delete_file(
     return _render_lecture(request, lecture_id, notice=f"Deleted {filename}.")
 
 
-@app.post("/lectures/{lecture_id}/build/local", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+@app.post("/lectures/{lecture_id}/build/local", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="build_local")
 async def build_local(
     request: fa.Request,
     lecture_id: str,
@@ -225,7 +242,7 @@ async def build_local(
     )
 
 
-@app.get("/lectures/{lecture_id}/prompt/{stage}.txt", dependencies=[fa.Depends(require_admin)])
+@app.get("/lectures/{lecture_id}/prompt/{stage}.txt", dependencies=[fa.Depends(require_admin)], name="download_prompt")
 def download_prompt(lecture_id: str, stage: str):
     prompt_text = workflow.build_manual_prompt(stage)
     filename = f"{lecture_id}_{stage}_prompt.txt"
@@ -236,7 +253,7 @@ def download_prompt(lecture_id: str, stage: str):
     )
 
 
-@app.get("/lectures/{lecture_id}/bundle/{stage}.zip", dependencies=[fa.Depends(require_admin)])
+@app.get("/lectures/{lecture_id}/bundle/{stage}.zip", dependencies=[fa.Depends(require_admin)], name="download_bundle")
 def download_bundle(lecture_id: str, stage: str):
     lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
     bundle = workflow.build_bundle_bytes(lecture_dir, stage)
@@ -248,7 +265,7 @@ def download_bundle(lecture_id: str, stage: str):
     )
 
 
-@app.get("/lectures/{lecture_id}/files/{filename}", dependencies=[fa.Depends(require_admin)])
+@app.get("/lectures/{lecture_id}/files/{filename}", dependencies=[fa.Depends(require_admin)], name="download_lecture_file")
 def download_lecture_file(lecture_id: str, filename: str):
     lecture_dir = workflow.resolve_lecture_dir(_lectures_dir(), lecture_id)
     target = (lecture_dir / filename).resolve()
@@ -257,7 +274,7 @@ def download_lecture_file(lecture_id: str, filename: str):
     return FileResponse(target)
 
 
-@app.post("/lectures/{lecture_id}/generated/{kind}", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)])
+@app.post("/lectures/{lecture_id}/generated/{kind}", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_generated_artifact")
 async def upload_generated_artifact(
     request: fa.Request,
     lecture_id: str,
