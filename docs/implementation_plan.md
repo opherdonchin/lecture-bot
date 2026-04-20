@@ -1,5 +1,7 @@
 # LLM Integration Plan v2
 
+Status note, 2026-04-20: this is now a historical implementation plan, not the current operational status. The OpenAI-backed dialogue/report path and backend-owned weighted grade behavior described here have largely been implemented. Current commands, routes, environment variables, admin behavior, and deployment caveats are documented in `README.md` and `docs/deployment_ubuntu.md`.
+
 ## 1. Goal
 
 Replace the current stub behavior with real OpenAI-backed behavior for:
@@ -199,7 +201,7 @@ The session state is not the source of truth for final grading. It is a running 
 
 ## 7. Model choice and configuration
 
-Add to `app/config.py`:
+Historical plan target:
 
 ```python
 openai_model: str = "gpt-4.1-mini"
@@ -209,7 +211,7 @@ max_grading_context_chars: int = 180000
 sampled_topic_count: int = 5
 ```
 
-The model should be configurable through settings, but there should still be a concrete default in code.
+Current implementation note: `app/config.py` now defaults to `openai_model="gpt-5.4-mini"`, `max_dialogue_context_chars=45000`, and `max_grading_context_chars=70000`. The model remains configurable through environment variables.
 
 ---
 

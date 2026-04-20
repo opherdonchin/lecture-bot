@@ -14,7 +14,7 @@ All implementation should follow this specification.
 - SQLite for v1 persistence
 - Pixi for environment and task management
 - Uvicorn as the ASGI server
-- Nginx + systemd for deployment on the Fedora server
+- Nginx + systemd for deployment; current target is Ubuntu 24.04 LTS
 
 ### API style
 - Use a simple RPC-style API for v1.
@@ -55,13 +55,18 @@ All implementation should follow this specification.
 - Grade/report requests may be logged as grade events.
 
 ### Lecture package conventions
-Each lecture package should ultimately contain:
+Each runtime lecture package must contain:
 - `lecture_config.json`
 - `rubric.md`
 - `slides.md`
 - `handout.md`
-- `notebook.md`
+- `minutes.json`
 - optional `bot_notes.md`
+
+The build/admin pipeline may also produce or use:
+- `notebook.md`
+- `transcript.md`
+- raw source files such as `.pptx`, `.qmd`, `.ipynb`, `.vtt`, and sometimes `.pdf`
 
 Source files such as `.pptx`, `.qmd`, and `.ipynb` may also be present.  
 The app reads only processed markdown/text outputs.
@@ -71,6 +76,14 @@ The app reads only processed markdown/text outputs.
 - Conversion/build logic lives in `scripts/`.
 - A master build script should generate processed lecture files from raw sources.
 - v1 conversion is text-only and does not attempt figure understanding.
+
+### Deployment conventions
+
+- The current student app entrypoint is `app.main:app`.
+- The current admin app entrypoint is `app.admin_main:app`.
+- Current launch is direct Uvicorn, for example `pixi run uvicorn app.main:app --host 127.0.0.1 --port 8000`.
+- The intended public paths are `/stats` for students and `/stats/stats-admin` for admin.
+- Current code still uses root-relative frontend URLs and does not cleanly support those path prefixes without code changes.
 
 ### Repository conventions
 - Repository code/spec may remain public.
@@ -168,7 +181,7 @@ Returns:
 }
 ```
 
-Uses dedicated grading prompt.
+Uses backend-owned best mastery state and Python weighted grade computation. The older dedicated grading-prompt path remains in `app/bot_engine.py` but is not used by the current `/get_grade` endpoint.
 
 ---
 
@@ -188,7 +201,7 @@ Returns:
 }
 ```
 
-Uses dedicated grading/report prompt.
+Uses the same authoritative backend grade snapshot, then asks the report-generation path to write report text. If the OpenAI report call fails, the backend returns a local fallback report.
 
 ---
 
@@ -296,7 +309,8 @@ Responsibilities:
 
 ## 7. Constraints
 
-* No authentication
+* Student app: no authentication
+* Admin app: HTTP Basic Auth configured by `ADMIN_USERNAME` and `ADMIN_PASSWORD`
 * No tokens
 * No resume
 * Text-only
@@ -304,10 +318,24 @@ Responsibilities:
 
 ---
 
-## 8. Extensions (future)
+## 8. Current Admin UI
+
+The repository includes a separate admin FastAPI app in `app/admin_main.py`.
+
+Current admin capabilities:
+
+* list, create, and reopen lecture folders under `LECTURES_DIR`
+* upload and delete files in a lecture folder
+* select source files for slides, handout, notebook, and transcript
+* run local conversion to `slides.md`, `handout.md`, `notebook.md`, and `transcript.md`
+* download manual prompt text and support bundles for minutes/rubric generation
+* upload `minutes.json` and `rubric.md`
+* refresh `topics` in `lecture_config.json` from uploaded rubric headings
+
+## 9. Extensions (future)
 
 * Token system
-* Admin UI
+* Path-prefix-aware deployment under `/stats`
 * Multi-lecture routing
 * Figure handling
 * REST API

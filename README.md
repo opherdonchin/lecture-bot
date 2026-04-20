@@ -1,15 +1,26 @@
 # lecture-bot
 
-A conversational tutoring bot for university lectures. Students start a session for a given lecture, chat with the bot about the material, and receive a grade based on demonstrated understanding.
+A lecture-specific tutoring bot for university courses. Students choose a lecture, start a short chat session, discuss the lecture material with an OpenAI-backed tutor, and can request a current grade or final report.
+
+## Current Behavior
+
+- Student-facing FastAPI app in `app/main.py`.
+- Browser chat UI in `app/templates/chat.html` and `app/static/chat.js`.
+- OpenAI-backed tutoring turns in `app/bot_engine.py`.
+- Backend-owned session state, weighted grade computation, grade events, and dialogue-turn audit rows stored through SQLAlchemy.
+- Current-grade and final-report endpoints compute from the best demonstrated topic mastery stored in backend state. Final report text is OpenAI-backed with a local fallback.
+- Separate admin FastAPI app in `app/admin_main.py` for lecture setup and upload workflow.
 
 ## Stack
 
-- Python 3.12, FastAPI, SQLAlchemy, SQLite
+- Python 3.12, FastAPI, Uvicorn, SQLAlchemy, SQLite
 - Pixi for environment and task management
-- Vanilla JS + Jinja2 for the browser UI
-- OpenAI for bot responses and grading (integration pending)
+- Vanilla JavaScript and Jinja2 templates
+- OpenAI Python SDK for tutoring replies, report text, and optional lecture-artifact generation
 
 ## Quickstart
+
+Run commands from the repository root so `.env`, `lectures/`, `data/`, `app/`, and `prompts/` resolve as expected.
 
 ```bash
 pixi install
@@ -17,104 +28,203 @@ pixi run init-db
 pixi run dev
 ```
 
-Then open http://127.0.0.1:8000/.
+Then open <http://127.0.0.1:8000/>.
 
-## Tasks
+For real tutoring behavior, set `OPENAI_API_KEY` in `.env` or the process environment. Without a valid key, dialogue and report generation use fallback paths and lecture-artifact generation fails.
+
+## Commands
 
 | Command | Purpose |
 |---|---|
-| `pixi run dev` | Start dev server with auto-reload |
-| `pixi run admin-dev` | Start the admin lecture-setup app on port 8001 |
-| `pixi run admin-stop` | Stop the admin lecture-setup app |
-| `pixi run test` | Run test suite |
-| `pixi run init-db` | Initialise SQLite database |
-| `pixi run build-lecture -- <lecture_id> --force` | Build lecture markdown, minutes, and rubric artifacts |
+| `pixi run dev` | Start the student app with auto-reload on `0.0.0.0:8000`. |
+| `pixi run admin-dev` | Start the separate admin app with auto-reload on `0.0.0.0:8001`. |
+| `pixi run stop` | Stop a process listening on port `8000`. |
+| `pixi run admin-stop` | Stop a process listening on port `8001`. |
+| `pixi run test` | Run the pytest suite. |
+| `pixi run init-db` | Create the configured database tables. |
+| `pixi run python scripts/build_lecture_package.py <lecture_id> --force` | Build or rebuild a lecture package from source files. |
+| `pixi run python scripts/grade_moodle.py ...` | Run the Moodle grading helper script. |
 
-## Project structure
+There is currently no named Pixi production task. The current production launch command is a direct Uvicorn invocation, for example:
 
-```
-app/          FastAPI application (main.py, models, session manager, bot engine)
-app/static/   Frontend JS and CSS
-app/templates/ Jinja2 HTML templates
-prompts/      Prompt templates loaded at runtime
-lectures/     Lecture packages (config, rubric, slides, handout, notebook)
-scripts/      DB init and lecture build/conversion utilities
-tests/        Pytest test suite
-docs/         Implementation spec and project plan
-data/         Runtime SQLite database (not committed)
+```bash
+pixi run uvicorn app.main:app --host 127.0.0.1 --port 8000
+pixi run uvicorn app.admin_main:app --host 127.0.0.1 --port 8001
 ```
 
-## API
+Use the admin process only when the admin UI is needed. See [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) for Ubuntu, systemd, Nginx, and `/stats` notes.
+
+## Student Routes
+
+The student app is defined in `app/main.py`.
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/` | GET | Chat UI |
-| `/health` | GET | Health check |
-| `/start_session` | POST | Start a new tutoring session |
-| `/send_message` | POST | Send a chat message |
-| `/get_grade` | POST | Get current grade estimate |
-| `/generate_report` | POST | Generate final session report |
-| `/restart_session` | POST | End current session and start a new one |
-
-## Status
-
-- [x] Session management and persistence
-- [x] Chat UI in browser
-- [x] Bot stub (echo responses)
-- [ ] OpenAI integration
-- [ ] Grading logic
-
-## Lecture Build Pipeline
-
-`lecture_config.json` is the pipeline manifest for each lecture. The `files` map can now describe:
-
-- converted sources: `slides`, `handout`, `notebook`, `transcript`
-- generated artifacts: `minutes`, `rubric`
-
-Example:
-
-```json
-{
-  "files": {
-    "slides": { "source": "Lecture 3.pptx", "target": "slides.md" },
-    "handout": { "source": "Lecture 3 handout.qmd", "target": "handout.md" },
-    "notebook": { "source": "Lecture03.ipynb", "target": "notebook.md" },
-    "transcript": { "source": "Lecture03.vtt", "target": "transcript.md" },
-    "minutes": { "target": "minutes.json" },
-    "rubric": { "target": "rubric.md" }
-  }
-}
-```
-
-Running `pixi run build-lecture -- lecture_03 --force` will:
-
-- convert the source files to markdown
-- convert the WebVTT transcript into a cleaner markdown transcript
-- generate `minutes.json` from slides, handout, notebook, and transcript
-- generate `rubric.md` from slides, handout, notebook, and minutes
-- refresh `topics` inside `lecture_config.json` from the resulting rubric
+| `/` | GET | Chat UI. |
+| `/favicon.ico` | GET | Bot SVG favicon. |
+| `/static/...` | GET | CSS, JavaScript, and SVG assets. |
+| `/health` | GET | Health check. |
+| `/lectures` | GET | List lecture IDs found under `LECTURES_DIR` with `lecture_config.json`. |
+| `/start_session` | POST | Start a tutoring session for `student_id` and `lecture_id`. |
+| `/send_message` | POST | Send a chat turn, call the tutor model, update state, and persist messages/audit rows. |
+| `/get_grade` | POST | Return current backend-computed grade, topic coverage labels, and timing fields. |
+| `/generate_report` | POST | Generate final report text from the authoritative grade snapshot. |
+| `/restart_session` | POST | End an existing session and create a new one for the same student/lecture. |
 
 ## Admin App
 
-The repo also includes a separate lecture-admin app for manual lecture setup. It is intended to be started only when needed:
+The admin app is separate from the student app and is defined in `app/admin_main.py`.
 
-```bash
-pixi run admin-dev
-```
-
-Set admin credentials in `.env`:
+It requires HTTP Basic Auth. Configure credentials with:
 
 ```env
-ADMIN_USERNAME=your_name
-ADMIN_PASSWORD=your_password
+ADMIN_USERNAME=
+ADMIN_PASSWORD=
 ```
 
-The admin app lets you:
+If either value is missing, admin requests return HTTP 500. Wrong credentials return HTTP 401.
 
-- create or reopen lecture folders
-- upload and delete files inside a lecture folder
-- choose which files are the selected source files
-- build the local markdown artifacts
-- download the exact prompt text and support bundle for the manual ChatGPT steps
-- upload `minutes.json` and `rubric.md` back into the correct lecture folder
-- refresh `topics` in `lecture_config.json` from the uploaded rubric
+Admin routes include:
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/` | GET | Admin index. |
+| `/lectures` | GET/POST | List lecture folders or create a lecture folder. |
+| `/lectures/{lecture_id}` | GET | Lecture setup page. |
+| `/lectures/{lecture_id}/metadata` | POST | Update title, course, and active flag. |
+| `/lectures/{lecture_id}/sources` | POST | Select source files for slides, handout, notebook, and transcript. |
+| `/lectures/{lecture_id}/upload` | POST | Upload a file into the lecture folder. |
+| `/lectures/{lecture_id}/delete` | POST | Delete a non-config file from the lecture folder. |
+| `/lectures/{lecture_id}/build/local` | POST | Convert selected local sources to markdown/text artifacts. |
+| `/lectures/{lecture_id}/prompt/{stage}.txt` | GET | Download manual prompt text for `minutes` or `rubric`. |
+| `/lectures/{lecture_id}/bundle/{stage}.zip` | GET | Download support files for manual artifact generation. |
+| `/lectures/{lecture_id}/generated/{kind}` | POST | Upload generated `minutes.json` or `rubric.md`; rubric upload refreshes `topics`. |
+
+Admin uploads write directly under the configured `LECTURES_DIR`. With the default configuration, that means repo-relative `lectures/<lecture_id>/`.
+
+## Environment Variables
+
+Settings are loaded by `pydantic-settings` from real environment variables and from `.env` in the current working directory. In normal use, run from the repository root and keep `.env` there.
+
+| Variable | Required? | Purpose |
+|---|---:|---|
+| `OPENAI_API_KEY` | Required for real tutor/report calls and generated lecture artifacts | API key used by the OpenAI SDK. |
+| `OPENAI_MODEL` | No | Model name. Defaults to `gpt-5.4-mini`. |
+| `DATABASE_URL` | No | SQLAlchemy URL. Defaults to `sqlite:///data/lecture_bot.db`. |
+| `LECTURES_DIR` | No | Directory for lecture packages. Defaults to `lectures`. |
+| `ADMIN_USERNAME` | Required for admin app | HTTP Basic Auth username. |
+| `ADMIN_PASSWORD` | Required for admin app | HTTP Basic Auth password. |
+| `SESSION_TIMEOUT_MINUTES` | No | Session duration. Defaults to `20`. |
+| `SESSION_WARNING_MINUTES` | No | Final-window timing threshold. Defaults to `5`. |
+| `RECENT_MESSAGE_LIMIT` | No | Number of recent messages sent to the tutor model. Defaults to `10`. |
+| `MAX_DIALOGUE_CONTEXT_CHARS` | No | Context character cap for dialogue prompts. Defaults to `45000`. |
+| `MAX_GRADING_CONTEXT_CHARS` | No | Context character cap for grading/report context. Defaults to `70000`. |
+| `SAMPLED_TOPIC_COUNT` | No | Number of sampled focus topics per session. Defaults to `5`. |
+| `OPENING_TOPIC_CHOICE_COUNT` | No | Number of sampled topics shown in the opening prompt. Defaults to `3`. |
+| `APP_NAME`, `APP_ENV` | No | Metadata/environment labels; not used for routing. |
+
+Do not commit `.env` or secret values.
+
+## Lecture Packages
+
+`LECTURES_DIR` contains a root `config.json` plus one directory per lecture. The public repository currently tracks only `lectures/config.json` and `lectures/.gitkeep`; actual lecture packages are private runtime material and must be copied in after cloning.
+
+The default runtime context in `lectures/config.json` expects:
+
+- optional `bot_notes.md`
+- required `slides.md`
+- required `handout.md`
+- required `minutes.json`
+
+Each usable lecture directory also requires:
+
+- `lecture_config.json`
+- `rubric.md`
+
+The build/admin pipeline can additionally use raw source files:
+
+- slides: `.pptx`
+- handout: `.qmd`, `.md`, `.txt`, or `.pdf` in the admin app; `.qmd` in the script pipeline
+- notebook: `.ipynb`
+- transcript: `.vtt`
+
+Both flows are supported:
+
+- Copy a complete lecture package directly into `LECTURES_DIR`.
+- Use the admin UI to create a lecture folder, upload/select source files, build local markdown artifacts, download manual prompts/bundles, and upload generated `minutes.json` and `rubric.md`.
+
+The script pipeline can also generate `minutes.json` and `rubric.md` through OpenAI:
+
+```bash
+pixi run python scripts/build_lecture_package.py lecture_03 --force
+```
+
+That generated path requires `OPENAI_API_KEY`.
+
+## Runtime Files
+
+Default repo-relative runtime locations:
+
+| Path | Used For | Production note |
+|---|---|---|
+| `data/lecture_bot.db` | SQLite database | Keep private; mount or symlink to persistent storage. |
+| `lectures/` | Lecture packages and admin uploads | Private course material; mount or symlink to persistent storage. |
+| `exports/` | Session/investigation exports from scripts | Private; do not publish. |
+| `app.log`, `admin.log` | Legacy/dev log files used by local background runs | Avoid for production secrets; prefer journald or private `logs/`. |
+
+If `DATABASE_URL` points to a SQLite file outside `data/`, create its parent directory before running `pixi run init-db`.
+
+## Public / Private Split
+
+Safe for the public repo:
+
+- application code
+- prompts
+- docs
+- tests
+- `lectures/config.json`
+
+Keep private and copy after cloning `main`:
+
+- `.env` and API keys
+- admin credentials
+- SQLite databases
+- student rosters and Moodle exports
+- runtime logs and investigation/session exports
+- uploaded lecture source files
+- processed lecture packages if they include private course content
+
+## Path Prefix Status
+
+The intended public path is `/stats` and the intended admin path is `/stats/stats-admin`.
+
+Current code assumes it is served at the domain root:
+
+- `app/static/chat.js` calls absolute endpoints such as `/lectures`, `/start_session`, and `/send_message`.
+- templates use root-relative asset URLs such as `/static/style.css`.
+- admin templates use root-relative form actions and links such as `/lectures/...`.
+- the student and admin apps are separate FastAPI apps and the admin app is not mounted under the student app.
+
+Result: the app does not currently support a clean `/stats` prefix by itself. A proxy that strips `/stats` is not enough, because the HTML and JavaScript still send the browser to root-level `/static`, `/lectures`, and API paths. Deploying cleanly at `/stats` and `/stats/stats-admin` needs code changes to generate prefix-aware URLs and route the admin app under the intended prefix, or an awkward Nginx workaround that exposes root-level endpoint aliases.
+
+## Tests
+
+Run:
+
+```bash
+pixi run test
+```
+
+The tests use temporary SQLite databases and fixture lecture packages. They mock OpenAI calls for dialogue/report tests and do not prove that the configured API key, model name, account quota, or network path works.
+
+Current coverage includes:
+
+- root page and health endpoint
+- lecture loading and context-file requirements
+- session creation, restart, timeout behavior, message persistence, and audit rows
+- backend weighted grade computation and report response structure
+- OpenAI fallback behavior for failed dialogue/report calls
+- admin Basic Auth, lecture creation, source selection, local build, and generated-artifact upload
+- conversion/build helpers for `.pptx`, `.qmd`, `.ipynb`, `.vtt`, generated minutes, and generated rubric paths
+
+The tests do not currently verify deployment under `/stats`, Nginx behavior, systemd units, Moodle upload end-to-end behavior, or real OpenAI responses.

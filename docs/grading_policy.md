@@ -65,10 +65,9 @@ These weights are fixed by policy.
 | ---: | -----: | --------: | -------------- |
 | 1 | 0.55 | 55  | Strong foothold in one central lecture idea |
 | 2 | 0.25 | 80  | Meaningful early coverage across the lecture |
-| 3 | 0.12 | 92  | Solid grounding across the core lecture terrain |
-| 4 | 0.05 | 97  | Broad and competent coverage of the lecture |
-| 5 | 0.02 | 99  | Very broad coverage with only small gaps remaining |
-| 6 | 0.01 | 100 | Full lecture mastery for session purposes |
+| 3 | 0.13 | 93  | Solid grounding across the core lecture terrain |
+| 4 | 0.04 | 97  | Broad and competent coverage of the lecture |
+| 5 | 0.03 | 100 | Full lecture mastery for session purposes |
 
 Notes:
 
@@ -77,6 +76,7 @@ Notes:
 * **Max cumulative** = maximum cumulative grade available if the top *n* ranked topics had full mastery.
 * **Interpretation** = a readable lecture-wide description of what that cumulative ceiling means.
 * The weights apply to ranked topic mastery values, not to fixed topic identities.
+* The current backend implementation uses exactly these five slots: `[55, 25, 13, 4, 3]`.
 * Breadth and depth are graded simultaneously: improving any topic can affect the grade, depending on its current mastery and rank.
 * The interpretation column is descriptive. It does not add a separate grading rule.
 * These are internal anchors, not student-facing labels.
@@ -184,4 +184,3 @@ They **do** mean:
 - tutor-side mastery assessments should be interpretable against this ladder
 - Python-side grade computation should follow the fixed cross-topic weighting
 - later prompt or policy work should remain consistent with this grading geometry
-

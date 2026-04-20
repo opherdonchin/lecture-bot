@@ -95,25 +95,34 @@ Each lecture contains:
 * rubric.md
 * slides.md
 * handout.md
-* notebook.md
+* minutes.json
 * lecture_config.json
 * optional bot_notes.md
+* optional notebook.md and transcript.md for build/admin workflows
 
 Rules:
 
 * Markdown/text only
 * Figures ignored in v1
 * Full rubric passed to model
-* Full lecture content passed (concatenated)
+* Runtime lecture context is selected by `lectures/config.json`
 
 ---
 
 ## Infrastructure
 
-* Fedora 43 server
-* Access via VPN
-* systemd + uvicorn + Nginx
+Current target:
+
+* Ubuntu 24.04 LTS server
+* systemd + Uvicorn + Nginx
 * SQLite database
+* public student path intended as `/stats`
+* admin path intended as `/stats/stats-admin`
+
+Important current limitation:
+
+* The app still assumes root-relative URLs in templates and frontend JavaScript.
+* A clean `/stats` deployment needs prefix-aware URL changes before it can be considered supported.
 
 ---
 
