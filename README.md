@@ -57,7 +57,9 @@ pixi run serve
 pixi run admin-serve
 ```
 
-Use the admin process only when the admin UI is needed. The tasks read host, port, and root path from environment variables and pass the matching Uvicorn `--root-path` internally. See [docs/path_prefix_change_note.md](docs/path_prefix_change_note.md) for prefix configuration and [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) for Ubuntu, systemd, and Nginx notes.
+Use the admin process only when the admin UI is needed. The tasks read host, port, and root path from environment variables and pass the matching Uvicorn `--root-path` internally. Prefix configuration is summarized below in "Path Prefix Status"; see [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) for Ubuntu, systemd, and Nginx notes.
+
+For a map of the docs directory, see [docs/README.md](docs/README.md).
 
 ## Student Routes
 

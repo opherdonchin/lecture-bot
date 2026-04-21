@@ -10,7 +10,7 @@ User=lecturebot
 Group=lecturebot
 WorkingDirectory=/srv/lecture-bot
 Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=/etc/lecture-bot/stats.env
+EnvironmentFile=/srv/lecture-bot/.env
 ExecStart=/home/lecturebot/.pixi/bin/pixi run serve
 Restart=on-failure
 RestartSec=5
