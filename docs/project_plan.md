@@ -95,25 +95,35 @@ Each lecture contains:
 * rubric.md
 * slides.md
 * handout.md
-* notebook.md
+* minutes.json
 * lecture_config.json
 * optional bot_notes.md
+* optional notebook.md and transcript.md for build/admin workflows
 
 Rules:
 
 * Markdown/text only
 * Figures ignored in v1
 * Full rubric passed to model
-* Full lecture content passed (concatenated)
+* Runtime lecture context is selected by `lectures/config.json`
 
 ---
 
 ## Infrastructure
 
-* Fedora 43 server
-* Access via VPN
-* systemd + uvicorn + Nginx
+Current target:
+
+* Ubuntu 24.04 LTS server
+* systemd + Uvicorn + Nginx
 * SQLite database
+* repo-default student path `/bot`
+* repo-default admin path `/bot-admin`
+* production student path intended as `/stats`
+* production admin path intended as `/stats-admin`
+
+Important deployment note:
+
+* Prefix-aware URLs are supported through `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH`; production startup should use `pixi run serve` and `pixi run admin-serve` so Uvicorn receives matching `--root-path` values.
 
 ---
 

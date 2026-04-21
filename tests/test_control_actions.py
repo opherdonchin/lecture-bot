@@ -1,8 +1,9 @@
+import datetime as dt
 import json
 import unittest.mock as mock
 
-import pytest
-
+import app.bot_engine as bot_engine
+import app.config as config_module
 import app.db as db_module
 import app.models as models
 from app.main import app
@@ -40,6 +41,22 @@ def test_start_session_persists_opening_message(client):
         .all()
     )
     assert any(m.role == "assistant" for m in messages)
+
+
+def test_start_session_uses_sampled_topics_for_opening_message(client):
+    with mock.patch("app.bot_engine.build_opening_message", return_value="Opening.") as mock_opening:
+        response = client.post(
+            "/start_session",
+            json={"student_id": "student_001", "lecture_id": "lecture_01"},
+        )
+    assert response.status_code == 200, response.text
+    session_id = response.json()["session_id"]
+    db = next(app.dependency_overrides[db_module.get_db]())
+    row = db.query(models.SessionStateModel).filter(
+        models.SessionStateModel.session_id == session_id
+    ).first()
+    state = json.loads(row.state_json)
+    assert mock_opening.call_args.kwargs["sampled_topic_ids"] == state["topics_sampled"]
 
 
 def test_start_session_persists_state(client):
@@ -152,13 +169,17 @@ def test_restart_session_invalid_old_session(client):
 
 def test_get_grade_returns_grade_structure(client):
     session_id = start_session(client)
-    with _mock_topic_scores([80]):
-        response = client.post("/get_grade", json={"session_id": session_id})
+    _set_mastery_state(session_id, best_scores=[80])
+    response = client.post("/get_grade", json={"session_id": session_id})
     assert response.status_code == 200, response.text
     data = response.json()
     assert "grade" in data
     assert "explanation" in data
+    assert "scored_topics" in data
     assert "missing_topics" in data
+    assert "minutes_elapsed" in data
+    assert "minutes_remaining" in data
+    assert "session_duration_minutes" in data
 
 
 def test_get_grade_invalid_session(client):
@@ -166,22 +187,43 @@ def test_get_grade_invalid_session(client):
     assert response.status_code == 404
 
 
-def _mock_topic_scores(scores):
-    """Return a mock for bot_engine.generate_topic_scores."""
-    result = {
-        "topic_scores": [{"topic_id": f"T{i+1}", "score": s, "rationale": "ok"} for i, s in enumerate(scores)],
-        "explanation": "Mock grading.",
-        "missing_topics": [],
+def _set_mastery_state(session_id, *, best_scores=None, current_scores=None):
+    db = next(app.dependency_overrides[db_module.get_db]())
+    session = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    row = db.query(models.SessionStateModel).filter(
+        models.SessionStateModel.session_id == session_id
+    ).first()
+    state = json.loads(row.state_json)
+
+    best_scores = best_scores or []
+    current_scores = current_scores if current_scores is not None else best_scores
+
+    state["best_mastery"] = {
+        f"T{i+1}": score
+        for i, score in enumerate(best_scores)
     }
-    return mock.patch("app.bot_engine.generate_topic_scores", return_value=result)
+    state["mastery"] = {
+        f"T{i+1}": score
+        for i, score in enumerate(current_scores)
+    }
+    state["topics_covered"] = [f"T{i+1}" for i, score in enumerate(current_scores) if score > 0]
+    state["current_grade"] = float(bot_engine.compute_weighted_grade([
+        {"topic_id": f"T{i+1}", "score": score}
+        for i, score in enumerate(best_scores)
+        if score > 0
+    ]))
+    row.state_json = json.dumps(state)
+    session.current_grade = state["current_grade"]
+    db.commit()
 
 
 def test_get_grade_python_owns_weighting(client):
     """Weighted grade is computed in Python, not returned by the model."""
     session_id = start_session(client)
-    # 2 topics scored at 100 each → 55+25 = 80
-    with _mock_topic_scores([100, 100]):
-        response = client.post("/get_grade", json={"session_id": session_id})
+    _set_mastery_state(session_id, best_scores=[100, 100])
+    response = client.post("/get_grade", json={"session_id": session_id})
     assert response.status_code == 200
     assert response.json()["grade"] == 80.0
 
@@ -189,44 +231,60 @@ def test_get_grade_python_owns_weighting(client):
 def test_get_grade_zero_padding_fewer_than_5(client):
     """Fewer than 5 topics scored: remaining slots padded with zero."""
     session_id = start_session(client)
-    with _mock_topic_scores([100]):
-        response = client.post("/get_grade", json={"session_id": session_id})
+    _set_mastery_state(session_id, best_scores=[100])
+    response = client.post("/get_grade", json={"session_id": session_id})
     assert response.status_code == 200
     assert response.json()["grade"] == 55.0
 
 
-def test_get_grade_monotone_nondecreasing(client):
-    """current_grade only increases, never decreases."""
+def test_get_grade_returns_labelled_scored_topics(client):
     session_id = start_session(client)
-    # First call: score 80
-    with _mock_topic_scores([100, 100]):
-        r1 = client.post("/get_grade", json={"session_id": session_id})
-    assert r1.json()["grade"] == 80.0
-
-    # Second call with lower scores
-    with _mock_topic_scores([50]):
-        r2 = client.post("/get_grade", json={"session_id": session_id})
-    # Authoritative grade stays at 80
-    assert r2.json()["grade"] == 80.0
+    _set_mastery_state(session_id, best_scores=[100, 100])
+    response = client.post("/get_grade", json={"session_id": session_id})
+    assert response.status_code == 200
+    assert response.json()["scored_topics"] == [
+        "Topic 1",
+        "Topic 2",
+    ]
 
 
-def test_get_grade_updates_on_improvement(client):
-    """current_grade updates when candidate is higher."""
+def test_get_grade_deduplicates_repeated_topic_defs(client):
+    lectures_dir = config_module.get_settings().lectures_dir
+    config_path = lectures_dir / "lecture_01" / "lecture_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["topics"] = config["topics"] + config["topics"]
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
     session_id = start_session(client)
-    with _mock_topic_scores([50]):
-        r1 = client.post("/get_grade", json={"session_id": session_id})
-    assert r1.json()["grade"] == pytest.approx(27.0)  # 55*50/100=27.5 → floor=27
+    _set_mastery_state(session_id, best_scores=[100, 100])
+    response = client.post("/get_grade", json={"session_id": session_id})
 
-    with _mock_topic_scores([100]):
-        r2 = client.post("/get_grade", json={"session_id": session_id})
-    assert r2.json()["grade"] == 55.0
+    assert response.status_code == 200
+    assert response.json()["scored_topics"] == ["Topic 1", "Topic 2"]
+    assert response.json()["missing_topics"] == [f"Topic {i}" for i in range(3, 11)]
+
+
+def test_get_grade_uses_best_mastery_when_current_mastery_is_lower(client):
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[100, 100], current_scores=[20])
+    response = client.post("/get_grade", json={"session_id": session_id})
+    assert response.status_code == 200
+    assert response.json()["grade"] == 80.0
+
+
+def test_get_grade_banks_higher_current_mastery(client):
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[50], current_scores=[100])
+    response = client.post("/get_grade", json={"session_id": session_id})
+    assert response.status_code == 200
+    assert response.json()["grade"] == 55.0
 
 
 def test_get_grade_inserts_grade_event(client):
     """A grade event row is inserted on each grading call."""
     session_id = start_session(client)
-    with _mock_topic_scores([80]):
-        client.post("/get_grade", json={"session_id": session_id})
+    _set_mastery_state(session_id, best_scores=[80])
+    client.post("/get_grade", json={"session_id": session_id})
 
     db = next(app.dependency_overrides[db_module.get_db]())
     events = db.query(models.GradeEventModel).filter(
@@ -236,30 +294,13 @@ def test_get_grade_inserts_grade_event(client):
     assert len(events) >= 1
 
 
-def test_get_grade_accepted_payload_authoritative_after_lower_candidate(client):
-    """After a lower grade attempt, the explanation from the first (higher) accepted payload is returned."""
+def test_get_grade_does_not_call_generate_topic_scores(client):
     session_id = start_session(client)
-
-    high_scores = {
-        "topic_scores": [{"topic_id": "T1", "score": 100, "rationale": "strong"}],
-        "explanation": "High performance on T1.",
-        "missing_topics": [],
-    }
-    low_scores = {
-        "topic_scores": [],
-        "explanation": "Nothing demonstrated.",
-        "missing_topics": ["T1"],
-    }
-
-    with mock.patch("app.bot_engine.generate_topic_scores", return_value=high_scores):
-        client.post("/get_grade", json={"session_id": session_id})
-
-    with mock.patch("app.bot_engine.generate_topic_scores", return_value=low_scores):
-        r2 = client.post("/get_grade", json={"session_id": session_id})
-
-    data = r2.json()
-    assert data["grade"] == 55.0
-    assert "High performance" in data["explanation"]
+    _set_mastery_state(session_id, best_scores=[100])
+    with mock.patch("app.bot_engine.generate_topic_scores", side_effect=AssertionError("should not be called")):
+        response = client.post("/get_grade", json={"session_id": session_id})
+    assert response.status_code == 200
+    assert response.json()["grade"] == 55.0
 
 
 # ---------------------------------------------------------------------------
@@ -277,12 +318,52 @@ def _mock_openai_report(report_text="Generated report."):
 
 def test_generate_report_returns_report_structure(client):
     session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[80])
     with _mock_openai_report():
         response = client.post("/generate_report", json={"session_id": session_id})
     assert response.status_code == 200, response.text
     data = response.json()
     assert "report_text" in data
     assert "report_json" in data
+    assert "minutes_elapsed" in data["report_json"]
+    assert "minutes_remaining" in data["report_json"]
+    assert "session_duration_minutes" in data["report_json"]
+
+
+def test_get_grade_returns_session_timing_fields(client):
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[80])
+    db = next(app.dependency_overrides[db_module.get_db]())
+    session_row = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=7)
+    db.commit()
+
+    response = client.post("/get_grade", json={"session_id": session_id})
+    data = response.json()
+    assert data["minutes_elapsed"] >= 7
+    assert data["minutes_remaining"] <= 13
+    assert data["session_duration_minutes"] == 20
+
+
+def test_generate_report_includes_session_timing_fields(client):
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[80])
+    db = next(app.dependency_overrides[db_module.get_db]())
+    session_row = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=9)
+    db.commit()
+
+    with _mock_openai_report():
+        response = client.post("/generate_report", json={"session_id": session_id})
+
+    data = response.json()
+    assert data["report_json"]["minutes_elapsed"] >= 9
+    assert data["report_json"]["minutes_remaining"] <= 11
+    assert data["report_json"]["session_duration_minutes"] == 20
 
 
 def test_generate_report_invalid_session(client):
@@ -290,67 +371,40 @@ def test_generate_report_invalid_session(client):
     assert response.status_code == 404
 
 
-def _mock_scores_for_report(topic_scores_list, explanation="Good work.", missing=None):
-    result = {
-        "topic_scores": [{"topic_id": f"T{i+1}", "score": s, "rationale": "ok"} for i, s in enumerate(topic_scores_list)],
-        "explanation": explanation,
-        "missing_topics": missing or [],
-    }
-    return mock.patch("app.bot_engine.generate_topic_scores", return_value=result)
-
-
 def test_generate_report_uses_authoritative_grade(client):
     """report_json.final_grade equals session.current_grade."""
     session_id = start_session(client)
-    with _mock_scores_for_report([100, 100]), _mock_openai_report():
+    _set_mastery_state(session_id, best_scores=[100, 100])
+    with _mock_openai_report():
         response = client.post("/generate_report", json={"session_id": session_id})
     assert response.status_code == 200
     data = response.json()
     assert data["report_json"]["final_grade"] == 80.0
 
 
-def test_generate_report_grade_monotone_nondecreasing(client):
-    """After a lower candidate, report still reflects accepted best grade."""
+def test_generate_report_uses_best_mastery_when_current_mastery_is_lower(client):
     session_id = start_session(client)
-    with _mock_topic_scores([100, 100]):
-        client.post("/get_grade", json={"session_id": session_id})
-
-    with _mock_scores_for_report([0]), _mock_openai_report():
+    _set_mastery_state(session_id, best_scores=[100, 100], current_scores=[0])
+    with _mock_openai_report():
         response = client.post("/generate_report", json={"session_id": session_id})
 
     data = response.json()
     assert data["report_json"]["final_grade"] == 80.0
 
 
-def test_generate_report_uses_prior_explanation_when_lower_candidate(client):
-    """When candidate is lower, report explanation comes from prior accepted payload."""
+def test_generate_report_passes_state_based_explanation(client):
     session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[100])
+    with mock.patch("app.bot_engine.generate_report") as mock_gen_report:
+        mock_gen_report.return_value = {
+            "report_text": "Report based on T1 understanding.",
+            "report_json": {},
+        }
+        response = client.post("/generate_report", json={"session_id": session_id})
 
-    first_grading = {
-        "topic_scores": [{"topic_id": "T1", "score": 100, "rationale": "strong"}],
-        "explanation": "Excellent understanding of T1.",
-        "missing_topics": [],
-    }
-    with mock.patch("app.bot_engine.generate_topic_scores", return_value=first_grading):
-        client.post("/get_grade", json={"session_id": session_id})
-
-    low_grading = {
-        "topic_scores": [],
-        "explanation": "Nothing demonstrated.",
-        "missing_topics": ["T1"],
-    }
-    with mock.patch("app.bot_engine.generate_topic_scores", return_value=low_grading):
-        # Also need to prevent report generator from calling real OpenAI
-        with mock.patch("app.bot_engine.generate_report") as mock_gen_report:
-            mock_gen_report.return_value = {
-                "report_text": "Report based on T1 understanding.",
-                "report_json": {},
-            }
-            response = client.post("/generate_report", json={"session_id": session_id})
-
-    # The call to generate_report should have received the authoritative explanation
     call_kwargs = mock_gen_report.call_args.kwargs
-    assert "Excellent understanding" in call_kwargs["grading_result"]["explanation"]
+    assert "Best demonstrated understanding so far is in Topic 1." == call_kwargs["grading_result"]["explanation"]
+    assert response.status_code == 200
 
 
 def test_generate_report_inserts_report_event(client):
@@ -358,7 +412,8 @@ def test_generate_report_inserts_report_event(client):
     session_id = start_session(client)
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.side_effect = RuntimeError("no api in tests")
-    with _mock_scores_for_report([80]), mock.patch("openai.OpenAI", return_value=mock_client):
+    _set_mastery_state(session_id, best_scores=[80])
+    with mock.patch("openai.OpenAI", return_value=mock_client):
         client.post("/generate_report", json={"session_id": session_id})
 
     db = next(app.dependency_overrides[db_module.get_db]())
@@ -369,33 +424,11 @@ def test_generate_report_inserts_report_event(client):
     assert len(events) >= 1
 
 
-def test_get_grade_uses_report_event_payload_when_authoritative(client):
-    """If the highest accepted payload came from a report event, get_grade still uses it.
-
-    This validates the shared _get_authoritative_grading_payload helper searches
-    both 'grade' and 'report' event types.
-    """
+def test_generate_report_does_not_call_generate_topic_scores(client):
     session_id = start_session(client)
-
-    # First accepted payload comes from a /generate_report call (no prior /get_grade)
-    high_grading = {
-        "topic_scores": [{"topic_id": "T1", "score": 100, "rationale": "strong"}],
-        "explanation": "Authoritative payload from report event.",
-        "missing_topics": [],
-    }
-    with mock.patch("app.bot_engine.generate_topic_scores", return_value=high_grading), \
+    _set_mastery_state(session_id, best_scores=[100])
+    with mock.patch("app.bot_engine.generate_topic_scores", side_effect=AssertionError("should not be called")), \
          _mock_openai_report():
-        client.post("/generate_report", json={"session_id": session_id})
-
-    # Now get_grade with a lower candidate score
-    low_grading = {
-        "topic_scores": [],
-        "explanation": "Nothing demonstrated.",
-        "missing_topics": ["T1"],
-    }
-    with mock.patch("app.bot_engine.generate_topic_scores", return_value=low_grading):
-        r = client.post("/get_grade", json={"session_id": session_id})
-
-    data = r.json()
-    assert data["grade"] == 55.0
-    assert "Authoritative payload from report event" in data["explanation"]
+        response = client.post("/generate_report", json={"session_id": session_id})
+    assert response.status_code == 200
+    assert response.json()["report_json"]["final_grade"] == 55.0

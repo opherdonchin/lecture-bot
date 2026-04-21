@@ -10,12 +10,17 @@ import app.models as models
 
 def build_initial_state(lecture_package: dict, topics_sampled: list) -> dict:
     return {
-        "topics_sampled": topics_sampled,
+        "topics_sampled": bot_engine._unique_topic_ids(topics_sampled),
         "topics_covered": [],
         "mastery": {},
+        "best_mastery": {},
+        "evidence_notes": {},
+        "current_topic_id": None,
+        "tutor_comment": "",
+        "private_decision_trace": None,
+        "current_grade": 0.0,
+        "timeout_warning_sent": False,
         "turn_count": 0,
-        "confidence": 0.0,
-        "lecture_title": lecture_package["config"].get("title", lecture_package["lecture_id"]),
     }
 
 
@@ -29,8 +34,8 @@ def create_session(db: sqlalchemy_orm.Session, student_id: str, lecture_id: str,
     db.add(session)
     db.flush()
 
-    # Parse rubric topics and sample deterministically using session_id
-    topic_defs = bot_engine.parse_rubric_topics(lecture_package["rubric"])
+    # Prefer lecture_config topics when present; fall back to rubric parsing.
+    topic_defs = bot_engine.resolve_topic_defs(lecture_package)
     count = config_module.get_settings().sampled_topic_count
     topics_sampled = bot_engine.sample_session_topics(topic_defs, session.session_id, count=count)
 

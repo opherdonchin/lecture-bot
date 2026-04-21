@@ -1,0 +1,28 @@
+{
+  "context_files": [
+    {
+      "key": "bot_notes",
+      "path": "bot_notes.md",
+      "label": "Bot Notes",
+      "required": false
+    },
+    {
+      "key": "slides",
+      "path": "slides.md",
+      "label": "Slides",
+      "required": true
+    },
+    {
+      "key": "handout",
+      "path": "handout.md",
+      "label": "Handout",
+      "required": true
+    },
+    {
+      "key": "minutes",
+      "path": "minutes.json",
+      "label": "Instructional Minutes",
+      "required": true
+    }
+  ]
+}

@@ -1,4 +1,13 @@
 let sessionId = null;
+const appRoutes = window.APP_ROUTES || {};
+
+function appRoute(name) {
+  const url = appRoutes[name];
+  if (!url) {
+    throw new Error("Missing app route: " + name);
+  }
+  return url;
+}
 
 function renderMath(el) {
   if (typeof renderMathInElement !== "undefined") {
@@ -17,7 +26,7 @@ const studentIdInput = document.getElementById("studentId");
 const lectureIdInput = document.getElementById("lectureId");
 
 // Populate lecture dropdown on load
-fetch("/lectures")
+fetch(appRoute("list_lectures"))
   .then(r => r.json())
   .then(lectures => {
     lectures.forEach(id => {
@@ -62,6 +71,13 @@ function showError(msg) {
 function clearError() {
   errorBox.textContent = "";
   errorBox.classList.add("hidden");
+}
+
+function setSessionActive(active) {
+  messageInput.disabled = !active;
+  sendBtn.disabled = !active;
+  gradeBtn.disabled = !active;
+  reportBtn.disabled = !active;
 }
 
 function appendMessage(role, content) {
@@ -117,7 +133,7 @@ async function startSession() {
   }
 
   try {
-    const res = await fetch("/start_session", {
+    const res = await fetch(appRoute("start_session"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ student_id, lecture_id }),
@@ -137,7 +153,7 @@ async function startSession() {
     transcript.innerHTML = "";
 
     messageInput.disabled = false;
-    sendBtn.disabled = false;
+    setSessionActive(true);
     messageInput.focus();
 
     if (data.message) {
@@ -166,7 +182,7 @@ async function sendMessage() {
   const thinkingRow = appendThinking();
 
   try {
-    const res = await fetch("/send_message", {
+    const res = await fetch(appRoute("send_message"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId, message }),
@@ -184,13 +200,21 @@ async function sendMessage() {
     const data = await res.json();
     thinkingRow.remove();
     appendMessage("assistant", data.message || "[no reply]");
+    if (data.final_report) {
+      appendReportMessage(data.final_report);
+    }
+    if (data.session_active === false) {
+      setSessionActive(false);
+    }
   } catch (err) {
     thinkingRow.remove();
     userRow.remove();
     messageInput.value = message; // restore on failure
     showError("Network error while sending message: " + err.message);
   } finally {
-    sendBtn.disabled = false;
+    if (sessionId && !messageInput.disabled) {
+      sendBtn.disabled = false;
+    }
     messageInput.focus();
   }
 }
@@ -203,7 +227,7 @@ async function getGrade() {
   const thinkingRow = appendThinking();
 
   try {
-    const res = await fetch("/get_grade", {
+    const res = await fetch(appRoute("get_grade"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId }),
@@ -239,21 +263,85 @@ function appendGradeMessage(data) {
     row.appendChild(exp);
   }
 
-  if (data.missing_topics && data.missing_topics.length > 0) {
-    const miss = document.createElement("p");
-    miss.className = "grade-missing";
-    miss.textContent = "Topics not yet covered: " + data.missing_topics.join(", ");
-    row.appendChild(miss);
-  } else {
-    const ok = document.createElement("p");
-    ok.className = "grade-missing";
-    ok.textContent = "All topics covered.";
-    row.appendChild(ok);
-  }
+  appendInfoList(
+    row,
+    "Stronger areas",
+    data.scored_topics || [],
+    "No strong footholds yet."
+  );
+  appendInfoList(
+    row,
+    "Still to cover",
+    data.missing_topics || [],
+    "All sampled topics have some coverage."
+  );
 
   transcript.appendChild(row);
   renderMath(row);
   transcript.scrollTop = transcript.scrollHeight;
+}
+
+function appendInfoList(container, label, items, emptyText) {
+  const block = document.createElement("div");
+  block.className = "info-block";
+
+  const title = document.createElement("div");
+  title.className = "info-title";
+  title.textContent = label;
+  block.appendChild(title);
+
+  if (items && items.length > 0) {
+    const list = document.createElement("ul");
+    list.className = "info-list";
+    for (const item of items) {
+      const li = document.createElement("li");
+      li.textContent = item;
+      list.appendChild(li);
+    }
+    block.appendChild(list);
+  } else {
+    const empty = document.createElement("p");
+    empty.className = "info-empty";
+    empty.textContent = emptyText;
+    block.appendChild(empty);
+  }
+
+  container.appendChild(block);
+}
+
+function appendStructuredReportText(container, reportText) {
+  const lines = reportText.split(/\r?\n/);
+  let currentList = null;
+
+  function closeList() {
+    currentList = null;
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      closeList();
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      if (!currentList) {
+        currentList = document.createElement("ul");
+        currentList.className = "report-list";
+        container.appendChild(currentList);
+      }
+      const li = document.createElement("li");
+      li.textContent = line.replace(/^[-*]\s+/, "");
+      currentList.appendChild(li);
+      continue;
+    }
+
+    closeList();
+    const block = document.createElement("div");
+    block.className = /:\s*$/.test(line) ? "report-section-title" : "report-line";
+    block.textContent = line;
+    container.appendChild(block);
+  }
 }
 
 async function generateReport() {
@@ -264,7 +352,7 @@ async function generateReport() {
   const thinkingRow = appendThinking();
 
   try {
-    const res = await fetch("/generate_report", {
+    const res = await fetch(appRoute("generate_report"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId }),
@@ -294,15 +382,7 @@ function appendReportMessage(data) {
   row.appendChild(header);
 
   const reportText = data.report_text || "[No report text returned]";
-  const paragraphs = reportText.split(/\n{2,}/);
-  for (const para of paragraphs) {
-    const trimmed = para.trim();
-    if (trimmed) {
-      const p = document.createElement("p");
-      p.textContent = trimmed;
-      row.appendChild(p);
-    }
-  }
+  appendStructuredReportText(row, reportText);
 
   // Download button
   const dl = document.createElement("button");
@@ -356,7 +436,7 @@ async function restartSession() {
   if (!sessionId) { showError("No active session to restart."); return; }
 
   try {
-    const res = await fetch("/restart_session", {
+    const res = await fetch(appRoute("restart_session"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -376,6 +456,7 @@ async function restartSession() {
 
     // Clear transcript for fresh start
     transcript.innerHTML = "";
+    setSessionActive(true);
     if (data.message) appendMessage("assistant", data.message);
   } catch (err) {
     showError("Network error: " + err.message);

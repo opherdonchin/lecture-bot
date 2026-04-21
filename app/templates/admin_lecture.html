@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{{ lecture_id }} Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_lectures') }}" class="back-link">All Lecture Folders</a>
+        <span class="muted">{{ lecture_dir }}</span>
+      </div>
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Lecture Folder</p>
+          <h1>{{ lecture_id }}</h1>
+          <p class="lead">Configure the source files, build local markdown artifacts, then follow the prompt-and-upload workflow until the folder is complete.</p>
+        </div>
+        <div class="step-chip">{{ summary.current_step }}</div>
+      </section>
+
+      {% if notice %}
+      <div class="notice success">{{ notice }}</div>
+      {% endif %}
+      {% if error %}
+      <div class="notice error">{{ error }}</div>
+      {% endif %}
+
+      <section class="card admin-card">
+        <h2>Lecture Metadata</h2>
+        <form method="post" action="{{ url_path('update_lecture_metadata', lecture_id=lecture_id) }}" class="grid-form">
+          <label>
+            <span>Title</span>
+            <input type="text" name="title" value="{{ config.title }}" />
+          </label>
+          <label>
+            <span>Course</span>
+            <input type="text" name="course" value="{{ config.course }}" />
+          </label>
+          <label class="checkbox-line">
+            <input type="checkbox" name="active" {% if config.active %}checked{% endif %} />
+            <span>Active</span>
+          </label>
+          <button type="submit">Save Metadata</button>
+        </form>
+      </section>
+
+      <section class="columns">
+        <section class="card admin-card">
+          <h2>Files In Folder</h2>
+          <form method="post" action="{{ url_path('upload_file', lecture_id=lecture_id) }}" enctype="multipart/form-data" class="upload-form">
+            <input type="file" name="uploaded_file" required />
+            <button type="submit">Upload File</button>
+          </form>
+
+          {% if files %}
+          <div class="file-list">
+            {% for file in files %}
+            <div class="file-row">
+              <div>
+                <strong>{{ file.name }}</strong>
+                <p>{{ file.size_bytes }} bytes</p>
+              </div>
+              <div class="inline-actions">
+                <a href="{{ url_path('download_lecture_file', lecture_id=lecture_id, filename=file.name) }}">Download</a>
+                {% if file.name != "lecture_config.json" %}
+                <form method="post" action="{{ url_path('delete_file', lecture_id=lecture_id) }}">
+                  <input type="hidden" name="filename" value="{{ file.name }}" />
+                  <button type="submit" class="danger">Delete</button>
+                </form>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="muted">This folder is empty.</p>
+          {% endif %}
+        </section>
+
+        <section class="card admin-card">
+          <h2>Select Source Files</h2>
+          <form method="post" action="{{ url_path('update_sources', lecture_id=lecture_id) }}" class="grid-form">
+            {% for key in source_keys %}
+            <label>
+              <span>{{ display_labels[key] }}</span>
+              <select name="{{ key }}_source">
+                <option value="">-- not selected --</option>
+                {% for file in files %}
+                <option value="{{ file.name }}" {% if summary.selected_sources[key] == file.name %}selected{% endif %}>{{ file.name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            {% endfor %}
+            <button type="submit">Save Source Selection</button>
+          </form>
+
+          <div class="target-grid">
+            {% for key in source_keys %}
+            <div>
+              <strong>{{ display_labels[key] }}</strong>
+              <p>{{ summary.selected_sources[key] or "No source selected" }}</p>
+              <p class="muted">Target: {{ summary.processed_targets[key] }}</p>
+              <p class="{% if summary.processed_ready[key] %}status-ready{% else %}status-pending{% endif %}">
+                {% if summary.processed_ready[key] %}Ready{% else %}Missing{% endif %}
+              </p>
+            </div>
+            {% endfor %}
+          </div>
+        </section>
+      </section>
+
+      <section class="card admin-card">
+        <div class="section-header">
+          <h2>Build Workflow</h2>
+          <form method="post" action="{{ url_path('build_local', lecture_id=lecture_id) }}">
+            <button type="submit">Build / Continue</button>
+          </form>
+        </div>
+        <ol class="workflow-list">
+          <li class="{% if summary.current_step == 'select_sources' %}current-step{% endif %}">Choose one source file for each of slides, handout, notebook, and transcript.</li>
+          <li class="{% if summary.current_step == 'build_local' %}current-step{% endif %}">Click <strong>Build / Continue</strong> to create `slides.md`, `handout.md`, `notebook.md`, and `transcript.md` locally.</li>
+          <li class="{% if summary.current_step == 'minutes' %}current-step{% endif %}">Use the minutes prompt with the support files, then upload the returned `minutes.json`.</li>
+          <li class="{% if summary.current_step == 'rubric' %}current-step{% endif %}">Use the rubric prompt with the support files, then upload the returned `rubric.md`.</li>
+          <li class="{% if summary.current_step == 'complete' %}current-step{% endif %}">Finish with refreshed `topics` in `lecture_config.json`.</li>
+        </ol>
+
+        {% if build_log %}
+        <div class="build-log">
+          <h3>Latest Local Build</h3>
+          <ul>
+            {% for line in build_log %}
+            <li>{{ line }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </section>
+
+      {% if summary.current_step in ['minutes', 'rubric', 'complete'] %}
+      <section class="card admin-card">
+        <h2>Minutes Step</h2>
+        <p>Copy the prompt, upload the support files to ChatGPT, and ask it to return a downloadable file named <code>{{ target_by_key['minutes'] }}</code>.</p>
+        <div class="inline-actions">
+          <a href="{{ url_path('download_prompt', lecture_id=lecture_id, stage='minutes') }}">Download Prompt</a>
+          <a href="{{ url_path('download_bundle', lecture_id=lecture_id, stage='minutes') }}">Download Zip Bundle</a>
+        </div>
+        <div class="download-list">
+          {% for filename in bundle_stage_files['minutes'] %}
+          <a href="{{ url_path('download_lecture_file', lecture_id=lecture_id, filename=filename) }}">{{ filename }}</a>
+          {% endfor %}
+        </div>
+        <form method="post" action="{{ url_path('upload_generated_artifact', lecture_id=lecture_id, kind='minutes') }}" enctype="multipart/form-data" class="upload-form">
+          <input type="file" name="uploaded_file" required />
+          <button type="submit">Upload minutes.json</button>
+        </form>
+        <p class="{% if summary.generated_ready['minutes'] %}status-ready{% else %}status-pending{% endif %}">
+          {% if summary.generated_ready['minutes'] %}minutes.json is present{% else %}minutes.json is still missing{% endif %}
+        </p>
+      </section>
+      {% endif %}
+
+      {% if summary.current_step in ['rubric', 'complete'] %}
+      <section class="card admin-card">
+        <h2>Rubric Step</h2>
+        <p>Copy the rubric prompt, upload the support files to ChatGPT, and ask it to return a downloadable file named <code>{{ target_by_key['rubric'] }}</code>.</p>
+        <div class="inline-actions">
+          <a href="{{ url_path('download_prompt', lecture_id=lecture_id, stage='rubric') }}">Download Prompt</a>
+          <a href="{{ url_path('download_bundle', lecture_id=lecture_id, stage='rubric') }}">Download Zip Bundle</a>
+        </div>
+        <div class="download-list">
+          {% for filename in bundle_stage_files['rubric'] %}
+          <a href="{{ url_path('download_lecture_file', lecture_id=lecture_id, filename=filename) }}">{{ filename }}</a>
+          {% endfor %}
+        </div>
+        <form method="post" action="{{ url_path('upload_generated_artifact', lecture_id=lecture_id, kind='rubric') }}" enctype="multipart/form-data" class="upload-form">
+          <input type="file" name="uploaded_file" required />
+          <button type="submit">Upload rubric.md</button>
+        </form>
+        <p class="{% if summary.generated_ready['rubric'] %}status-ready{% else %}status-pending{% endif %}">
+          {% if summary.generated_ready['rubric'] %}rubric.md is present{% else %}rubric.md is still missing{% endif %}
+        </p>
+      </section>
+      {% endif %}
+
+      {% if summary.current_step == 'complete' %}
+      <section class="card admin-card">
+        <h2>Ready</h2>
+        <p>The lecture folder now has the built files plus generated `minutes.json` and `rubric.md`. The topics list in `lecture_config.json` has been refreshed from the rubric.</p>
+      </section>
+      {% endif %}
+    </main>
+  </body>
+</html>

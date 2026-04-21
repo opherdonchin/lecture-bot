@@ -1,46 +1,89 @@
 # Working note: grading calibration and internal mastery ladder
 
-## Status
+## Document goals
 
 This is the current working calibration for the lecture-bot grading design.
 
-It is not yet a full implementation spec. It is a design note capturing the grading geometry we currently intend to build prompt behavior around.
+It defines:
 
-The current idea is to make the prompt aware of two grading tables:
+- the **within-topic mastery scale**
+- the **cross-topic weighting**
+- how those two combine into the student’s grade
 
-* a **within-topic mastery table**
-* a **cross-topic breadth table**
+This document is about grading policy and does specify:
 
-The tutor should use these as internal anchors while balancing:
+- tutor stay / move / revisit behavior
+- routing or policy-family logic
+- detailed prompt design
+- how the tutor should choose its next move
 
-* breadth
-* depth
-* educational value
-* student engagement
+## What the policy is trying to achieve
+
+The grading policy is intended to reward both:
+
+- **depth**, because stronger understanding within a topic raises that topic’s mastery
+- **breadth**, because having multiple reasonably strong topics improves the weighted profile
+
+It is also intended to make:
+
+- early understanding within a topic matter a lot
+- additional polishing within the same topic matter less over time
+- additional topics matter strongly at first, then less strongly later
+
+This creates the desired grading geometry without requiring the tutor to expose arithmetic to the student.
 
 ---
 
 ## Core grading geometry
 
-### Cross-topic weighting
+The grading policy combines:
 
-Working cross-topic scale:
+1. a **within-topic mastery score** for each topic
+2. a fixed **cross-topic weighting** across the ranked topics
 
-* 0.55
-* 0.25
-* 0.12
-* 0.05
-* 0.02
-* 0.01
+The tutor’s job is to assess current mastery within each topic. Cross-topic weighting will be handled on the back end. 
 
-Interpretation:
+Breadth and depth are therefore graded **simultaneously**.
 
-* the first mastered topic matters a great deal
-* the second and third still matter substantially
-* later breadth still counts, but progressively less
-* this gives a bit more breathing room than the earlier 5-topic version while preserving the same overall shape
+At any given moment:
 
-### Within-topic shape
+- improving the current best topic can raise the grade
+- improving a weaker already-touched topic can also raise the grade
+- opening a new topic can also raise the grade
+
+Which increase matters more depends on the current ranked mastery profile and the fixed cross-topic weights.
+
+---
+
+## Cross-topic weighting and lecture-wide interpretation
+
+Python computes the final grade by ranking topics by current mastery and applying the fixed cross-topic weights below.
+
+These weights are fixed by policy.
+
+| Rank | Weight | Max cumulative | Interpretation |
+| ---: | -----: | --------: | -------------- |
+| 1 | 0.55 | 55  | Strong foothold in one central lecture idea |
+| 2 | 0.25 | 80  | Meaningful early coverage across the lecture |
+| 3 | 0.13 | 93  | Solid grounding across the core lecture terrain |
+| 4 | 0.04 | 97  | Broad and competent coverage of the lecture |
+| 5 | 0.03 | 100 | Full lecture mastery for session purposes |
+
+Notes:
+
+* **Rank** = topic rank after sorting topics by current mastery, highest first.
+* **Weight** = fixed cross-topic weight applied by Python to the mastery of the topic at that rank.
+* **Max cumulative** = maximum cumulative grade available if the top *n* ranked topics had full mastery.
+* **Interpretation** = a readable lecture-wide description of what that cumulative ceiling means.
+* The weights apply to ranked topic mastery values, not to fixed topic identities.
+* The current backend implementation uses exactly these five slots: `[55, 25, 13, 4, 3]`.
+* Breadth and depth are graded simultaneously: improving any topic can affect the grade, depending on its current mastery and rank.
+* The interpretation column is descriptive. It does not add a separate grading rule.
+* These are internal anchors, not student-facing labels.
+
+---
+
+## Within-topic shape
 
 Within-topic grading should be strongly concave.
 
@@ -48,30 +91,44 @@ That means:
 
 * early progress on a topic earns points quickly
 * later progress on the same topic earns points more slowly
-* this creates an ongoing breadth/depth tradeoff
-* after moderate mastery on one topic, opening a second or third topic can be more valuable than continuing to drill the first one
-* later in the session, once several topics have meaningful evidence, revisiting and deepening earlier topics can again become attractive
+* first real understanding matters a lot
+* later refinement still matters, but much more slowly
+* very high mastery should be reachable, but only with sustained strong evidence
 
----
+The cumulative mastery ladder for a single topic assumes a sequence of successful **demonstrations of understanding** of increasing difficulty, subtlety, or transfer. It will not reflect rigid prompt steps. Rather, the anchors will be passed to the tutor which will evaluate mastery and then grades will be applied based on the mastery level assesed. 
 
-## Working internal mastery ladder
+### Qualitative meaning of the levels
 
-This is the current working cumulative mastery ladder for a single topic, assuming a sequence of fully correct, student-owned answers of increasing difficulty / subtlety / transfer.
+| Step | Level name | Meaning |
+| ---: | ---------- | ------- |
+| 1 | Anchored foothold | First meaningful contact with the topic; the student gets its basic criterion or core idea roughly right, but still thinly. |
+| 2 | Clearer grasp | The student can make a useful distinction or give a usable explanation that separates the idea from at least one nearby confusion. |
+| 3 | Student-owned explanation | The student can explain the idea in their own words with solid conceptual control, not just recognize or repeat a phrase. |
+| 4 | Fresh check or guided transfer | The student survives a new check: a contrastive case, figure/code interpretation, or guided application beyond the original wording. |
+| 5 | Robust independent use | The student can use the idea more independently in a nearby new case, with less reliance on the tutor’s framing. |
+| 6 | High-confidence understanding | The student shows stable, independent understanding across more than one probe and can interpret the idea practically or analytically. |
+| 7 | Strong transfer | The student shows unusually strong, transferable understanding: connecting the idea cleanly to another lecture idea or handling a less obvious case. |
+| 8 | Near-complete session mastery | The student shows flexible, precise, independent command of the topic for session purposes, possibly extending slightly beyond the lecture’s direct examples without losing fidelity. |
 
-### Cumulative score after k successful answers on one topic
+### Cumulative mastery ladder
 
-| Successful answers on topic | Cumulative mastery |
-| --------------------------: | -----------------: |
-|                           1 |                 45 |
-|                           2 |                 70 |
-|                           3 |                 84 |
-|                           4 |                 92 |
-|                           5 |                 96 |
-|                           6 |                 98 |
-|                           7 |                 99 |
-|                           8 |                100 |
+| Step | Mastery |
+| ---: | ------: |
+| 1 | 45  |
+| 2 | 70  |
+| 3 | 84  |
+| 4 | 92  |
+| 5 | 96  |
+| 6 | 98  |
+| 7 | 99  |
+| 8 | 100 |
 
-### Marginal gain per additional successful answer
+Notes:
+
+* **Step** = successful demonstration number on the same topic.
+* **Mastery** = cumulative within-topic mastery after that step.
+
+### Marginal gain per additional successful demonstration
 
 | Step | Marginal gain |
 | ---: | ------------: |
@@ -86,125 +143,44 @@ This is the current working cumulative mastery ladder for a single topic, assumi
 
 This ladder is intentionally aggressive early and very flat late.
 
-Its purpose is to create the desired tradeoff:
-
-* first contact and early understanding should count for a lot
-* later refinement should still count, but much more slowly
-* very high mastery should be reachable, but only with sustained strong evidence
 
 ---
 
-## Breadth table
+## How backend combines topic mastery into a grade
 
-The tutor should also have an internal sense of how much lecture-wide coverage has been established.
+The tutor maintains a current mastery estimate for each topic.
 
-| Number of topics mastered | Lecture-wide mastery description                   | Maximum grade |
-| ------------------------: | -------------------------------------------------- | ------------: |
-|                         1 | Strong foothold in one central lecture idea        |            55 |
-|                         2 | Meaningful early coverage across the lecture       |            80 |
-|                         3 | Solid grounding across the core lecture terrain    |            92 |
-|                         4 | Broad and competent coverage of the lecture        |            97 |
-|                         5 | Very broad coverage with only small gaps remaining |            99 |
-|                         6 | Full lecture mastery for session purposes          |           100 |
+The backend then:
 
-Notes:
+1. ranks topics by current mastery
+2. applies the fixed cross-topic weights to those ranked mastery values
+3. computes the current grade from that weighted combination
 
-* These are internal anchors, not student-facing labels.
-* “Mastered” here means meaningfully banked at a solid level, not merely touched.
-* The table is meant to help the tutor feel the value of early breadth without forcing hard arithmetic every turn.
+This means:
 
----
+- every increase in a topic’s mastery can matter
+- the effect of an increase depends on that topic’s current rank
+- breadth and depth are not separate phases
+- there is no threshold a topic must cross before it “starts counting”
 
-## Interpretation of the 8 within-topic levels
-
-These are not rigid prompt steps. They are an internal grading anchor.
-
-A rough interpretation is:
-
-1. first meaningful contact / correct basic criterion
-2. stronger grasp / clear distinction or usable explanation
-3. solid explanation in own words
-4. strong answer with fresh check or guided transfer
-5. robust answer with more independent use
-6. high-confidence independent understanding
-7. unusually strong / transferable understanding
-8. near-complete mastery on that topic for session purposes
-
-The tutor should not mechanically walk through these levels. This is a scoring anchor, not a move ladder.
-
----
-
-## How the two tables should work together
-
-The tutor should not think in terms of raw evidence alone.
-
-It should think in terms of the joint value of:
-
-* deepening the current topic
-* opening a new topic
-* revisiting an earlier topic
-
-The two tables jointly encode this:
-
-* early depth matters because a topic can move quickly from 0 to 45 to 70 to 84
-* early breadth matters because the first, second, and third meaningfully mastered topics add a lot of lecture-wide value
-* later depth matters less because the within-topic ladder flattens sharply
-* later breadth matters less because the cross-topic breadth table also flattens sharply
-
-This means the tutor should naturally face a recurring question:
-
-* is the next best move to deepen the current topic,
-* to open another topic,
-* or to return and strengthen an earlier one?
-
-That tradeoff should be decided using both educational judgment and the internal grading geometry.
-
----
-
-## Prompt-design implication
-
-The prompt should likely include both internal tables, with short verbal descriptions.
-
-The tutor should then be instructed to balance:
-
-* likely gain in topic mastery
-* likely gain in lecture-wide coverage
-* educational value of the move
-* student engagement and momentum
-
-The goal is not for the tutor to act like a calculator.
-The goal is for it to have a clearer internal model of why:
-
-* opening a second or third topic can be very valuable,
-* overdrilling a topic after moderate mastery can be wasteful,
-* and returning later to deepen an earlier topic can again become the best move.
+A topic with partial mastery already contributes.
+A topic with stronger mastery contributes more.
+A new topic may matter a lot, a little, or not much yet, depending on its resulting rank and score.
 
 ---
 
 ## Important caution
 
-These tables are internal design anchors.
+These tables are internal grading anchors.
 
 They do **not** mean:
 
-* the tutor should expose numbers to the student
-* the tutor should talk about weights or grading arithmetic explicitly
-* the tutor should use a rigid scripted sequence of moves
+- the tutor should expose numbers to the student
+- the tutor should talk about weights or grading arithmetic explicitly
+- the tutor should narrate the grading policy during the dialogue
 
 They **do** mean:
 
-* prompt logic should encode the intended breadth/depth tradeoff more concretely
-* state updates should use the mastery ladder as a rough internal guide
-* later prompt work should express when to stay, when to switch, and when to revisit earlier topics in a way that is aligned with these two tables
-
----
-
-## Current working decision
-
-For now, use:
-
-* cross-topic scale: **0.55, 0.25, 0.12, 0.05, 0.02, 0.01**
-* within-topic cumulative mastery ladder: **45, 70, 84, 92, 96, 98, 99, 100**
-* breadth table anchored at maximum grades: **55, 80, 92, 97, 99, 100**
-
-This is the current calibration to design prompts around unless later testing shows that it is too generous, too harsh, or induces the wrong switching behavior.
+- tutor-side mastery assessments should be interpretable against this ladder
+- Python-side grade computation should follow the fixed cross-topic weighting
+- later prompt or policy work should remain consistent with this grading geometry

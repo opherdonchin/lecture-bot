@@ -17,21 +17,86 @@ sqlalchemy = ">=2.0,<3"
 pydantic = ">=2.8,<3"
 pydantic-settings = ">=2.4,<3"
 python-dotenv = ">=1.0,<2"
+python-multipart = ">=0.0.9,<1"
 openai = ">=1.40,<2"
 pytest = ">=8.3,<9"
 httpx = ">=0.27,<1"
 python-pptx = ">=0.6.23,<2"
 jinja2 = ">=3.1,<4"
+langdetect = ">=1.0, <2"
 
 [tasks]
-dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
-dev-bg = "bash -lc 'nohup uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > app.log 2>&1 < /dev/null & disown; echo Started app in background. Logs: app.log'"
+system-dev-start = "systemctl --user start lecture-bot.service"
+system-dev-stop = "systemctl --user stop lecture-bot.service"
+system-dev-restart = "systemctl --user restart lecture-bot.service"
+system-dev-status = "systemctl --user status lecture-bot.service --no-pager -l"
+system-dev-logs = "journalctl --user -u lecture-bot.service -b --no-pager"
+dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --root-path /bot"
+dev-bg = "bash -lc 'nohup uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --root-path /bot > app.log 2>&1 < /dev/null & disown; echo Started app in background. Logs: app.log'"
+admin-dev = "uvicorn app.admin_main:app --reload --host 0.0.0.0 --port 8001 --root-path /bot-admin"
+stats-dev = "bash -lc 'LECTURE_BOT_STUDENT_ROOT_PATH=/stats uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --root-path /stats'"
+stats-admin-dev = "bash -lc 'LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin uvicorn app.admin_main:app --reload --host 0.0.0.0 --port 8001 --root-path /stats-admin'"
+serve = "scripts/serve_student.sh"
+admin-serve = "scripts/serve_admin.sh"
+admin-stop = '''bash -lc '
+pids=$(lsof -tiTCP:8001 -sTCP:LISTEN 2>/dev/null || true)
+
+if [ -z "$pids" ]; then
+  echo "Admin app is not running."
+  exit 0
+fi
+
+kill $pids 2>/dev/null || true
+
+for _ in $(seq 1 20); do
+  if ! lsof -nP -iTCP:8001 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Admin app stopped."
+    exit 0
+  fi
+  sleep 0.5
+done
+
+fuser -k 8001/tcp >/dev/null 2>&1 || true
+sleep 0.5
+
+if ! lsof -nP -iTCP:8001 -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "Admin app stopped."
+  exit 0
+fi
+
+echo "Admin app may still be shutting down; port 8001 is still busy."
+exit 1
+''''
 test = "pytest -q"
 init-db = "python scripts/init_db.py"
-stop = "fuser -k 8000/tcp 2>/dev/null && echo 'App stopped.' || echo 'App is not running.'"
+stop = '''bash -lc '
+pids=$(lsof -tiTCP:8000 -sTCP:LISTEN 2>/dev/null || true)
+
+if [ -z "$pids" ]; then
+  echo "App is not running."
+  exit 0
+fi
+
+kill $pids 2>/dev/null || true
+
+for _ in $(seq 1 20); do
+  if ! lsof -nP -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "App stopped."
+    exit 0
+  fi
+  sleep 0.5
+done
+
+fuser -k 8000/tcp >/dev/null 2>&1 || true
+sleep 0.5
+
+if ! lsof -nP -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "App stopped."
+  exit 0
+fi
+
+echo "App may still be shutting down; port 8000 is still busy."
+exit 1
+''''
 tunnel = "ngrok http 8000"
 grade-moodle = "python scripts/grade_moodle.py"
-service-start = "systemctl --user start lecture-bot"
-service-stop = "systemctl --user stop lecture-bot"
-service-status = "systemctl --user status lecture-bot --no-pager"
-service-install = "systemctl --user daemon-reload && systemctl --user enable lecture-bot"

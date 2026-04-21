@@ -30,6 +30,7 @@ Thumbs.db
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Data and logs
 data/*.db
@@ -41,4 +42,5 @@ logs/
 # Lecture content (keep directory structure but not files)
 lectures/**
 !lectures/
+!lectures/config.json
 !lectures/**/.gitkeep

@@ -69,6 +69,10 @@ input, select, button {
   background: #eef8ea;
 }
 
+.msg span {
+  white-space: pre-wrap;
+}
+
 .chat-input-row {
   display: flex;
   gap: 8px;
@@ -124,15 +128,40 @@ input, select, button {
   line-height: 1.5;
 }
 
-.grade-missing {
-  margin: 4px 0 0;
-  font-size: 0.9rem;
+.info-block {
+  margin-top: 8px;
+}
+
+.info-title,
+.report-section-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #234423;
+  margin: 0 0 4px;
+}
+
+.info-list,
+.report-list {
+  margin: 0 0 6px 18px;
+  padding: 0;
+}
+
+.info-list li,
+.report-list li {
+  margin: 3px 0;
+  line-height: 1.4;
+}
+
+.info-empty,
+.report-line {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
   color: #555;
 }
 
-.report-card p {
-  margin: 6px 0;
-  line-height: 1.5;
+.report-line {
+  color: #222;
+  line-height: 1.45;
 }
 
 .download-btn {

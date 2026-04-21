@@ -5,6 +5,7 @@ import unittest.mock as mock
 import pytest
 
 import app.bot_engine as bot_engine
+import app.language_policy as language_policy
 import app.prompt_loader as prompt_loader
 
 
@@ -70,6 +71,33 @@ def test_parse_rubric_topics_empty():
     assert topics == []
 
 
+def test_parse_rubric_topics_deduplicates_repeated_topic_headings():
+    rubric = """\
+### T1. Topic 1
+
+- **Importance:** core
+
+### T2. Topic 2
+
+- **Importance:** important
+
+## Evidence standards
+
+### T1. Topic 1
+
+Evidence text.
+
+### T2. Topic 2
+
+More evidence text.
+"""
+    topics = bot_engine.parse_rubric_topics(rubric)
+    assert topics == [
+        {"topic_id": "T1", "label": "Topic 1", "importance": "core"},
+        {"topic_id": "T2", "label": "Topic 2", "importance": "important"},
+    ]
+
+
 # ---------------------------------------------------------------------------
 # sample_session_topics
 # ---------------------------------------------------------------------------
@@ -115,6 +143,154 @@ def test_sample_session_topics_fewer_than_count():
     small_defs = [{"topic_id": "T1", "label": "A", "importance": "core"}]
     result = bot_engine.sample_session_topics(small_defs, "session-abc", count=5)
     assert result == ["T1"]
+
+
+# ---------------------------------------------------------------------------
+# build_opening_message
+# ---------------------------------------------------------------------------
+
+def test_build_opening_message_includes_sampled_topic_labels(monkeypatch):
+    lecture_package = {
+        "lecture_id": "lecture_01",
+        "config": {"title": "Lecture 1"},
+        "rubric": SAMPLE_RUBRIC,
+        "topics": [
+            {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
+            {"topic_id": "T2", "label": "Purpose of statistics", "importance": "core"},
+            {"topic_id": "T3", "label": "Definition and structure of data", "importance": "important"},
+        ],
+    }
+    monkeypatch.setattr(
+        bot_engine.config_module,
+        "get_settings",
+        lambda: type("Settings", (), {"opening_topic_choice_count": 3})(),
+    )
+    message = bot_engine.build_opening_message(
+        lecture_package,
+        sampled_topic_ids=["T1", "T2", "T3"],
+    )
+    assert "Welcome to the review bot for Lecture 1." in message
+    assert "A few good places to start are:" in message
+    assert "- Reality–Data–Model distinction" in message
+    assert "- Purpose of statistics" in message
+    assert "- Definition and structure of data" in message
+    assert "Which would you like to begin with?" in message
+
+
+def test_build_opening_message_falls_back_without_resolved_sampled_topics(monkeypatch):
+    lecture_package = {
+        "lecture_id": "lecture_01",
+        "config": {"title": "Lecture 1"},
+        "rubric": SAMPLE_RUBRIC,
+        "topics": [
+            {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
+        ],
+    }
+    monkeypatch.setattr(
+        bot_engine.config_module,
+        "get_settings",
+        lambda: type("Settings", (), {"opening_topic_choice_count": 3})(),
+    )
+    message = bot_engine.build_opening_message(
+        lecture_package,
+        sampled_topic_ids=["T99"],
+    )
+    assert message == (
+        "Welcome to the review bot for Lecture 1. "
+        "We can start wherever feels most useful. "
+        "What topic from this lecture would you like to begin with?"
+    )
+
+
+def test_generate_report_fallback_uses_scannable_bullets(monkeypatch):
+    lecture_package = {
+        "lecture_id": "lecture_01",
+        "config": {"title": "Lecture 1"},
+        "rubric": SAMPLE_RUBRIC,
+    }
+    grading_result = {
+        "final_grade": 80,
+        "explanation": "Strongest evidence is in model-vs-data distinctions.",
+        "scored_topics": ["Reality–Data–Model distinction", "Purpose of statistics"],
+        "missing_topics": ["Definition and structure of data"],
+        "topic_scores": [
+            {"topic_id": "T1", "score": 90},
+            {"topic_id": "T2", "score": 70},
+        ],
+    }
+    monkeypatch.setattr(
+        bot_engine.config_module,
+        "get_settings",
+        lambda: type("Settings", (), {"openai_api_key": "test-key", "openai_model": "test-model"})(),
+    )
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("boom")
+    monkeypatch.setattr(bot_engine.openai_, "OpenAI", lambda **kwargs: mock_client)
+
+    result = bot_engine.generate_report(
+        lecture_package=lecture_package,
+        messages=[{"role": "user", "content": "Hello"}],
+        state={},
+        grading_result=grading_result,
+        session_id="session-1",
+        student_id="student-1",
+        timestamp_iso="2026-04-19T12:00:00+00:00",
+    )
+
+    assert "Summary:" in result["report_text"]
+    assert "Stronger areas:" in result["report_text"]
+    assert "Next steps:" in result["report_text"]
+    assert "Coverage:" in result["report_text"]
+    assert "- Reality–Data–Model distinction, Purpose of statistics." in result["report_text"]
+    assert "- Not yet covered: Definition and structure of data." in result["report_text"]
+
+
+def test_rewrite_opening_topic_selection_rewrites_prefix_match():
+    lecture_package = {
+        "lecture_id": "lecture_03",
+        "config": {"title": "Lecture 3"},
+        "rubric": SAMPLE_RUBRIC,
+        "topics": [
+            {"topic_id": "T1", "label": "Reading posterior output in ArviZ", "importance": "core"},
+            {"topic_id": "T2", "label": "Why sample, and what a posterior draw is", "importance": "core"},
+            {"topic_id": "T3", "label": "Point estimation from the posterior", "importance": "core"},
+        ],
+    }
+    state = {
+        "topics_sampled": ["T1", "T2", "T3"],
+        "turn_count": 0,
+        "current_topic_id": None,
+    }
+    rewritten = bot_engine.rewrite_opening_topic_selection(
+        lecture_package=lecture_package,
+        state=state,
+        user_message="Why sample",
+    )
+    assert "Treat my message as a topic selection" in rewritten
+    assert "Why sample, and what a posterior draw is" in rewritten
+
+
+def test_rewrite_opening_topic_selection_leaves_nonopening_turn_alone():
+    lecture_package = {
+        "lecture_id": "lecture_03",
+        "config": {"title": "Lecture 3"},
+        "rubric": SAMPLE_RUBRIC,
+        "topics": [
+            {"topic_id": "T2", "label": "Why sample, and what a posterior draw is", "importance": "core"},
+        ],
+    }
+    state = {
+        "topics_sampled": ["T2"],
+        "turn_count": 1,
+        "current_topic_id": "T2",
+    }
+    original = "Why sample"
+    rewritten = bot_engine.rewrite_opening_topic_selection(
+        lecture_package=lecture_package,
+        state=state,
+        user_message=original,
+    )
+    assert rewritten == original
 
 
 # ---------------------------------------------------------------------------
@@ -179,86 +355,255 @@ OLD_STATE = {
     "topics_sampled": ["T1", "T2", "T3"],
     "topics_covered": [],
     "mastery": {},
+    "best_mastery": {},
+    "evidence_notes": {},
+    "current_topic_id": None,
+    "tutor_comment": "",
+    "private_decision_trace": None,
+    "current_grade": 0.0,
+    "timeout_warning_sent": False,
     "turn_count": 1,
-    "confidence": 0.5,
-    "lecture_title": "Lecture 1",
 }
 ALLOWED_IDS = {"T1", "T2", "T3", "T4", "T5"}
 
 
 def test_sanitize_topics_sampled_immutable():
-    llm_state = {"topics_sampled": ["X9", "X10"], "topics_covered": [], "mastery": {}, "confidence": 0.5}
+    llm_state = {"topics_sampled": ["X9", "X10"], "topics_covered": [], "mastery": {}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["topics_sampled"] == ["T1", "T2", "T3"]
 
 
 def test_sanitize_turn_count_incremented():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 0.5, "turn_count": 99}
+    llm_state = {"topics_covered": [], "mastery": {}, "turn_count": 99}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["turn_count"] == OLD_STATE["turn_count"] + 1
 
 
 def test_sanitize_topics_covered_filtered():
-    llm_state = {"topics_covered": ["T1", "T99"], "mastery": {}, "confidence": 0.5}
+    llm_state = {"topics_covered": ["T1", "T99"], "mastery": {"T1": 45}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["topics_covered"] == ["T1"]
 
 
 def test_sanitize_mastery_keys_filtered():
-    llm_state = {"topics_covered": [], "mastery": {"T1": 80, "T99": 50}, "confidence": 0.5}
+    llm_state = {"topics_covered": [], "mastery": {"T1": 80, "T99": 50}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert "T1" in result["mastery"]
     assert "T99" not in result["mastery"]
 
 
 def test_sanitize_mastery_values_clamped():
-    llm_state = {"topics_covered": [], "mastery": {"T1": 150, "T2": -10}, "confidence": 0.5}
+    llm_state = {"topics_covered": [], "mastery": {"T1": 150, "T2": -10}}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert result["mastery"]["T1"] == 100
     assert result["mastery"]["T2"] == 0
 
 
-def test_sanitize_confidence_clamped():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 1.5}
+def test_sanitize_best_mastery_preserved():
+    old_state = dict(OLD_STATE)
+    old_state["best_mastery"] = {"T1": 90}
+    result = bot_engine.sanitize_state_update(old_state, {"mastery": {"T1": 20}}, ALLOWED_IDS)
+    assert result["best_mastery"] == {"T1": 90}
+
+
+def test_sanitize_current_grade_preserved():
+    old_state = dict(OLD_STATE)
+    old_state["current_grade"] = 55.0
+    result = bot_engine.sanitize_state_update(old_state, {"mastery": {"T1": 100}}, ALLOWED_IDS)
+    assert result["current_grade"] == 55.0
+
+
+def test_sanitize_evidence_notes_filtered_and_merged():
+    old_state = dict(OLD_STATE)
+    old_state["evidence_notes"] = {"T1": "old note"}
+    llm_state = {"evidence_notes": {"T1": "new note", "T99": "bad"}}
+    result = bot_engine.sanitize_state_update(old_state, llm_state, ALLOWED_IDS)
+    assert result["evidence_notes"] == {"T1": "new note"}
+
+
+def test_sanitize_current_topic_id_filtered():
+    llm_state = {"current_topic_id": "T99"}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
-    assert result["confidence"] == 1.0
+    assert result["current_topic_id"] is None
+
+
+def test_sanitize_tutor_comment_preserved_when_missing():
+    old_state = dict(OLD_STATE)
+    old_state["tutor_comment"] = "stay on T1"
+    result = bot_engine.sanitize_state_update(old_state, {}, ALLOWED_IDS)
+    assert result["tutor_comment"] == "stay on T1"
 
 
 def test_sanitize_unknown_keys_dropped():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 0.5, "extra_field": "bad"}
+    llm_state = {"topics_covered": [], "mastery": {}, "extra_field": "bad"}
     result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
     assert "extra_field" not in result
 
 
-def test_sanitize_lecture_title_immutable():
-    llm_state = {"topics_covered": [], "mastery": {}, "confidence": 0.5, "lecture_title": "Changed"}
-    result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
-    assert result["lecture_title"] == "Lecture 1"
+def test_sanitize_decision_trace_stored_privately():
+    llm_state = {"topics_covered": [], "mastery": {}}
+    raw_trace = {
+        "student_model": {
+            "understanding": "partial distinction",
+            "uncertainty": "mixing up prior and likelihood",
+            "failure_mode": "label recognition only",
+        },
+        "evidence_target": {
+            "topic_id": "T1",
+            "element": "prior vs likelihood arrows",
+            "target_type": "distinction",
+            "why_now": "student is close but still blurry",
+        },
+        "move_candidates": [
+            {
+                "move_type": "contrastive_prompt",
+                "prompt_sketch": "Which arrow means prior and which means likelihood?",
+                "revealing": 2,
+                "productive": 4,
+                "fit": 5,
+            }
+        ],
+        "chosen_move": {
+            "move_type": "contrastive_prompt",
+            "reason": "best low-revealing clarification",
+        },
+    }
+    result = bot_engine.sanitize_state_update(
+        OLD_STATE,
+        llm_state,
+        ALLOWED_IDS,
+        raw_decision_trace=raw_trace,
+    )
+    assert result["private_decision_trace"]["step_6_chosen_topic"]["topic_id"] == "T1"
+    assert result["private_decision_trace"]["step_8_evidence_target"]["topic_id"] == "T1"
+    assert result["private_decision_trace"]["step_10_choice"]["chosen_move"] == "contrastive_prompt"
+
+
+def test_sanitize_stepwise_decision_trace_preserved():
+    llm_state = {"topics_covered": [], "mastery": {}}
+    raw_trace = {
+        "step_1_current_topic_option": {
+            "topic_id": "T1",
+            "why_consider": "current line still has value",
+        },
+        "step_2_alternative_topic_option": {
+            "topic_id": "T2",
+            "why_consider": "strong breadth alternative",
+        },
+        "step_3_current_topic_value": {
+            "topic_id": "T1",
+            "grade_value": 4,
+            "pedagogical_value": 3,
+            "engagement_value": 2,
+            "reason": "one more check could land",
+        },
+        "step_4_alternative_topic_value": {
+            "topic_id": "T2",
+            "grade_value": 3,
+            "pedagogical_value": 5,
+            "engagement_value": 4,
+            "reason": "better momentum",
+        },
+        "step_5_weighted_topic_comparison": {
+            "grade_weight": 3,
+            "pedagogical_weight": 5,
+            "engagement_weight": 4,
+            "current_topic_total": 29,
+            "alternative_topic_total": 41,
+            "preferred_topic_id": "T2",
+            "reason": "alternative topic wins overall",
+        },
+        "step_6_chosen_topic": {
+            "topic_id": "T2",
+            "choice_type": "switch",
+            "reason": "better overall value",
+        },
+        "step_7_student_model": {
+            "understanding": "basic prior role",
+            "uncertainty": "support constraints still blurry",
+            "failure_mode": "speaks generically",
+        },
+        "step_8_evidence_target": {
+            "topic_id": "T2",
+            "element": "support of beta prior",
+            "target_type": "criterion",
+            "why_now": "needed for the next check",
+        },
+        "step_9_move_candidates": [
+            {
+                "move_type": "contrastive_prompt",
+                "prompt_sketch": "Can the parameter be outside [0,1]?",
+                "revealing": 2,
+                "productive": 5,
+                "fit": 5,
+            }
+        ],
+        "step_10_choice": {
+            "chosen_move": "contrastive_prompt",
+            "reason": "best low-reveal move",
+        },
+        "step_11_reply_draft": {
+            "draft": "Can a coin probability ever be outside [0,1]?",
+        },
+        "step_12_reply_check": {
+            "most_productive": True,
+            "minimally_revealing": True,
+            "smuggles_answer": False,
+            "asks_one_contribution": True,
+        },
+        "step_13_revision": {
+            "revised": False,
+            "reason": "draft already fits",
+        },
+        "step_14_final_move": {
+            "move_type": "contrastive_prompt",
+            "reason": "same as chosen move after review",
+        },
+    }
+    result = bot_engine.sanitize_state_update(
+        OLD_STATE,
+        llm_state,
+        ALLOWED_IDS,
+        raw_decision_trace=raw_trace,
+    )
+    assert result["private_decision_trace"]["step_6_chosen_topic"]["topic_id"] == "T2"
+    assert result["private_decision_trace"]["step_7_student_model"]["understanding"] == "basic prior role"
+    assert result["private_decision_trace"]["step_12_reply_check"]["asks_one_contribution"] is True
+    assert result["private_decision_trace"]["step_14_final_move"]["chosen_move"] == "contrastive_prompt"
 
 
 # ---------------------------------------------------------------------------
 # build_dialogue_context
 # ---------------------------------------------------------------------------
 
-def _make_pkg(bot_notes="", slides="", handout="", notebook=""):
+def _make_pkg(bot_notes="", slides="", handout="", minutes="", notebook=""):
+    context_sections = []
+    if bot_notes:
+        context_sections.append({"key": "bot_notes", "label": "Bot Notes", "content": bot_notes})
+    if slides:
+        context_sections.append({"key": "slides", "label": "Slides", "content": slides})
+    if handout:
+        context_sections.append({"key": "handout", "label": "Handout", "content": handout})
+    if minutes:
+        context_sections.append({"key": "minutes", "label": "Instructional Minutes", "content": minutes})
+    if notebook:
+        context_sections.append({"key": "notebook", "label": "Notebook", "content": notebook})
     return {
         "lecture_id": "test",
         "config": {"title": "Test"},
         "rubric": "rubric content",
-        "bot_notes": bot_notes,
-        "slides": slides,
-        "handout": handout,
-        "notebook": notebook,
+        "context_sections": context_sections,
     }
 
 
 def test_build_dialogue_context_all_fit():
-    pkg = _make_pkg(bot_notes="BN", slides="SL", handout="HO", notebook="NB")
+    pkg = _make_pkg(bot_notes="BN", slides="SL", handout="HO", minutes="MN", notebook="NB")
     result = bot_engine.build_dialogue_context(pkg, max_chars=10000)
     assert "## Bot Notes" in result
     assert "## Slides" in result
     assert "## Handout" in result
-    assert "## Notebook" in result
+    assert "## Instructional Minutes" in result
+    assert "## Notebook" not in result
 
 
 def test_build_dialogue_context_empty_sections_skipped():
@@ -267,12 +612,13 @@ def test_build_dialogue_context_empty_sections_skipped():
     assert "## Slides" in result
     assert "## Bot Notes" not in result
     assert "## Handout" not in result
+    assert "## Instructional Minutes" not in result
     assert "## Notebook" not in result
 
 
 def test_build_dialogue_context_respects_budget():
     long_text = "x" * 5000
-    pkg = _make_pkg(bot_notes=long_text, slides=long_text, handout=long_text, notebook=long_text)
+    pkg = _make_pkg(bot_notes=long_text, slides=long_text, handout=long_text, minutes=long_text, notebook=long_text)
     result = bot_engine.build_dialogue_context(pkg, max_chars=8000)
     assert len(result) <= 8000
 
@@ -282,13 +628,40 @@ def test_build_dialogue_context_priority_order():
     bot_notes = "BN " * 100
     slides = "SL " * 100
     handout = "HO " * 100
+    minutes = "MN " * 100
     notebook = "NB " * 10000  # very large, should be truncated/dropped
-    pkg = _make_pkg(bot_notes=bot_notes, slides=slides, handout=handout, notebook=notebook)
+    pkg = _make_pkg(bot_notes=bot_notes, slides=slides, handout=handout, minutes=minutes, notebook=notebook)
     result = bot_engine.build_dialogue_context(pkg, max_chars=5000)
     assert len(result) <= 5000
     # bot_notes and slides should still be present
     assert "BN" in result
     assert "SL" in result
+    assert "MN" in result
+
+
+def test_sanitize_assistant_message_replaces_bare_topic_ids():
+    message = "You've got T3. Let's move to T4 next."
+    topic_defs = [
+        {"topic_id": "T3", "label": "Posterior draws", "importance": "core"},
+        {"topic_id": "T4", "label": "Posterior plots", "importance": "core"},
+    ]
+    result = bot_engine.sanitize_assistant_message(message, topic_defs=topic_defs, timing_context=None)
+    assert "T3" not in result
+    assert "T4" not in result
+    assert "Posterior draws" in result
+    assert "Posterior plots" in result
+
+
+def test_language_policy_accepts_short_english_topic_pick():
+    assert language_policy.is_english_text("Why sample")
+
+
+def test_language_policy_accepts_technical_english_noun_phrase():
+    assert language_policy.is_english_text("Normalized cerebellar volume")
+
+
+def test_language_policy_rejects_hebrew_text():
+    assert not language_policy.is_english_text("למה לדגום")
 
 
 # ---------------------------------------------------------------------------
@@ -317,10 +690,7 @@ _LECTURE_PACKAGE_FOR_GRADING = {
     "lecture_id": "test",
     "config": {"title": "Test"},
     "rubric": _RUBRIC_FOR_GRADING,
-    "bot_notes": "",
-    "slides": "",
-    "handout": "",
-    "notebook": "",
+    "context_sections": [],
 }
 
 
@@ -409,43 +779,63 @@ def test_grading_validation_non_dict_entry_skipped():
 
 
 # ---------------------------------------------------------------------------
-# prompt templates
+# prompt loading
 # ---------------------------------------------------------------------------
 
-def test_render_prompt_template_replaces_placeholders():
-    rendered = prompt_loader.render_prompt_template(
-        "dialogue_system_prompt.txt",
-        {
-            "session_focus_topics": "T1: Topic 1",
-            "topics_covered_json": '["T1"]',
-            "mastery_json": '{"T1": 80}',
-            "rubric_text": "Rubric body",
-            "lecture_context": "Lecture body",
-            "next_turn_count": 3,
-            "lecture_title_json": '"Lecture 1"',
-        },
-    )
-
-    assert "{{" not in rendered
-    assert "Session focus topics: T1: Topic 1" in rendered
-    assert '"turn_count": 3' in rendered
-    assert '"lecture_title": "Lecture 1"' in rendered
+def test_load_prompt_template_reads_dialogue_prompt_markdown():
+    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
+    assert "You are a focused, natural, pedagogically intelligent lecture-review tutor" in loaded
 
 
-def test_render_prompt_template_raises_for_missing_values():
-    with pytest.raises(KeyError):
-        prompt_loader.render_prompt_template("dialogue_system_prompt.txt", {})
+def test_dialogue_prompt_requires_stepwise_decision_trace():
+    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
+    assert "The `decision_trace` must document these steps separately." in loaded
+    assert "* `step_1_current_topic_option`" in loaded
+    assert "* `step_14_final_move`" in loaded
+    assert "`step_12_reply_check` should explicitly record" in loaded
+    assert "Topic control" in loaded
+    assert "weighted current-versus-alternative totals" in loaded
+    assert "Move binding" in loaded
+    assert "must implement the same move family as `step_10_choice.chosen_move`" in loaded
+    assert "briefly tell the student that the session is in its final few minutes" in loaded
 
 
-def test_generate_reply_uses_rendered_dialogue_prompt():
+def test_dialogue_prompt_has_explicit_move_preference_order():
+    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
+    assert "Move preference order" in loaded
+    assert "1. `contrastive_prompt`" in loaded
+    assert "7. `compact_explanation`" in loaded
+    assert "prefer the earlier move in this list" in loaded
+
+
+def test_tutor_generation_prompt_requires_stepwise_trace_and_move_order():
+    loaded = prompt_loader.load_prompt_template("tutor_generation_prompt.md")
+    assert "each step be documented separately and sequentially" in loaded
+    assert "- `step_1_current_topic_option`" in loaded
+    assert "- `step_14_final_move`" in loaded
+    assert "weighted current-versus-alternative comparison" in loaded
+    assert "default move value ordering explicit" in loaded
+    assert "1. contrastive prompt" in loaded
+    assert "7. compact explanation" in loaded
+    assert "strong move-binding section" in loaded
+    assert "must change the move rather than keep the move and emit a different question" in loaded
+
+
+def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
     lecture_package = {
         "lecture_id": "lecture_01",
         "config": {"title": "Lecture 1"},
         "rubric": SAMPLE_RUBRIC,
-        "bot_notes": "Bot notes",
-        "slides": "Slides body",
-        "handout": "Handout body",
-        "notebook": "Notebook body",
+        "context_sections": [
+            {"key": "bot_notes", "label": "Bot Notes", "content": "Bot notes"},
+            {"key": "slides", "label": "Slides", "content": "Slides body"},
+            {"key": "handout", "label": "Handout", "content": "Handout body"},
+            {
+                "key": "minutes",
+                "label": "Instructional Minutes",
+                "content": '{"lecture_metadata": {"title": "Lecture 1"}}',
+            },
+        ],
         "topics": [
             {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
             {"topic_id": "T2", "label": "Purpose of statistics", "importance": "core"},
@@ -455,14 +845,21 @@ def test_generate_reply_uses_rendered_dialogue_prompt():
         "topics_sampled": ["T1"],
         "topics_covered": ["T1"],
         "mastery": {"T1": 80},
+        "best_mastery": {"T1": 92},
+        "evidence_notes": {"T1": "old note"},
+        "current_topic_id": "T1",
+        "tutor_comment": "stay on topic",
+        "current_grade": 55.0,
+        "timeout_warning_sent": False,
         "turn_count": 2,
-        "confidence": 0.5,
-        "lecture_title": 'Lecture "1"',
+        "private_decision_trace": None,
     }
     mock_resp = mock.MagicMock()
     mock_resp.choices[0].message.content = (
         '{"assistant_message": "Next question", '
-        '"updated_state": {"topics_covered": ["T1"], "mastery": {"T1": 80}, "confidence": 0.5}}'
+        '"updated_state": {"topics_covered": ["T1"], "mastery": {"T1": 80}, '
+        '"evidence_notes": {"T1": "student made a real distinction"}, '
+        '"current_topic_id": "T1", "tutor_comment": "Keep pressing on T1."}}'
     )
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.return_value = mock_resp
@@ -473,14 +870,30 @@ def test_generate_reply_uses_rendered_dialogue_prompt():
             recent_messages=[],
             state=state,
             user_message="I think data are imperfect measurements.",
+            timing_context={
+                "minutes_remaining": 4,
+                "minutes_elapsed": 16,
+                "session_duration_minutes": 20,
+                "closing_mode": True,
+                "timeout_warning_sent": False,
+            },
         )
 
     create_kwargs = mock_client.chat.completions.create.call_args.kwargs
     system_prompt = create_kwargs["messages"][0]["content"]
-    assert "Session focus topics: T1: Reality–Data–Model distinction" in system_prompt
-    assert 'Topics covered so far: ["T1"]' in system_prompt
-    assert 'Mastery estimates so far: {"T1": 80}' in system_prompt
+    assert "You are a focused, natural, pedagogically intelligent lecture-review tutor" in system_prompt
+    assert "Runtime context" in system_prompt
+    assert '"topic_id": "T1"' in system_prompt
+    assert '"label": "Reality–Data–Model distinction"' in system_prompt
+    assert '"topics_covered": [' in system_prompt
+    assert '"best_mastery": {' in system_prompt
+    assert '"session_timing": {' in system_prompt
+    assert '"closing_mode": true' in system_prompt
+    assert '"minutes_elapsed": 16' in system_prompt
+    assert '"session_duration_minutes": 20' in system_prompt
+    assert "## Instructional Minutes" in system_prompt
+    assert "## Notebook" not in system_prompt
     assert '"turn_count": 3' in system_prompt
-    assert '"lecture_title": "Lecture \\"1\\""' in system_prompt
     assert assistant_message == "Next question"
     assert updated_state["turn_count"] == 3
+    assert updated_state["evidence_notes"]["T1"] == "student made a real distinction"

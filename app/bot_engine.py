@@ -7,34 +7,194 @@ import re as re_
 import openai as openai_
 
 import app.config as config_module
+import app.language_policy as language_policy
 import app.prompt_loader as prompt_loader
 
 _log = logging_.getLogger(__name__)
 
 _GRADE_WEIGHTS = [55, 25, 13, 4, 3]
+_RUNTIME_CONTEXT_KEYS = ("bot_notes", "slides", "handout", "minutes")
+_DECISION_TARGET_TYPES = {
+    "criterion",
+    "distinction",
+    "explanation",
+    "application",
+    "practical_interpretation",
+    "self_correction",
+}
+_DECISION_MOVE_TYPES = {
+    "open_probe",
+    "narrowing_question",
+    "contrastive_prompt",
+    "criterion_check",
+    "explanation_check",
+    "application_check",
+    "practical_interpretation",
+    "hint",
+    "partial_frame",
+    "compact_explanation",
+    "concise_reformulation",
+    "topic_switch",
+    "self_correction_prompt",
+}
+_DECISION_TRACE_CHECK_KEYS = (
+    "most_productive",
+    "minimally_revealing",
+    "smuggles_answer",
+    "asks_one_contribution",
+)
 
-_TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)\.\s+(.+)$', re_.MULTILINE)
+_TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)(?:\.|\s+[—-])\s+(.+)$', re_.MULTILINE)
 _IMPORTANCE_RE = re_.compile(r'\*\*Importance:\*\*\s+(\w+)')
+_BARE_TOPIC_ID_RE = re_.compile(r"\b(T\d+)\b")
+_TIME_CLAIM_RE = re_.compile(r"\b\d+\s+minutes?\s+left\b", re_.IGNORECASE)
+_NON_ALNUM_RE = re_.compile(r"[^a-z0-9]+")
 
 _FALLBACK_DIALOGUE_MESSAGE = (
     "I'm having trouble updating the tutoring state cleanly. "
     "Let's keep going with one focused question: "
     "what idea from this lecture seems most important to you, and why?"
 )
-_DIALOGUE_PROMPT_TEMPLATE = "dialogue_system_prompt.txt"
+_DIALOGUE_PROMPT_TEMPLATE = "dialogue_system_prompt.md"
 
 
 # ---------------------------------------------------------------------------
 # Public: opening message
 # ---------------------------------------------------------------------------
 
-def build_opening_message(lecture_package: dict) -> str:
+def _format_opening_topic_choices(labels: list[str]) -> str:
+    if not labels:
+        return ""
+    return "\n".join(f"- {label}" for label in labels)
+
+
+def normalize_topic_defs(topic_defs: list[dict] | None) -> list[dict]:
+    """Return canonical topic defs with duplicate topic IDs removed.
+
+    Some rubric sections repeat canonical `### Tn.` headings later in the file
+    (for example under evidence standards). We keep the first occurrence for
+    each topic ID so the lecture config, sampled topics, and grading views stay
+    aligned to one canonical topic list.
+    """
+    normalized: list[dict] = []
+    by_topic_id: dict[str, dict] = {}
+    for topic in topic_defs or []:
+        if not isinstance(topic, dict):
+            continue
+        topic_id = str(topic.get("topic_id", "")).strip()
+        label = str(topic.get("label", "")).strip()
+        if not topic_id or not label:
+            continue
+        importance = str(topic.get("importance", "unknown") or "unknown").strip()
+        existing = by_topic_id.get(topic_id)
+        if existing is None:
+            canonical_topic = {
+                "topic_id": topic_id,
+                "label": label,
+                "importance": importance,
+            }
+            normalized.append(canonical_topic)
+            by_topic_id[topic_id] = canonical_topic
+            continue
+        if existing["importance"] == "unknown" and importance != "unknown":
+            existing["importance"] = importance
+    return normalized
+
+
+def _unique_topic_ids(topic_ids: list[str] | None) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for topic_id in topic_ids or []:
+        if not isinstance(topic_id, str) or not topic_id or topic_id in seen:
+            continue
+        seen.add(topic_id)
+        unique.append(topic_id)
+    return unique
+
+
+def _normalize_selection_text(text: str) -> str:
+    return _NON_ALNUM_RE.sub(" ", text.lower()).strip()
+
+
+def rewrite_opening_topic_selection(
+    *,
+    lecture_package: dict,
+    state: dict,
+    user_message: str,
+) -> str:
+    """Rewrite an opening-turn topic pick into explicit selection intent.
+
+    This prevents short menu replies like "Why sample" from being treated as
+    content answers to the topic itself.
+    """
+    if state.get("turn_count", 0) != 0:
+        return user_message
+    if state.get("current_topic_id") is not None:
+        return user_message
+
+    topic_defs = resolve_topic_defs(lecture_package)
+    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
+    sampled_labels = [
+        topic_id_to_label[topic_id]
+        for topic_id in _unique_topic_ids(state.get("topics_sampled", []))
+        if topic_id in topic_id_to_label
+    ]
+    normalized_user = _normalize_selection_text(user_message)
+    if not normalized_user:
+        return user_message
+
+    for label in sampled_labels:
+        normalized_label = _normalize_selection_text(label)
+        if not normalized_label:
+            continue
+        if normalized_user == normalized_label:
+            return (
+                f"I want to begin with the topic '{label}'. "
+                "Treat my message as a topic selection, not as a content answer. "
+                "Ask the first substantive question for that topic."
+            )
+        if len(normalized_user) >= 6 and normalized_label.startswith(normalized_user):
+            return (
+                f"I want to begin with the topic '{label}'. "
+                "Treat my message as a topic selection, not as a content answer. "
+                "Ask the first substantive question for that topic."
+            )
+
+    return user_message
+
+
+def resolve_topic_defs(lecture_package: dict) -> list[dict]:
+    """Load canonical topic defs from lecture config or rubric."""
+    return normalize_topic_defs(
+        lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    )
+
+
+def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | None = None) -> str:
     title = lecture_package["config"].get("title", lecture_package["lecture_id"])
+    topic_defs = resolve_topic_defs(lecture_package)
+    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
+
+    settings = config_module.get_settings()
+    sampled_labels = [
+        topic_id_to_label[topic_id]
+        for topic_id in (sampled_topic_ids or [])[:settings.opening_topic_choice_count]
+        if topic_id in topic_id_to_label
+    ]
+    if sampled_labels:
+        topic_choices = _format_opening_topic_choices(sampled_labels)
+        return (
+            f"Welcome to the review bot for {title}. "
+            "We can start wherever feels most useful.\n"
+            "A few good places to start are:\n"
+            f"{topic_choices}\n\n"
+            "Which would you like to begin with?"
+        )
+
     return (
         f"Welcome to the review bot for {title}. "
-        "I'll work with you through a short conceptual review of this lecture. "
-        "You can ask for your current grade or a final report at any time. "
-        "Let's begin: what do you think was one central idea of this lecture?"
+        "We can start wherever feels most useful. "
+        "What topic from this lecture would you like to begin with?"
     )
 
 
@@ -49,6 +209,7 @@ def generate_reply(
     recent_messages: list,
     state: dict,
     user_message: str,
+    timing_context: dict | None = None,
 ) -> tuple[str, dict]:
     """Generate a tutoring reply using OpenAI.
 
@@ -56,33 +217,25 @@ def generate_reply(
     Falls back to a generic message if OpenAI fails or returns malformed output.
     """
     settings = config_module.get_settings()
-    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    topic_defs = resolve_topic_defs(lecture_package)
     allowed_topic_ids = {t["topic_id"] for t in topic_defs}
     context = build_dialogue_context(lecture_package, settings.max_dialogue_context_chars)
-
-    rubric_text = lecture_package["rubric"]
-    topics_sampled = state.get("topics_sampled", [])
-    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
-    sampled_labels = [
-        f"{tid}: {topic_id_to_label.get(tid, tid)}" for tid in topics_sampled
-    ]
-
-    system_prompt = prompt_loader.render_prompt_template(
-        _DIALOGUE_PROMPT_TEMPLATE,
-        {
-            "session_focus_topics": ", ".join(sampled_labels) if sampled_labels else "all topics",
-            "topics_covered_json": j_.dumps(state.get("topics_covered", []), ensure_ascii=False),
-            "mastery_json": j_.dumps(state.get("mastery", {}), ensure_ascii=False),
-            "rubric_text": rubric_text,
-            "lecture_context": context,
-            "next_turn_count": state.get("turn_count", 0) + 1,
-            "lecture_title_json": j_.dumps(state.get("lecture_title", ""), ensure_ascii=False),
-        },
+    normalized_user_message = rewrite_opening_topic_selection(
+        lecture_package=lecture_package,
+        state=state,
+        user_message=user_message,
+    )
+    system_prompt = build_dialogue_system_prompt(
+        lecture_package=lecture_package,
+        state=state,
+        topic_defs=topic_defs,
+        lecture_context=context,
+        timing_context=timing_context,
     )
 
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(recent_messages)
-    messages.append({"role": "user", "content": user_message})
+    messages.append({"role": "user", "content": normalized_user_message})
 
     try:
         client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
@@ -94,8 +247,13 @@ def generate_reply(
         )
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
-        assistant_message = str(parsed["assistant_message"])
+        assistant_message = sanitize_assistant_message(
+            str(parsed["assistant_message"]),
+            topic_defs=topic_defs,
+            timing_context=timing_context,
+        )
         raw_updated_state = parsed.get("updated_state", {})
+        raw_decision_trace = parsed.get("decision_trace")
     except openai_.AuthenticationError:
         _log.exception("generate_reply failed: OpenAI authentication error")
         fallback_state = dict(state)
@@ -116,7 +274,12 @@ def generate_reply(
         fallback_state["turn_count"] = state.get("turn_count", 0) + 1
         return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
     # sanitize_state_update is our own code — bugs here propagate as 500, not masked
-    updated_state = sanitize_state_update(state, raw_updated_state, allowed_topic_ids)
+    updated_state = sanitize_state_update(
+        state,
+        raw_updated_state,
+        allowed_topic_ids,
+        raw_decision_trace=raw_decision_trace,
+    )
     return assistant_message, updated_state
 
 
@@ -140,28 +303,74 @@ def parse_rubric_topics(rubric_markdown: str) -> list[dict]:
         imp_match = _IMPORTANCE_RE.search(section_text)
         importance = imp_match.group(1) if imp_match else "unknown"
         topics.append({"topic_id": topic_id, "label": label, "importance": importance})
-    return topics
+    return normalize_topic_defs(topics)
 
 
 def sample_session_topics(topic_defs: list[dict], session_id: str, count: int = 5) -> list[str]:
     """Sample a deterministic subset of topic IDs seeded by session_id."""
-    topic_ids = [t["topic_id"] for t in topic_defs]
+    topic_ids = _unique_topic_ids([t["topic_id"] for t in normalize_topic_defs(topic_defs)])
     rng = random_.Random(session_id)
     k = min(count, len(topic_ids))
     return rng.sample(topic_ids, k)
 
 
+def build_dialogue_system_prompt(
+    *,
+    lecture_package: dict,
+    state: dict,
+    topic_defs: list[dict],
+    lecture_context: str,
+    timing_context: dict | None = None,
+) -> str:
+    """Build the runtime system prompt around the committed markdown prompt."""
+    prompt_body = prompt_loader.load_prompt_template(_DIALOGUE_PROMPT_TEMPLATE).strip()
+    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
+    sampled_topic_ids = _unique_topic_ids(state.get("topics_sampled", []))
+    sampled_topics = [
+        {
+            "topic_id": tid,
+            "label": topic_id_to_label.get(tid, tid),
+        }
+        for tid in sampled_topic_ids
+    ]
+    current_state = {
+        "topics_sampled": list(sampled_topic_ids),
+        "topics_covered": list(state.get("topics_covered", [])),
+        "mastery": dict(state.get("mastery", {})),
+        "best_mastery": dict(state.get("best_mastery", {})),
+        "evidence_notes": dict(state.get("evidence_notes", {})),
+        "current_topic_id": state.get("current_topic_id"),
+        "tutor_comment": state.get("tutor_comment", ""),
+        "turn_count": state.get("turn_count", 0) + 1,
+    }
+
+    injected_context = {
+        "lecture_title": lecture_package["config"].get("title", lecture_package["lecture_id"]),
+        "sampled_topics": sampled_topics,
+        "topic_structure_note": "Use the rubric text below as the equivalent topic-to-element map or rubric structure.",
+        "current_tutoring_state": current_state,
+        "session_timing": timing_context or {},
+        "rubric_text": lecture_package["rubric"],
+        "lecture_context": lecture_context,
+    }
+
+    return (
+        f"{prompt_body}\n\n"
+        "Runtime context\n\n"
+        "## Injected lecture/runtime data\n"
+        f"{j_.dumps(injected_context, indent=2, ensure_ascii=False)}"
+    )
+
+
 def build_dialogue_context(lecture_package: dict, max_chars: int) -> str:
     """Build lecture context string with deterministic truncation.
 
-    Priority order (most important first): bot_notes, slides, handout, notebook.
-    When budget is exceeded, notebook is trimmed first, then handout.
+    Use the configured context_sections order from lecture config / lectures defaults.
     """
     sections = [
-        ("## Bot Notes", lecture_package.get("bot_notes", "")),
-        ("## Slides", lecture_package.get("slides", "")),
-        ("## Handout", lecture_package.get("handout", "")),
-        ("## Notebook", lecture_package.get("notebook", "")),
+        (f"## {section['label']}", section.get("content", ""))
+        for section in lecture_package.get("context_sections", [])
+        if section.get("key") in _RUNTIME_CONTEXT_KEYS
     ]
     parts = []
     used = 0
@@ -184,6 +393,28 @@ def build_dialogue_context(lecture_package: dict, max_chars: int) -> str:
     return "\n\n".join(parts)
 
 
+def sanitize_assistant_message(
+    assistant_message: str,
+    *,
+    topic_defs: list[dict],
+    timing_context: dict | None = None,
+) -> str:
+    """Apply hard guardrails to the student-facing tutor message."""
+    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
+
+    def replace_topic_id(match):
+        topic_id = match.group(1)
+        return topic_id_to_label.get(topic_id, "this topic")
+
+    sanitized = _BARE_TOPIC_ID_RE.sub(replace_topic_id, assistant_message).strip()
+    if not timing_context or not timing_context.get("timing_reliable", False):
+        sanitized = _TIME_CLAIM_RE.sub("time left", sanitized)
+    return language_policy.ensure_english_text(
+        sanitized,
+        language_policy.ENGLISH_ONLY_ASSISTANT_FALLBACK,
+    )
+
+
 def compute_weighted_grade(topic_scores: list[dict]) -> int:
     """Compute the weighted student-facing grade from per-topic scores.
 
@@ -195,30 +426,333 @@ def compute_weighted_grade(topic_scores: list[dict]) -> int:
     return math_.floor(sum(w * s / 100 for w, s in zip(_GRADE_WEIGHTS, padded)))
 
 
-def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: set) -> dict:
+def _sanitize_decision_trace(raw_trace: object, allowed_topic_ids: set[str]) -> dict | None:
+    if not isinstance(raw_trace, dict):
+        return None
+
+    def _sanitize_topic_option(raw_option: object) -> dict:
+        if not isinstance(raw_option, dict):
+            raw_option = {}
+        topic_id = str(raw_option.get("topic_id", "")).strip()
+        return {
+            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
+            "why_consider": str(raw_option.get("why_consider", "")).strip()[:240],
+        }
+
+    def _sanitize_topic_value(raw_value: object) -> dict:
+        if not isinstance(raw_value, dict):
+            raw_value = {}
+        topic_id = str(raw_value.get("topic_id", "")).strip()
+        return {
+            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
+            "grade_value": _safe_rating(raw_value.get("grade_value", 1)),
+            "pedagogical_value": _safe_rating(raw_value.get("pedagogical_value", 1)),
+            "engagement_value": _safe_rating(raw_value.get("engagement_value", 1)),
+            "reason": str(raw_value.get("reason", "")).strip()[:240],
+        }
+
+    def _sanitize_weighted_topic_comparison(raw_comparison: object) -> dict:
+        if not isinstance(raw_comparison, dict):
+            raw_comparison = {}
+        preferred_topic_id = str(raw_comparison.get("preferred_topic_id", "")).strip()
+        current_total_raw = raw_comparison.get("current_topic_total", 0)
+        alternative_total_raw = raw_comparison.get("alternative_topic_total", 0)
+        try:
+            current_topic_total = max(0, min(99, int(current_total_raw or 0)))
+        except (TypeError, ValueError):
+            current_topic_total = 0
+        try:
+            alternative_topic_total = max(0, min(99, int(alternative_total_raw or 0)))
+        except (TypeError, ValueError):
+            alternative_topic_total = 0
+        return {
+            "grade_weight": _safe_rating(raw_comparison.get("grade_weight", 1)),
+            "pedagogical_weight": _safe_rating(raw_comparison.get("pedagogical_weight", 1)),
+            "engagement_weight": _safe_rating(raw_comparison.get("engagement_weight", 1)),
+            "current_topic_total": current_topic_total,
+            "alternative_topic_total": alternative_topic_total,
+            "preferred_topic_id": preferred_topic_id if preferred_topic_id in allowed_topic_ids else None,
+            "reason": str(raw_comparison.get("reason", "")).strip()[:240],
+        }
+
+    def _sanitize_chosen_topic(raw_topic: object) -> dict:
+        if not isinstance(raw_topic, dict):
+            raw_topic = {}
+        topic_id = str(raw_topic.get("topic_id", "")).strip()
+        choice_type = str(raw_topic.get("choice_type", "")).strip()
+        return {
+            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
+            "choice_type": choice_type if choice_type in {"stay", "switch"} else "",
+            "reason": str(raw_topic.get("reason", "")).strip()[:240],
+        }
+
+    def _sanitize_student_model(raw_model: object) -> dict:
+        if not isinstance(raw_model, dict):
+            raw_model = {}
+        return {
+            "understanding": str(raw_model.get("understanding", "")).strip()[:240],
+            "uncertainty": str(raw_model.get("uncertainty", "")).strip()[:240],
+            "failure_mode": str(raw_model.get("failure_mode", "")).strip()[:240],
+        }
+
+    def _sanitize_evidence_target(raw_target: object) -> dict:
+        if not isinstance(raw_target, dict):
+            raw_target = {}
+        topic_id = str(raw_target.get("topic_id", "")).strip()
+        target_type = str(raw_target.get("target_type", "")).strip()
+        return {
+            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
+            "element": str(raw_target.get("element", "")).strip()[:160],
+            "target_type": target_type if target_type in _DECISION_TARGET_TYPES else "",
+            "why_now": str(raw_target.get("why_now", "")).strip()[:240],
+        }
+
+    def _safe_rating(value: object) -> int:
+        try:
+            return max(1, min(5, int(value or 1)))
+        except (TypeError, ValueError):
+            return 1
+
+    def _sanitize_move_candidates(raw_candidates: object) -> list[dict]:
+        move_candidates: list[dict] = []
+        if not isinstance(raw_candidates, list):
+            return move_candidates
+        for item in raw_candidates[:4]:
+            if not isinstance(item, dict):
+                continue
+            move_type = str(item.get("move_type", "")).strip()
+            move_candidates.append(
+                {
+                    "move_type": move_type if move_type in _DECISION_MOVE_TYPES else "open_probe",
+                    "prompt_sketch": str(item.get("prompt_sketch", "")).strip()[:200],
+                    "revealing": _safe_rating(item.get("revealing", 1)),
+                    "productive": _safe_rating(item.get("productive", 1)),
+                    "fit": _safe_rating(item.get("fit", 1)),
+                }
+            )
+        return move_candidates
+
+    def _sanitize_choice(raw_choice: object) -> dict:
+        if not isinstance(raw_choice, dict):
+            raw_choice = {}
+        chosen_move_type = str(
+            raw_choice.get("chosen_move", raw_choice.get("move_type", ""))
+        ).strip()
+        return {
+            "chosen_move": chosen_move_type if chosen_move_type in _DECISION_MOVE_TYPES else "open_probe",
+            "reason": str(raw_choice.get("reason", "")).strip()[:240],
+        }
+
+    def _sanitize_reply_draft(raw_draft: object) -> dict:
+        if not isinstance(raw_draft, dict):
+            raw_draft = {}
+        return {
+            "draft": str(raw_draft.get("draft", "")).strip()[:280],
+        }
+
+    def _sanitize_reply_check(raw_check: object) -> dict:
+        if not isinstance(raw_check, dict):
+            raw_check = {}
+        return {
+            key: bool(raw_check.get(key, False))
+            for key in _DECISION_TRACE_CHECK_KEYS
+        }
+
+    def _sanitize_revision(raw_revision: object) -> dict:
+        if not isinstance(raw_revision, dict):
+            raw_revision = {}
+        return {
+            "revised": bool(raw_revision.get("revised", False)),
+            "reason": str(raw_revision.get("reason", "")).strip()[:240],
+        }
+
+    stepwise_present = any(key.startswith("step_") for key in raw_trace)
+
+    if "step_6_chosen_topic" in raw_trace or "step_14_final_move" in raw_trace:
+        trace = {
+            "step_1_current_topic_option": _sanitize_topic_option(raw_trace.get("step_1_current_topic_option")),
+            "step_2_alternative_topic_option": _sanitize_topic_option(raw_trace.get("step_2_alternative_topic_option")),
+            "step_3_current_topic_value": _sanitize_topic_value(raw_trace.get("step_3_current_topic_value")),
+            "step_4_alternative_topic_value": _sanitize_topic_value(raw_trace.get("step_4_alternative_topic_value")),
+            "step_5_weighted_topic_comparison": _sanitize_weighted_topic_comparison(raw_trace.get("step_5_weighted_topic_comparison")),
+            "step_6_chosen_topic": _sanitize_chosen_topic(raw_trace.get("step_6_chosen_topic")),
+            "step_7_student_model": _sanitize_student_model(raw_trace.get("step_7_student_model")),
+            "step_8_evidence_target": _sanitize_evidence_target(raw_trace.get("step_8_evidence_target")),
+            "step_9_move_candidates": _sanitize_move_candidates(raw_trace.get("step_9_move_candidates")),
+            "step_10_choice": _sanitize_choice(raw_trace.get("step_10_choice")),
+            "step_11_reply_draft": _sanitize_reply_draft(raw_trace.get("step_11_reply_draft")),
+            "step_12_reply_check": _sanitize_reply_check(raw_trace.get("step_12_reply_check")),
+            "step_13_revision": _sanitize_revision(raw_trace.get("step_13_revision")),
+            "step_14_final_move": _sanitize_choice(raw_trace.get("step_14_final_move")),
+        }
+        if (
+            not any(v for v in trace["step_6_chosen_topic"].values() if v)
+            and not any(trace["step_7_student_model"].values())
+            and not any(v for v in trace["step_8_evidence_target"].values() if v)
+            and not trace["step_9_move_candidates"]
+            and not trace["step_11_reply_draft"]["draft"]
+        ):
+            return None
+        return trace
+
+    if stepwise_present:
+        student_model = _sanitize_student_model(raw_trace.get("step_1_student_model"))
+        evidence_target = _sanitize_evidence_target(raw_trace.get("step_2_evidence_target"))
+        move_candidates = _sanitize_move_candidates(raw_trace.get("step_3_move_candidates"))
+        chosen_move = _sanitize_choice(raw_trace.get("step_4_choice"))
+        chosen_topic_id = evidence_target.get("topic_id")
+
+        if (
+            not any(student_model.values())
+            and not move_candidates
+            and not any(v for v in evidence_target.values() if v)
+        ):
+            return None
+
+        return {
+            "step_1_current_topic_option": {
+                "topic_id": chosen_topic_id,
+                "why_consider": "",
+            },
+            "step_2_alternative_topic_option": {
+                "topic_id": None,
+                "why_consider": "",
+            },
+            "step_3_current_topic_value": {
+                "topic_id": chosen_topic_id,
+                "grade_value": 1,
+                "pedagogical_value": 1,
+                "engagement_value": 1,
+                "reason": "",
+            },
+            "step_4_alternative_topic_value": {
+                "topic_id": None,
+                "grade_value": 1,
+                "pedagogical_value": 1,
+                "engagement_value": 1,
+                "reason": "",
+            },
+            "step_5_weighted_topic_comparison": {
+                "grade_weight": 1,
+                "pedagogical_weight": 1,
+                "engagement_weight": 1,
+                "current_topic_total": 0,
+                "alternative_topic_total": 0,
+                "preferred_topic_id": chosen_topic_id,
+                "reason": "",
+            },
+            "step_6_chosen_topic": {
+                "topic_id": chosen_topic_id,
+                "choice_type": "stay" if chosen_topic_id else "",
+                "reason": "",
+            },
+            "step_7_student_model": student_model,
+            "step_8_evidence_target": evidence_target,
+            "step_9_move_candidates": move_candidates,
+            "step_10_choice": chosen_move,
+            "step_11_reply_draft": _sanitize_reply_draft(raw_trace.get("step_5_reply_draft")),
+            "step_12_reply_check": _sanitize_reply_check(raw_trace.get("step_6_reply_check")),
+            "step_13_revision": _sanitize_revision(raw_trace.get("step_7_revision")),
+            "step_14_final_move": _sanitize_choice(raw_trace.get("step_8_final_move")),
+        }
+
+    student_model = _sanitize_student_model(raw_trace.get("student_model"))
+    evidence_target = _sanitize_evidence_target(raw_trace.get("evidence_target"))
+    move_candidates = _sanitize_move_candidates(raw_trace.get("move_candidates"))
+    chosen_move = _sanitize_choice(raw_trace.get("chosen_move"))
+
+    if not any(student_model.values()) and not move_candidates and not any(v for v in evidence_target.values() if v):
+        return None
+
+    # Backward-compatible upgrade path: store legacy traces in the new stepwise shape.
+    return {
+        "step_1_current_topic_option": {
+            "topic_id": evidence_target.get("topic_id"),
+            "why_consider": "",
+        },
+        "step_2_alternative_topic_option": {
+            "topic_id": None,
+            "why_consider": "",
+        },
+        "step_3_current_topic_value": {
+            "topic_id": evidence_target.get("topic_id"),
+            "grade_value": 1,
+            "pedagogical_value": 1,
+            "engagement_value": 1,
+            "reason": "",
+        },
+        "step_4_alternative_topic_value": {
+            "topic_id": None,
+            "grade_value": 1,
+            "pedagogical_value": 1,
+            "engagement_value": 1,
+            "reason": "",
+        },
+        "step_5_weighted_topic_comparison": {
+            "grade_weight": 1,
+            "pedagogical_weight": 1,
+            "engagement_weight": 1,
+            "current_topic_total": 0,
+            "alternative_topic_total": 0,
+            "preferred_topic_id": evidence_target.get("topic_id"),
+            "reason": "",
+        },
+        "step_6_chosen_topic": {
+            "topic_id": evidence_target.get("topic_id"),
+            "choice_type": "stay" if evidence_target.get("topic_id") else "",
+            "reason": "",
+        },
+        "step_7_student_model": student_model,
+        "step_8_evidence_target": evidence_target,
+        "step_9_move_candidates": move_candidates,
+        "step_10_choice": chosen_move,
+        "step_11_reply_draft": {"draft": ""},
+        "step_12_reply_check": {key: False for key in _DECISION_TRACE_CHECK_KEYS},
+        "step_13_revision": {"revised": False, "reason": ""},
+        "step_14_final_move": chosen_move,
+    }
+
+
+def sanitize_state_update(
+    old_state: dict,
+    llm_state: dict,
+    allowed_topic_ids: set,
+    *,
+    raw_decision_trace: object | None = None,
+) -> dict:
     """Sanitize a model-returned state update.
 
     Rules enforced:
     - topics_sampled: immutable, taken from old_state
-    - lecture_title: immutable, taken from old_state
-    - topics_covered: subset of allowed_topic_ids
+    - timeout_warning_sent: backend-owned, preserved from old_state
+    - best_mastery: backend-owned, preserved from old_state
+    - current_grade: backend-owned, preserved from old_state
+    - topics_covered: cumulative topics with at least a meaningful foothold
     - mastery: keys in allowed_topic_ids, values clamped int 0-100
+    - evidence_notes: keys in allowed_topic_ids, short strings
+    - current_topic_id: one allowed topic id or None
+    - tutor_comment: short string
     - turn_count: old_turn_count + 1
-    - confidence: clamped float 0.0-1.0
+    - private_decision_trace: backend-stored, never shown to the student
     - unknown keys dropped
     """
     result = {
-        "topics_sampled": list(old_state.get("topics_sampled", [])),
-        "lecture_title": old_state.get("lecture_title", ""),
+        "topics_sampled": _unique_topic_ids(old_state.get("topics_sampled", [])),
+        "timeout_warning_sent": bool(old_state.get("timeout_warning_sent", False)),
+        "best_mastery": {
+            k: max(0, min(100, int(v)))
+            for k, v in old_state.get("best_mastery", {}).items()
+            if isinstance(k, str) and k in allowed_topic_ids and isinstance(v, int | float)
+        },
+        "current_grade": float(old_state.get("current_grade", 0.0) or 0.0),
     }
 
-    result["topics_covered"] = [
-        t for t in llm_state.get("topics_covered", [])
-        if isinstance(t, str) and t in allowed_topic_ids
-    ]
-
-    raw_mastery = llm_state.get("mastery", {})
-    result["mastery"] = {}
+    result["mastery"] = {
+        k: v
+        for k, v in old_state.get("mastery", {}).items()
+        if isinstance(k, str) and k in allowed_topic_ids and isinstance(v, int | float)
+    }
+    raw_mastery = llm_state.get("mastery")
     if isinstance(raw_mastery, dict):
         for k, v in raw_mastery.items():
             if isinstance(k, str) and k in allowed_topic_ids:
@@ -227,14 +761,46 @@ def sanitize_state_update(old_state: dict, llm_state: dict, allowed_topic_ids: s
                 except (ValueError, TypeError):
                     pass
 
-    result["turn_count"] = old_state.get("turn_count", 0) + 1
+    result["evidence_notes"] = {
+        k: str(v)
+        for k, v in old_state.get("evidence_notes", {}).items()
+        if isinstance(k, str) and k in allowed_topic_ids
+    }
+    raw_evidence_notes = llm_state.get("evidence_notes")
+    if isinstance(raw_evidence_notes, dict):
+        for k, v in raw_evidence_notes.items():
+            if isinstance(k, str) and k in allowed_topic_ids:
+                result["evidence_notes"][k] = str(v)
 
-    raw_conf = llm_state.get("confidence", old_state.get("confidence", 0.0))
-    try:
-        conf = float(raw_conf)
-    except (TypeError, ValueError):
-        conf = 0.0
-    result["confidence"] = max(0.0, min(1.0, conf))
+    prior_topics_covered = [
+        t for t in old_state.get("topics_covered", [])
+        if isinstance(t, str) and t in allowed_topic_ids
+    ]
+    meaningful_topics = [
+        topic_id
+        for topic_id, score in result["mastery"].items()
+        if isinstance(score, int | float) and int(score) >= 45
+    ]
+    seen_topics = set()
+    result["topics_covered"] = []
+    for topic_id in prior_topics_covered + meaningful_topics:
+        if topic_id in seen_topics:
+            continue
+        seen_topics.add(topic_id)
+        result["topics_covered"].append(topic_id)
+
+    raw_current_topic_id = llm_state.get("current_topic_id", old_state.get("current_topic_id"))
+    result["current_topic_id"] = (
+        raw_current_topic_id
+        if isinstance(raw_current_topic_id, str) and raw_current_topic_id in allowed_topic_ids
+        else None
+    )
+
+    raw_tutor_comment = llm_state.get("tutor_comment", old_state.get("tutor_comment", ""))
+    result["tutor_comment"] = str(raw_tutor_comment)
+
+    result["turn_count"] = old_state.get("turn_count", 0) + 1
+    result["private_decision_trace"] = _sanitize_decision_trace(raw_decision_trace, allowed_topic_ids)
 
     return result
 
@@ -260,13 +826,14 @@ def generate_topic_scores(
         {
           "topic_scores": [{"topic_id": "T1", "score": 85, "rationale": "..."}],
           "explanation": "...",
+          "scored_topics": ["Topic 1"],
           "missing_topics": ["T8"]
         }
 
     Falls back to empty scores on any failure.
     """
     settings = config_module.get_settings()
-    topic_defs = lecture_package.get("topics") or parse_rubric_topics(lecture_package["rubric"])
+    topic_defs = resolve_topic_defs(lecture_package)
     context = build_dialogue_context(lecture_package, settings.max_grading_context_chars)
     rubric_text = lecture_package["rubric"]
 
@@ -313,23 +880,36 @@ def generate_topic_scores(
         parsed = j_.loads(raw)
         raw_topic_scores = parsed.get("topic_scores", [])
         explanation = str(parsed.get("explanation", ""))
-        raw_missing = [str(t) for t in parsed.get("missing_topics", []) if isinstance(t, str)]
     except openai_.AuthenticationError:
         _log.exception("generate_topic_scores failed: OpenAI authentication error")
-        return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
+        return {
+            "topic_scores": [],
+            "explanation": "Grading unavailable.",
+            "scored_topics": [],
+            "missing_topics": [],
+        }
     except openai_.APIError:
         # Rate limits, timeouts, connection errors from the OpenAI API.
         _log.exception("generate_topic_scores failed: OpenAI API error")
-        return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
+        return {
+            "topic_scores": [],
+            "explanation": "Grading unavailable.",
+            "scored_topics": [],
+            "missing_topics": [],
+        }
     except Exception:
         # Catches malformed JSON, missing model output keys, and other unexpected
         # response-parsing failures. Our own validation code below is deliberately
         # outside this block so bugs there propagate as 500 instead of hiding as fallback.
         _log.exception("generate_topic_scores failed")
-        return {"topic_scores": [], "explanation": "Grading unavailable.", "missing_topics": []}
+        return {
+            "topic_scores": [],
+            "explanation": "Grading unavailable.",
+            "scored_topics": [],
+            "missing_topics": [],
+        }
     # Our own validation logic — bugs here propagate as 500, not masked as fallback
     allowed_topic_ids = {t["topic_id"] for t in topic_defs}
-    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
     seen: dict = {}
     for ts in raw_topic_scores:
         if not isinstance(ts, dict):
@@ -347,14 +927,22 @@ def generate_topic_scores(
                 "score": score,
                 "rationale": str(ts.get("rationale", "")),
             }
+    topic_scores = list(seen.values())
+    scored_topic_ids = {ts["topic_id"] for ts in topic_scores}
+    scored_topics = [
+        topic["label"]
+        for topic in topic_defs
+        if topic["topic_id"] in scored_topic_ids
+    ]
     labelled_missing = [
-        topic_id_to_label.get(tid, tid)
-        for tid in raw_missing
-        if tid in allowed_topic_ids
+        topic["label"]
+        for topic in topic_defs
+        if topic["topic_id"] not in scored_topic_ids
     ]
     return {
-        "topic_scores": list(seen.values()),
+        "topic_scores": topic_scores,
         "explanation": explanation,
+        "scored_topics": scored_topics,
         "missing_topics": labelled_missing,
     }
 
@@ -382,36 +970,59 @@ def generate_report(
     rubric_text = lecture_package["rubric"]
     final_grade = grading_result.get("final_grade", 0)
     explanation = grading_result.get("explanation", "")
+    scored_topics = grading_result.get("scored_topics", [])
     missing_topics = grading_result.get("missing_topics", [])
     topic_scores = grading_result.get("topic_scores", [])
 
     topic_summary = ", ".join(
         f"{ts['topic_id']}={ts['score']}" for ts in topic_scores
     ) if topic_scores else "none assessed"
+    scored_summary = ", ".join(scored_topics) if scored_topics else "no strong footholds yet"
+    missing_summary = ", ".join(missing_topics) if missing_topics else "none"
 
     system_prompt = (
         "You are writing a final mastery report for a student's tutoring session.\n"
-        "Write a clear, professional 2–3 paragraph report based on the assessment provided.\n"
-        "Focus on: what the student demonstrated, where they showed strength, where growth is needed.\n"
+        "Write a quick-read, professional report based on the assessment provided.\n"
+        "Use short section headings and bullet points, not dense paragraphs.\n"
+        "Keep it brief and easy to scan.\n"
         "Do not include a grade number — the backend will add that separately.\n\n"
         f"Final grade earned: {final_grade}/100\n"
         f"Topic scores: {topic_summary}\n"
         f"Assessment: {explanation}\n"
-        f"Topics not covered: {missing_topics}\n\n"
+        f"Stronger areas so far: {scored_summary}\n"
+        f"Topics not covered: {missing_summary}\n\n"
         "Rubric for reference:\n"
         f"{rubric_text}\n\n"
+        "Return `report_text` as plain text with exactly these section headings:\n"
+        "Summary:\n"
+        "Stronger areas:\n"
+        "Next steps:\n"
+        "Coverage:\n"
+        "Under each heading, use 1-3 short bullet points that start with '- '.\n"
+        "Do not write multi-paragraph prose.\n\n"
         "Return JSON only:\n"
-        '{"report_text": "your 2-3 paragraph report"}'
+        '{"report_text": "your bullet-point report"}'
     )
 
     conversation_text = "\n\n".join(
         f"[{msg['role'].upper()}]: {msg['content']}" for msg in messages
     )
 
+    fallback_next_step = (
+        f"Strengthen coverage in {missing_topics[0]}."
+        if missing_topics else
+        "Keep pushing for one more clean distinction, explanation, or application."
+    )
     fallback_report_text = (
-        f"Session report for {student_id}. "
-        f"Final grade: {final_grade}/100. "
-        f"{explanation}"
+        "Summary:\n"
+        f"- {explanation or 'This session produced some usable evidence, but the picture is still incomplete.'}\n"
+        "Stronger areas:\n"
+        f"- {scored_summary}.\n"
+        "Next steps:\n"
+        f"- {fallback_next_step}\n"
+        "Coverage:\n"
+        f"- Covered: {scored_summary}.\n"
+        f"- Not yet covered: {missing_summary}."
     )
 
     try:
@@ -427,7 +1038,10 @@ def generate_report(
         )
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
-        report_text = str(parsed["report_text"])
+        report_text = language_policy.ensure_english_text(
+            str(parsed["report_text"]),
+            language_policy.ENGLISH_ONLY_REPORT_FALLBACK,
+        )
     except openai_.AuthenticationError:
         _log.exception("generate_report failed: OpenAI authentication error")
         report_text = fallback_report_text
