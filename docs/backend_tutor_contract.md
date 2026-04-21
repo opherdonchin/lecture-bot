@@ -23,7 +23,7 @@ The prompt template can be overridden by:
 - `Settings.tutor_prompt_template`
 - `lecture_package["config"]["tutor_prompt_template"]`, when present
 
-The old `prompts/dialogue_system_prompt.md` name is no longer the configured runtime prompt name.
+Legacy dialogue prompt names are no longer configured runtime prompt names.
 
 ## 3. Backend Inputs To The Tutor
 
@@ -36,6 +36,8 @@ For each model call, the backend renders the prompt and appends an injected runt
 - `session_timing`
 - `rubric_text`
 - `lecture_context`
+
+Recent conversation history is passed as prior chat-completion messages, and the latest student message is passed as the current user message. These are not duplicated inside the injected runtime JSON.
 
 `lecture_context` is assembled from lecture package context sections whose keys are in:
 
@@ -139,6 +141,8 @@ The backend computes timing context for each ordinary turn:
 - `timing_reliable`
 
 If the session has timed out before a new student message is processed, the backend computes the authoritative grade/report, persists the assistant closing message, marks the session ended, and does not call the ordinary tutor path for a new instructional turn.
+
+The backend does not currently inject a separate `turn_context`, `session_start`, or `five_minute_warning` field. Five-minute warning behavior is inferred from `session_timing.closing_mode` and `session_timing.timeout_warning_sent`.
 
 ## 10. Opening And Closing
 

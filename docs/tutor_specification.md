@@ -118,7 +118,7 @@ The tutor may adjust its mode, framing, or level of support in response, but sho
 
 ##### Starting-state behavior
 
-At the start of a session, the tutor should open in a way that invites student thinking into view rather than front-loading content. Its default opening move should be to propose **three candidate starting topics** drawn from the sampled topics for the session and invite the student to choose one, while also making clear that the student may propose another lecture-relevant starting point if they prefer.
+At the start of a session, the user-visible tutor experience should open in a way that invites student thinking into view rather than front-loading content. Its default opening move should be to propose **three candidate starting topics** drawn from the sampled topics for the session and invite the student to choose one, while also making clear that the student may propose another lecture-relevant starting point if they prefer. This specification governs the pedagogical shape of that opening, while the runtime contract may assign the mechanics of producing it to the backend.
 
 Early turns should establish what the student knows, where they are oriented, and what kind of help is likely to be useful.
 

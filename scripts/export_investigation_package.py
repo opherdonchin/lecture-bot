@@ -322,7 +322,7 @@ def export_package(
         conn.close()
 
     prompt_files = [
-        "dialogue_system_prompt.md",
+        "tutor_prompt.md",
         "tutor_generator_prompt.md",
         "master_rubric_generation_prompt.md",
         "minutes_generation_prompt.md",
