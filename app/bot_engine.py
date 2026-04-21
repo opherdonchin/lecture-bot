@@ -55,7 +55,16 @@ _FALLBACK_DIALOGUE_MESSAGE = (
     "Let's keep going with one focused question: "
     "what idea from this lecture seems most important to you, and why?"
 )
-_DIALOGUE_PROMPT_TEMPLATE = "dialogue_system_prompt.md"
+def get_tutor_prompt_template(lecture_package: dict | None = None) -> str:
+    """Return the tutor prompt template name, allowing lecture config override."""
+    # Try lecture_package['config']['tutor_prompt_template'] if present
+    if lecture_package and "config" in lecture_package:
+        config = lecture_package["config"]
+        if isinstance(config, dict) and "tutor_prompt_template" in config:
+            return config["tutor_prompt_template"]
+    # Otherwise, use global config
+    return config_module.get_settings().tutor_prompt_template
+
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +323,7 @@ def sample_session_topics(topic_defs: list[dict], session_id: str, count: int = 
     return rng.sample(topic_ids, k)
 
 
+
 def build_dialogue_system_prompt(
     *,
     lecture_package: dict,
@@ -323,7 +333,8 @@ def build_dialogue_system_prompt(
     timing_context: dict | None = None,
 ) -> str:
     """Build the runtime system prompt around the committed markdown prompt."""
-    prompt_body = prompt_loader.load_prompt_template(_DIALOGUE_PROMPT_TEMPLATE).strip()
+    prompt_template = get_tutor_prompt_template(lecture_package)
+    prompt_body = prompt_loader.load_prompt_template(prompt_template).strip()
     topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
     sampled_topic_ids = _unique_topic_ids(state.get("topics_sampled", []))
     sampled_topics = [

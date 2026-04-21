@@ -9,7 +9,7 @@
 - Session state initialization in `app/session_manager.py`
 - Lecture package loading in `app/lecture_loader.py`
 - Admin lecture processing and package-building flow in `app/admin_workflow.py`
-- Prompt templates in `prompts/dialogue_system_prompt.md`, `prompts/tutor_generation_prompt.md`, `prompts/minutes_generation_prompt.md`, and `prompts/master_rubric_generation_prompt.md`
+- Prompt templates in `prompts/dialogue_system_prompt.md`, `prompts/tutor_generator_prompt.md`, `prompts/minutes_generation_prompt.md`, and `prompts/master_rubric_generation_prompt.md`
 - Export/package script in `scripts/export_session_package.py`
 - Lecture defaults in `lectures/config.json`
 
@@ -84,7 +84,7 @@
 ### What I inspected
 
 - `prompts/dialogue_system_prompt.md`
-- `prompts/tutor_generation_prompt.md`
+- `prompts/tutor_generator_prompt.md`
 
 ### What I concluded
 
@@ -274,7 +274,7 @@
   - reviews it for productivity and reveal level
   - checks whether it smuggles the answer before the question
   - revises it if a less revealing reply would likely work
-- Updated `prompts/tutor_generation_prompt.md` so the generator now targets that stronger internal self-critique step.
+- Updated `prompts/tutor_generator_prompt.md` so the generator now targets that stronger internal self-critique step.
 
 ### Unresolved choices
 
@@ -326,7 +326,7 @@
 ### What I inspected
 
 - `prompts/dialogue_system_prompt.md`
-- `prompts/tutor_generation_prompt.md`
+- `prompts/tutor_generator_prompt.md`
 - prompt-focused tests in `tests/test_bot_engine.py`
 - the recent debugging discussion about repeated checks, vague one-sentence prompts, and lossy decision-trace summaries
 
@@ -367,7 +367,7 @@
   - when the move is strongest
   - when it is a weak or misleading use of that move
   - what kind of pedagogical value it is meant to deliver
-- Mirrored those requirements in `prompts/tutor_generation_prompt.md`.
+- Mirrored those requirements in `prompts/tutor_generator_prompt.md`.
 - Added prompt-level regression checks in `tests/test_bot_engine.py`.
 
 ### Unresolved choices
@@ -464,7 +464,7 @@
   - `assistant_message` must implement the same move family
   - the final move must describe the move actually realized in the emitted message
   - if faithful realization is impossible, the tutor must change the move rather than emit a mismatched question
-- Mirrored those requirements in `prompts/tutor_generation_prompt.md`.
+- Mirrored those requirements in `prompts/tutor_generator_prompt.md`.
 - Added prompt-level regression checks in `tests/test_bot_engine.py`.
 
 ### Unresolved choices
@@ -478,7 +478,7 @@
 - Session `c6ac5b60-b9c0-4311-aebe-a6a77bdc4ac9`
 - timeout/timing injection in `app/main.py`
 - timing instructions in `prompts/dialogue_system_prompt.md`
-- timing guidance in `prompts/tutor_generation_prompt.md`
+- timing guidance in `prompts/tutor_generator_prompt.md`
 
 ### What I concluded
 
@@ -498,7 +498,7 @@
   - and `timeout_warning_sent` is false
   the tutor should briefly say the session is in its final few minutes, then pivot to one concrete last contribution
 - Added a rule not to repeat the warning once `timeout_warning_sent` is already true.
-- Mirrored that expectation in `prompts/tutor_generation_prompt.md`.
+- Mirrored that expectation in `prompts/tutor_generator_prompt.md`.
 - Added prompt-level regression checks in `tests/test_bot_engine.py`.
 
 ### Unresolved choices
@@ -546,7 +546,7 @@
 ### What I inspected
 
 - `prompts/dialogue_system_prompt.md`
-- `prompts/tutor_generation_prompt.md`
+- `prompts/tutor_generator_prompt.md`
 - `app/bot_engine.py`
 - `app/main.py`
 - trace-related tests in `tests/test_bot_engine.py` and `tests/test_send_message.py`

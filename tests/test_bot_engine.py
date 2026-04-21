@@ -808,17 +808,17 @@ def test_dialogue_prompt_has_explicit_move_preference_order():
     assert "prefer the earlier move in this list" in loaded
 
 
-def test_tutor_generation_prompt_requires_stepwise_trace_and_move_order():
-    loaded = prompt_loader.load_prompt_template("tutor_generation_prompt.md")
-    assert "each step be documented separately and sequentially" in loaded
-    assert "- `step_1_current_topic_option`" in loaded
-    assert "- `step_14_final_move`" in loaded
-    assert "weighted current-versus-alternative comparison" in loaded
-    assert "default move value ordering explicit" in loaded
-    assert "1. contrastive prompt" in loaded
-    assert "7. compact explanation" in loaded
-    assert "strong move-binding section" in loaded
-    assert "must change the move rather than keep the move and emit a different question" in loaded
+def test_tutor_generator_prompt_validates_contracts_and_sparse_delta():
+    loaded = prompt_loader.load_prompt_template("tutor_generator_prompt.md")
+    assert "You are given three authoritative inputs" in loaded
+    assert "Tutor Specification Contract" in loaded
+    assert "Backend–Tutor Runtime Contract" in loaded
+    assert "Step 1 — Check tutor-spec conformance" in loaded
+    assert "Step 2 — Check backend compatibility" in loaded
+    assert "Step 4 — Generate the runtime tutor prompt only if Steps 1 and 2 both pass" in loaded
+    assert "`updated_state` is a **sparse delta**" in loaded
+    assert "Do not drift into full-state replacement language." in loaded
+    assert "Do not output the runtime tutor prompt unless both checks pass." in loaded
 
 
 def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():

@@ -185,7 +185,7 @@ def collect_lecture_files(lecture_dir: pathlib.Path) -> list[tuple[pathlib.Path,
 def collect_prompt_files() -> list[tuple[pathlib.Path, str]]:
     wanted = [
         ("dialogue_system_prompt.md", "prompts/dialogue_system_prompt.md"),
-        ("tutor_generation_prompt.md", "prompts/tutor_generation_prompt.md"),
+        ("tutor_generator_prompt.md", "prompts/tutor_generator_prompt.md"),
         ("master_rubric_generation_prompt.md", "prompts/master_rubric_generation_prompt.md"),
         ("minutes_generation_prompt.md", "prompts/minutes_generation_prompt.md"),
     ]
@@ -217,7 +217,7 @@ def build_manifest(
             "conversation/messages_for_chat_agent.json",
             "prompts/dialogue_system_prompt.md",
             "prompts/dialogue_system_prompt_rendered_latest.md",
-            "prompts/tutor_generation_prompt.md",
+            "prompts/tutor_generator_prompt.md",
             "prompts/master_rubric_generation_prompt.md",
             "prompts/minutes_generation_prompt.md",
             "lecture/lecture_config.json",

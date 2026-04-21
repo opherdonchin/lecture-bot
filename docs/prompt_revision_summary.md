@@ -8,7 +8,7 @@
   - made each turn seek exactly one new content contribution
   - added guardrails against bare topic-ID leakage, vague one-sentence prompts, and unreliable time claims
 
-- Rewrote the tutor-generation prompt in [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:1) so it now targets:
+- Rewrote the tutor-generation prompt in [prompts/tutor_generator_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generator_prompt.md:1) so it now targets:
   - compact hidden turn procedure
   - candidate-move comparison
   - bracketed grading awareness
@@ -69,7 +69,7 @@
 - Removed the experimental backend-side low-reveal message shaping from [app/bot_engine.py](/home/opher/Repositories/lecture-bot/app/bot_engine.py:390).
 - Moved reveal-discipline back into the tutor prompt itself:
   - [prompts/dialogue_system_prompt.md](/home/opher/Repositories/lecture-bot/prompts/dialogue_system_prompt.md:1)
-  - [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:1)
+  - [prompts/tutor_generator_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generator_prompt.md:1)
 
 Why:
 
@@ -113,7 +113,7 @@ Tradeoff:
   6. `concise_reformulation`
   7. `compact_explanation`
 - Sharpened the move heuristics so they say more clearly when a move is genuinely useful and when it is only tidying wording, repeating a prior demand, or revealing too much.
-- Mirrored those requirements in [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:1).
+- Mirrored those requirements in [prompts/tutor_generator_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generator_prompt.md:1).
 - Added prompt-level regression checks in [tests/test_bot_engine.py](/home/opher/Repositories/lecture-bot/tests/test_bot_engine.py:640).
 
 Why:
@@ -170,7 +170,7 @@ Why:
   - `assistant_message` must implement the same move family as the chosen move
   - `step_8_final_move` must describe the move actually realized by `assistant_message`
   - if faithful realization is not possible, the tutor must change the move rather than keep the move and emit a different question
-- Mirrored those requirements in [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:1).
+- Mirrored those requirements in [prompts/tutor_generator_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generator_prompt.md:1).
 - Added prompt-level regression checks in [tests/test_bot_engine.py](/home/opher/Repositories/lecture-bot/tests/test_bot_engine.py:644).
 
 Why:
@@ -191,7 +191,7 @@ Why:
   - briefly tells the student when the session has entered its final few minutes
   - pivots to one concrete final goal instead of acting like there is unlimited time
   - avoids repeating the warning after it has already been given once
-- Mirrored that requirement in [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:254).
+- Mirrored that requirement in [prompts/tutor_generator_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generator_prompt.md:254).
 - Added regression checks in [tests/test_bot_engine.py](/home/opher/Repositories/lecture-bot/tests/test_bot_engine.py:644).
 
 Why:
@@ -227,7 +227,7 @@ Why:
   - a weighted current-versus-alternative comparison
   - the chosen topic for the turn
 - Moved the student model and evidence target later in the sequence so they are explicitly written inside the chosen topic rather than implicitly inheriting the previous one.
-- Updated [prompts/tutor_generation_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generation_prompt.md:1) to require the same topic-control logic.
+- Updated [prompts/tutor_generator_prompt.md](/home/opher/Repositories/lecture-bot/prompts/tutor_generator_prompt.md:1) to require the same topic-control logic.
 - Extended [app/bot_engine.py](/home/opher/Repositories/lecture-bot/app/bot_engine.py:430) to sanitize and store the richer trace shape, while still upgrading older stepwise and legacy traces into the new format.
 - Updated [app/main.py](/home/opher/Repositories/lecture-bot/app/main.py:344) so audit metadata now prefers the chosen-topic trace step when extracting the turn’s target topic.
 - Updated regression coverage in:
