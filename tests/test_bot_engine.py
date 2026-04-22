@@ -782,30 +782,27 @@ def test_grading_validation_non_dict_entry_skipped():
 # prompt loading
 # ---------------------------------------------------------------------------
 
-def test_load_prompt_template_reads_dialogue_prompt_markdown():
-    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
-    assert "You are a focused, natural, pedagogically intelligent lecture-review tutor" in loaded
+def test_load_prompt_template_reads_tutor_prompt_markdown():
+    loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
+    assert "You are the runtime tutor for a lecture-review dialogue" in loaded
 
 
-def test_dialogue_prompt_requires_stepwise_decision_trace():
-    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
-    assert "The `decision_trace` must document these steps separately." in loaded
-    assert "* `step_1_current_topic_option`" in loaded
-    assert "* `step_14_final_move`" in loaded
-    assert "`step_12_reply_check` should explicitly record" in loaded
-    assert "Topic control" in loaded
-    assert "weighted current-versus-alternative totals" in loaded
-    assert "Move binding" in loaded
-    assert "must implement the same move family as `step_10_choice.chosen_move`" in loaded
-    assert "briefly tell the student that the session is in its final few minutes" in loaded
+def test_tutor_prompt_uses_backend_runtime_context_names():
+    loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
+    assert "current_tutoring_state" in loaded
+    assert "session_timing" in loaded
+    assert "rubric_text" in loaded
+    assert "sampled_topics" in loaded
+    assert "turn_context" not in loaded
+    assert "warning_reason" not in loaded
 
 
-def test_dialogue_prompt_has_explicit_move_preference_order():
-    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
-    assert "Move preference order" in loaded
-    assert "1. `contrastive_prompt`" in loaded
-    assert "7. `compact_explanation`" in loaded
-    assert "prefer the earlier move in this list" in loaded
+def test_tutor_prompt_describes_backend_owned_lifecycle_boundaries():
+    loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
+    assert "The backend owns the opening message." in loaded
+    assert "Timeout closure is backend-owned." in loaded
+    assert "session_timing.closing_mode" in loaded
+    assert "session_timing.timeout_warning_sent" in loaded
 
 
 def test_tutor_generator_prompt_validates_contracts_and_sparse_delta():
@@ -816,12 +813,16 @@ def test_tutor_generator_prompt_validates_contracts_and_sparse_delta():
     assert "Step 1 — Check tutor-spec conformance" in loaded
     assert "Step 2 — Check backend compatibility" in loaded
     assert "Step 4 — Generate the runtime tutor prompt only if Steps 1 and 2 both pass" in loaded
+    assert "`current_tutoring_state`" in loaded
+    assert "`session_timing`" in loaded
+    assert "`rubric_text`" in loaded
+    assert "`turn_context`" not in loaded
     assert "`updated_state` is a **sparse delta**" in loaded
     assert "Do not drift into full-state replacement language." in loaded
     assert "Do not output the runtime tutor prompt unless both checks pass." in loaded
 
 
-def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
+def test_generate_reply_uses_tutor_prompt_markdown_with_injected_context():
     lecture_package = {
         "lecture_id": "lecture_01",
         "config": {"title": "Lecture 1"},
@@ -881,13 +882,15 @@ def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
 
     create_kwargs = mock_client.chat.completions.create.call_args.kwargs
     system_prompt = create_kwargs["messages"][0]["content"]
-    assert "You are a focused, natural, pedagogically intelligent lecture-review tutor" in system_prompt
+    assert "You are the runtime tutor for a lecture-review dialogue" in system_prompt
     assert "Runtime context" in system_prompt
     assert '"topic_id": "T1"' in system_prompt
     assert '"label": "Reality–Data–Model distinction"' in system_prompt
     assert '"topics_covered": [' in system_prompt
     assert '"best_mastery": {' in system_prompt
     assert '"session_timing": {' in system_prompt
+    assert '"current_tutoring_state": {' in system_prompt
+    assert '"rubric_text":' in system_prompt
     assert '"closing_mode": true' in system_prompt
     assert '"minutes_elapsed": 16' in system_prompt
     assert '"session_duration_minutes": 20' in system_prompt

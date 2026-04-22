@@ -92,17 +92,23 @@ The runtime tutor prompt you generate must assume the backend contract exactly, 
 The prompt must treat the backend as providing runtime inputs such as:
 
 - `lecture_title`
-- `rubric`
+- `sampled_topics`
+- `topic_structure_note`
+- `current_tutoring_state`
+- `session_timing`
+- `rubric_text`
 - `lecture_context`
-- `current_state`
-- `conversation_history`
-- `turn_context`
 
-and possibly optional timing metadata such as:
+The backend provides recent conversation history as prior chat messages and the latest student message as the current user message. These are not fields inside the injected runtime JSON.
 
-- `session_duration_minutes`
+`session_timing` may contain timing metadata such as:
+
 - `minutes_remaining`
-- `warning_reason`
+- `minutes_elapsed`
+- `session_duration_minutes`
+- `closing_mode`
+- `timeout_warning_sent`
+- `timing_reliable`
 
 Do not assume any additional runtime inputs unless explicitly allowed by the backend contract.
 
@@ -152,11 +158,10 @@ Do not introduce new runtime fields.
 
 The generated runtime tutor prompt must respect backend lifecycle semantics:
 
-- `session_start` is a backend-signaled lifecycle turn, not something the tutor infers
-- `five_minute_warning` is a backend-signaled lifecycle turn, not something the tutor improvises
-- `student_turn` is the ordinary content turn
+- the backend owns the opening message and timeout closure
+- ordinary model-backed tutor calls happen during `/send_message`
+- five-minute warning behavior is driven by `session_timing.closing_mode` and `session_timing.timeout_warning_sent`, not by an invented lifecycle field
 - if timing metadata is absent, the tutor must not fabricate it
-- if `student_message` is absent on a lifecycle turn, the tutor must not pretend the student asked a content question
 
 If the tutor specification defines special opening behavior, warning behavior, or closing behavior, encode it only in ways compatible with the lifecycle model in the backend contract.
 

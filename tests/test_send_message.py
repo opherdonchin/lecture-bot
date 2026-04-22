@@ -484,7 +484,7 @@ def test_send_message_writes_dialogue_turn_audit_row(client):
         .one()
     )
     assert audit_row.turn_index == 1
-    assert audit_row.prompt_template_name == "dialogue_system_prompt.md"
+    assert audit_row.prompt_template_name == "tutor_prompt.md"
     assert audit_row.dialogue_model
-    assert "focused, natural, pedagogically intelligent lecture-review tutor" in audit_row.rendered_system_prompt
+    assert "You are the runtime tutor for a lecture-review dialogue" in audit_row.rendered_system_prompt
     assert audit_row.user_message == "What counts as data"

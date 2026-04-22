@@ -184,7 +184,7 @@ def collect_lecture_files(lecture_dir: pathlib.Path) -> list[tuple[pathlib.Path,
 
 def collect_prompt_files() -> list[tuple[pathlib.Path, str]]:
     wanted = [
-        ("dialogue_system_prompt.md", "prompts/dialogue_system_prompt.md"),
+        ("tutor_prompt.md", "prompts/tutor_prompt.md"),
         ("tutor_generator_prompt.md", "prompts/tutor_generator_prompt.md"),
         ("master_rubric_generation_prompt.md", "prompts/master_rubric_generation_prompt.md"),
         ("minutes_generation_prompt.md", "prompts/minutes_generation_prompt.md"),
@@ -215,8 +215,8 @@ def build_manifest(
         "included_files": [
             "conversation/session_bundle.json",
             "conversation/messages_for_chat_agent.json",
-            "prompts/dialogue_system_prompt.md",
-            "prompts/dialogue_system_prompt_rendered_latest.md",
+            "prompts/tutor_prompt.md",
+            "prompts/tutor_prompt_rendered_latest.md",
             "prompts/tutor_generator_prompt.md",
             "prompts/master_rubric_generation_prompt.md",
             "prompts/minutes_generation_prompt.md",
@@ -273,7 +273,7 @@ def export_session_package(lecture_id: str, session_id: str | None, output_dir: 
         zf.writestr("manifest.json", write_json_bytes(manifest))
         zf.writestr("conversation/session_bundle.json", write_json_bytes(session_bundle))
         zf.writestr("conversation/messages_for_chat_agent.json", write_json_bytes(chat_agent_messages))
-        zf.writestr("prompts/dialogue_system_prompt_rendered_latest.md", rendered_prompt.encode("utf-8"))
+        zf.writestr("prompts/tutor_prompt_rendered_latest.md", rendered_prompt.encode("utf-8"))
 
         for source_path, archive_name in collect_prompt_files():
             zf.write(source_path, archive_name)
