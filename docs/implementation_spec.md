@@ -38,7 +38,7 @@ The student app exposes a browser chat UI plus RPC-style JSON endpoints.
 | `/health` | GET | Return `{"status": "ok"}`. |
 | `/lectures` | GET | List lecture IDs with a `lecture_config.json`. |
 | `/start_session` | POST | Load the lecture package, create a session, sample focus topics, persist the backend opening message. |
-| `/send_message` | POST | Validate session, enforce timeout, reject non-English student text, call the tutor model, sanitize state, persist messages and audit row. |
+| `/send_message` | POST | Validate session, enforce timeout, reject non-English student text, call the tutor model, sanitize state, validate/log any private artifact, persist messages and audit row. |
 | `/get_grade` | POST | Compute current grade from backend-owned best mastery state. |
 | `/generate_report` | POST | Build the same authoritative grade snapshot and ask OpenAI for report prose, with a local fallback. |
 | `/restart_session` | POST | End the current session and create a fresh one for the same student and lecture. |
@@ -95,7 +95,6 @@ Initial state is created in `app/session_manager.py`.
   "evidence_notes": {},
   "current_topic_id": null,
   "tutor_comment": "",
-  "private_decision_trace": null,
   "current_grade": 0.0,
   "timeout_warning_sent": false,
   "turn_count": 0
@@ -107,23 +106,28 @@ Field ownership:
 - Backend-owned: `topics_sampled`, `best_mastery`, `current_grade`, `timeout_warning_sent`, `turn_count`
 - Tutor-updated through sanitized model output: `mastery`, `evidence_notes`
 - Backend-derived: `topics_covered`, derived from topics whose mastery is at least a meaningful foothold
-- Internal/debug support: `current_topic_id`, `tutor_comment`, `private_decision_trace`
+- Tutor-local support: `current_topic_id`, `tutor_comment`
+
+Private artifacts are not part of `session_state`. When a session has a fixed private artifact schema, each ordinary tutoring turn logs the returned private artifact in a separate table.
 
 ## 7. Tutor Runtime
 
 The default runtime tutor prompt is `prompts/tutor_prompt.md`, selected by `Settings.tutor_prompt_template`.
+
+The active private artifact schema, when present, is loaded from the generated schema file accompanying the active prompt. At session creation, the backend snapshots that schema text into `sessions.private_artifact_schema_json`. If no schema file exists for the active prompt, the session field is null and ordinary turns do not use private artifacts. Prompt history and schema history are not stored.
 
 For each ordinary student turn, the backend:
 
 1. loads recent messages,
 2. computes timing context,
 3. builds lecture context with deterministic truncation,
-4. renders the tutor prompt plus injected runtime JSON,
+4. renders the tutor prompt plus injected runtime JSON, including `private_artifact_schema_json` when the session has one,
 5. calls OpenAI with `response_format={"type": "json_object"}`,
 6. sanitizes the returned assistant message,
 7. sanitizes and merges state updates,
-8. records a dialogue audit row,
-9. persists the student and assistant messages.
+8. validates and logs `private_artifact` when a session schema exists,
+9. records a dialogue audit row,
+10. persists the student and assistant messages.
 
 The model is expected to return:
 
@@ -134,9 +138,12 @@ The model is expected to return:
     "mastery": {},
     "evidence_notes": {},
     "topics_covered": []
-  }
+  },
+  "private_artifact": {}
 }
 ```
+
+`private_artifact` is required only when the session has `private_artifact_schema_json`. It is private/backend-facing, validated against the session schema, logged per turn, and never merged into tutoring state, messages, grading state, or lifecycle state. Validation failures are recorded in the private artifact log and do not crash the tutoring turn by themselves.
 
 The backend is conservative: unknown topic IDs are ignored, mastery values are clamped to `0..100`, backend-owned fields are preserved, and `topics_covered` is not trusted as authoritative.
 
@@ -179,6 +186,11 @@ Core tables are defined in `app/models.py`:
 - `session_state`
 - `grade_events`
 - `dialogue_turn_audits`
+- `private_artifact_logs`
+
+`sessions.private_artifact_schema_json` is nullable. Non-null values are fixed for that session and written once at session creation.
+
+`private_artifact_logs` stores one row per ordinary tutoring turn when the session has a private artifact schema. The log stores the artifact JSON text and a nullable validation error. Artifact internals are not decomposed into relational columns.
 
 The SQLite database is runtime state, not a long-term archive. Databases, logs, private lecture material, exports, rosters, and `.env` files must not be committed.
 

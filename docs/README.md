@@ -21,8 +21,11 @@ This directory now keeps only current operating and design references. The older
 Prompt files live in [`../prompts`](../prompts), not in this directory.
 
 - Runtime tutor prompt: [`../prompts/tutor_prompt.md`](../prompts/tutor_prompt.md)
+- Runtime private artifact schema: [`../prompts/tutor_prompt_private_artifact_schema.json`](../prompts/tutor_prompt_private_artifact_schema.json)
 - Tutor prompt generator: [`../prompts/tutor_generator_prompt.md`](../prompts/tutor_generator_prompt.md)
 - Minutes generation prompt: [`../prompts/minutes_generation_prompt.md`](../prompts/minutes_generation_prompt.md)
 - Rubric generation prompt: [`../prompts/master_rubric_generation_prompt.md`](../prompts/master_rubric_generation_prompt.md)
+
+Generated tutor prompts may have an accompanying `*_private_artifact_schema.json` file. At session creation, the backend snapshots the active schema into the session row; prompt history and schema history are not stored.
 
 The legacy classifier prompts under `prompts/old/` are retained only as prompt history and are not part of the current runtime.

@@ -33,6 +33,22 @@ def test_send_message_invalid_session(client):
     assert response.json()["detail"] == "Session not found"
 
 
+VALID_PRIVATE_ARTIFACT = {
+    "governing_condition": "ordinary content turn",
+    "locus_choice": "stay with T1",
+    "student_model": {
+        "understanding": "partial",
+        "orientation": "oriented",
+        "engagement": "engaged",
+        "momentum": "moving",
+    },
+    "dominant_need": "understand the student better",
+    "target_and_primary_interaction": "criterion check through probing",
+    "chosen_move": "ask one focused question",
+    "alignment_check": "fits priorities and preserves ownership",
+}
+
+
 def _mock_openai_dialogue(reply_text="Test reply."):
     """Patch openai.OpenAI so generate_reply returns a canned JSON response."""
     import json as j
@@ -46,69 +62,7 @@ def _mock_openai_dialogue(reply_text="Test reply."):
             "current_topic_id": None,
             "tutor_comment": "",
         },
-        "decision_trace": {
-            "step_1_current_topic_option": {
-                "topic_id": "T1",
-                "why_consider": "",
-            },
-            "step_2_alternative_topic_option": {
-                "topic_id": "T2",
-                "why_consider": "",
-            },
-            "step_3_current_topic_value": {
-                "topic_id": "T1",
-                "grade_value": 3,
-                "pedagogical_value": 3,
-                "engagement_value": 3,
-                "reason": "",
-            },
-            "step_4_alternative_topic_value": {
-                "topic_id": "T2",
-                "grade_value": 3,
-                "pedagogical_value": 3,
-                "engagement_value": 3,
-                "reason": "",
-            },
-            "step_5_weighted_topic_comparison": {
-                "grade_weight": 3,
-                "pedagogical_weight": 4,
-                "engagement_weight": 3,
-                "current_topic_total": 27,
-                "alternative_topic_total": 24,
-                "preferred_topic_id": "T1",
-                "reason": "",
-            },
-            "step_6_chosen_topic": {
-                "topic_id": "T1",
-                "choice_type": "stay",
-                "reason": "",
-            },
-            "step_7_student_model": {
-                "understanding": "",
-                "uncertainty": "",
-                "failure_mode": "",
-            },
-            "step_8_evidence_target": {
-                "topic_id": "T1",
-                "element": "",
-                "target_type": "criterion",
-                "why_now": "",
-            },
-            "step_9_move_candidates": [],
-            "step_10_choice": {
-                "chosen_move": "open_probe",
-                "reason": "",
-            },
-            "step_11_reply_draft": {"draft": ""},
-            "step_12_reply_check": {
-                "most_productive": True,
-                "minimally_revealing": True,
-                "smuggles_answer": False,
-                "asks_one_contribution": True,
-            },
-            "step_13_revision": {"revised": False, "reason": ""},
-            "step_14_final_move": {"move_type": "open_probe", "reason": ""},
-        },
+        "private_artifact": VALID_PRIVATE_ARTIFACT,
     })
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.return_value = mock_resp
@@ -167,69 +121,7 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
             "current_topic_id": "T1",
             "tutor_comment": "bank T1 and verify once more",
         },
-        "decision_trace": {
-            "step_1_current_topic_option": {
-                "topic_id": "T1",
-                "why_consider": "already active",
-            },
-            "step_2_alternative_topic_option": {
-                "topic_id": "T2",
-                "why_consider": "possible breadth move",
-            },
-            "step_3_current_topic_value": {
-                "topic_id": "T1",
-                "grade_value": 4,
-                "pedagogical_value": 4,
-                "engagement_value": 3,
-                "reason": "",
-            },
-            "step_4_alternative_topic_value": {
-                "topic_id": "T2",
-                "grade_value": 3,
-                "pedagogical_value": 3,
-                "engagement_value": 3,
-                "reason": "",
-            },
-            "step_5_weighted_topic_comparison": {
-                "grade_weight": 3,
-                "pedagogical_weight": 4,
-                "engagement_weight": 3,
-                "current_topic_total": 37,
-                "alternative_topic_total": 27,
-                "preferred_topic_id": "T1",
-                "reason": "",
-            },
-            "step_6_chosen_topic": {
-                "topic_id": "T1",
-                "choice_type": "stay",
-                "reason": "",
-            },
-            "step_7_student_model": {
-                "understanding": "partial distinction",
-                "uncertainty": "still soft",
-                "failure_mode": "too verbal",
-            },
-            "step_8_evidence_target": {
-                "topic_id": "T1",
-                "element": "key distinction",
-                "target_type": "distinction",
-                "why_now": "one stronger check",
-            },
-            "step_9_move_candidates": [],
-            "step_10_choice": {
-                "chosen_move": "narrowing_question",
-                "reason": "best next check",
-            },
-            "step_11_reply_draft": {"draft": "Good. What is the key distinction?"},
-            "step_12_reply_check": {
-                "most_productive": True,
-                "minimally_revealing": True,
-                "smuggles_answer": False,
-                "asks_one_contribution": True,
-            },
-            "step_13_revision": {"revised": False, "reason": ""},
-            "step_14_final_move": {"move_type": "narrowing_question", "reason": "best next check"},
-        },
+        "private_artifact": VALID_PRIVATE_ARTIFACT,
     })
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.return_value = mock_resp
@@ -246,8 +138,13 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
     assert state["mastery"]["T1"] == 70
     assert state["best_mastery"]["T1"] == 70
     assert state["current_grade"] == 38.0
-    assert state["private_decision_trace"]["step_6_chosen_topic"]["topic_id"] == "T1"
-    assert state["private_decision_trace"]["step_8_evidence_target"]["topic_id"] == "T1"
+    assert "private_artifact" not in state
+    assert "private_decision_trace" not in state
+    artifact_row = db.query(models.PrivateArtifactLogModel).filter(
+        models.PrivateArtifactLogModel.session_id == session_id
+    ).one()
+    assert j.loads(artifact_row.artifact_json)["chosen_move"] == "ask one focused question"
+    assert artifact_row.validation_error is None
 
 
 # ---------------------------------------------------------------------------
@@ -437,24 +334,7 @@ def test_send_message_forces_assistant_reply_to_english(client):
             "current_topic_id": None,
             "tutor_comment": "",
         },
-        "decision_trace": {
-            "student_model": {
-                "understanding": "",
-                "uncertainty": "",
-                "failure_mode": "",
-            },
-            "evidence_target": {
-                "topic_id": "T1",
-                "element": "",
-                "target_type": "criterion",
-                "why_now": "",
-            },
-            "move_candidates": [],
-            "chosen_move": {
-                "move_type": "open_probe",
-                "reason": "",
-            },
-        },
+        "private_artifact": VALID_PRIVATE_ARTIFACT,
     })
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.return_value = mock_resp
@@ -488,3 +368,92 @@ def test_send_message_writes_dialogue_turn_audit_row(client):
     assert audit_row.dialogue_model
     assert "You are the runtime tutor for a lecture-review dialogue" in audit_row.rendered_system_prompt
     assert audit_row.user_message == "What counts as data"
+
+
+def test_send_message_injects_private_artifact_schema_json(client):
+    session_id = start_session(client)
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "What is one example?",
+        "updated_state": {},
+        "private_artifact": VALID_PRIVATE_ARTIFACT,
+    })
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+
+    assert response.status_code == 200
+    system_prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert '"private_artifact_schema_json":' in system_prompt
+    assert "governing_condition" in system_prompt
+
+
+def test_send_message_missing_private_artifact_logs_validation_failure(client):
+    session_id = start_session(client)
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "What is one example?",
+        "updated_state": {},
+    })
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+
+    assert response.status_code == 200
+    db = next(app.dependency_overrides[db_module.get_db]())
+    artifact_row = db.query(models.PrivateArtifactLogModel).filter(
+        models.PrivateArtifactLogModel.session_id == session_id
+    ).one()
+    assert artifact_row.artifact_json is None
+    assert artifact_row.validation_error == "missing private_artifact"
+
+
+def test_send_message_invalid_private_artifact_logs_validation_failure(client):
+    session_id = start_session(client)
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "What is one example?",
+        "updated_state": {},
+        "private_artifact": {},
+    })
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+
+    assert response.status_code == 200
+    db = next(app.dependency_overrides[db_module.get_db]())
+    artifact_row = db.query(models.PrivateArtifactLogModel).filter(
+        models.PrivateArtifactLogModel.session_id == session_id
+    ).one()
+    assert j.loads(artifact_row.artifact_json) == {}
+    assert "private_artifact validation failed" in artifact_row.validation_error
+
+
+def test_private_artifact_inside_updated_state_is_not_persisted(client):
+    session_id = start_session(client)
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "What is one example?",
+        "updated_state": {"private_artifact": {"bad": "state"}, "mastery": {"T1": 55}},
+        "private_artifact": VALID_PRIVATE_ARTIFACT,
+    })
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+
+    assert response.status_code == 200
+    db = next(app.dependency_overrides[db_module.get_db]())
+    state_row = db.query(models.SessionStateModel).filter(
+        models.SessionStateModel.session_id == session_id
+    ).one()
+    state = j.loads(state_row.state_json)
+    assert "private_artifact" not in state
+    assert state["mastery"]["T1"] == 55

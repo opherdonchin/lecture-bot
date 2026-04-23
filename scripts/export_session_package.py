@@ -12,6 +12,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import app.bot_engine as bot_engine
 import app.config as config_module
+import app.prompt_loader as prompt_loader
 
 DATABASE_PATH = REPO_ROOT / "data" / "lecture_bot.db"
 LECTURES_DIR = REPO_ROOT / "lectures"
@@ -54,14 +55,14 @@ def fetch_all_dicts(conn: sqlite3.Connection, query: str, params: tuple) -> list
 def get_session(conn: sqlite3.Connection, lecture_id: str, session_id: str | None) -> dict:
     if session_id:
         query = """
-            select session_id, student_id, lecture_id, started_at, ended_at, current_grade
+            select session_id, student_id, lecture_id, started_at, ended_at, current_grade, private_artifact_schema_json
             from sessions
             where session_id = ?
         """
         params = (session_id,)
     else:
         query = """
-            select session_id, student_id, lecture_id, started_at, ended_at, current_grade
+            select session_id, student_id, lecture_id, started_at, ended_at, current_grade, private_artifact_schema_json
             from sessions
             where lecture_id = ?
             order by started_at desc
@@ -112,6 +113,26 @@ def load_session_bundle(conn: sqlite3.Connection, session: dict) -> dict:
         """,
         (session_id,),
     )
+    dialogue_turn_audits = fetch_all_dicts(
+        conn,
+        """
+        select *
+        from dialogue_turn_audits
+        where session_id = ?
+        order by turn_index asc, id asc
+        """,
+        (session_id,),
+    )
+    private_artifact_logs = fetch_all_dicts(
+        conn,
+        """
+        select id, session_id, turn_index, artifact_json, validation_error, created_at
+        from private_artifact_logs
+        where session_id = ?
+        order by turn_index asc, id asc
+        """,
+        (session_id,),
+    )
     session_state_row = fetch_one_dict(
         conn,
         """
@@ -136,28 +157,62 @@ def load_session_bundle(conn: sqlite3.Connection, session: dict) -> dict:
             parsed_event["payload_parse_error"] = payload_parse_error
         parsed_grade_events.append(parsed_event)
 
+    parsed_dialogue_turn_audits = []
+    for audit in dialogue_turn_audits:
+        parsed_audit = dict(audit)
+        for key in ["state_before_json", "recent_messages_json", "action_hint_json"]:
+            parsed_value, parse_error = parse_json_field(parsed_audit.get(key))
+            parsed_audit[key.removesuffix("_json")] = parsed_value
+            if parse_error:
+                parsed_audit[f"{key}_parse_error"] = parse_error
+        parsed_dialogue_turn_audits.append(parsed_audit)
+
+    parsed_private_artifact_logs = []
+    for artifact_log in private_artifact_logs:
+        parsed_artifact, parse_error = parse_json_field(artifact_log.get("artifact_json"))
+        parsed_log = dict(artifact_log)
+        parsed_log["artifact"] = parsed_artifact
+        if parse_error:
+            parsed_log["artifact_json_parse_error"] = parse_error
+        parsed_private_artifact_logs.append(parsed_log)
+
+    chat_transcript = [
+        {"role": message["role"], "content": message["content"]}
+        for message in messages
+    ]
+
     return {
         "session": session,
         "messages": messages,
+        "chat_transcript": chat_transcript,
         "session_state": session_state_row,
         "session_state_parsed": state_parsed,
         "session_state_parse_error": state_parse_error,
         "grade_events": parsed_grade_events,
+        "dialogue_turn_audits": parsed_dialogue_turn_audits,
+        "private_artifact_logs": parsed_private_artifact_logs,
     }
 
 
-def build_rendered_prompt(lecture_id: str, state: dict | None) -> str:
-    lecture_package = load_lecture_package(lecture_id)
+def build_rendered_prompt(lecture_package: dict, session_bundle: dict) -> str:
+    dialogue_turn_audits = session_bundle.get("dialogue_turn_audits") or []
+    if dialogue_turn_audits:
+        latest_audit = dialogue_turn_audits[-1]
+        rendered_system_prompt = latest_audit.get("rendered_system_prompt")
+        if isinstance(rendered_system_prompt, str) and rendered_system_prompt.strip():
+            return rendered_system_prompt
+
     settings = config_module.get_settings()
     return bot_engine.build_dialogue_system_prompt(
         lecture_package=lecture_package,
-        state=state or {},
+        state=session_bundle.get("session_state_parsed") or {},
         topic_defs=bot_engine.resolve_topic_defs(lecture_package),
         lecture_context=bot_engine.build_dialogue_context(
             lecture_package,
             settings.max_dialogue_context_chars,
         ),
         timing_context={},
+        private_artifact_schema_json=session_bundle["session"].get("private_artifact_schema_json"),
     )
 
 
@@ -182,25 +237,61 @@ def collect_lecture_files(lecture_dir: pathlib.Path) -> list[tuple[pathlib.Path,
     return files
 
 
-def collect_prompt_files() -> list[tuple[pathlib.Path, str]]:
+def collect_prompt_files(template_name: str) -> list[tuple[pathlib.Path, str]]:
     wanted = [
-        ("tutor_prompt.md", "prompts/tutor_prompt.md"),
+        (template_name, f"prompts/{template_name}"),
         ("tutor_generator_prompt.md", "prompts/tutor_generator_prompt.md"),
         ("master_rubric_generation_prompt.md", "prompts/master_rubric_generation_prompt.md"),
         ("minutes_generation_prompt.md", "prompts/minutes_generation_prompt.md"),
     ]
-    return [(PROMPTS_DIR / name, archive_name) for name, archive_name in wanted]
+    files = [(PROMPTS_DIR / name, archive_name) for name, archive_name in wanted]
+    schema_path = prompt_loader.private_artifact_schema_path(template_name)
+    if schema_path.exists():
+        files.append((schema_path, f"prompts/{schema_path.name}"))
+    return files
+
+
+def transcript_text(messages: list[dict]) -> str:
+    lines = []
+    for message in messages:
+        lines.append(f"{message['role'].upper()}: {message['content']}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def build_manifest(
     *,
     lecture_id: str,
     session_bundle: dict,
+    template_name: str,
     database_path: pathlib.Path,
     lecture_dir: pathlib.Path,
     zip_path: pathlib.Path,
 ) -> dict:
     session = session_bundle["session"]
+    included_files = [
+        "conversation/session_bundle.json",
+        "conversation/chat_transcript.json",
+        "conversation/messages.txt",
+        "conversation/messages_for_chat_agent.json",
+        "conversation/dialogue_turn_audits.json",
+        "conversation/private_artifact_logs.json",
+        "prompts/tutor_prompt_rendered_latest.md",
+        f"prompts/{template_name}",
+        "prompts/tutor_generator_prompt.md",
+        "prompts/master_rubric_generation_prompt.md",
+        "prompts/minutes_generation_prompt.md",
+        "lecture/lecture_config.json",
+        "lecture/slides.md",
+        "lecture/handout.md",
+        "lecture/rubric.md",
+        "lecture/minutes.json",
+    ]
+    if session.get("private_artifact_schema_json") is not None:
+        included_files.append("conversation/session_private_artifact_schema.json")
+        schema_path = prompt_loader.private_artifact_schema_path(template_name)
+        if schema_path.exists():
+            included_files.append(f"prompts/{schema_path.name}")
     return {
         "export_generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "lecture_id": lecture_id,
@@ -211,21 +302,9 @@ def build_manifest(
         "current_grade": session["current_grade"],
         "source_database": str(database_path),
         "source_lecture_dir": str(lecture_dir),
+        "prompt_template_name": template_name,
         "zip_path": str(zip_path),
-        "included_files": [
-            "conversation/session_bundle.json",
-            "conversation/messages_for_chat_agent.json",
-            "prompts/tutor_prompt.md",
-            "prompts/tutor_prompt_rendered_latest.md",
-            "prompts/tutor_generator_prompt.md",
-            "prompts/master_rubric_generation_prompt.md",
-            "prompts/minutes_generation_prompt.md",
-            "lecture/lecture_config.json",
-            "lecture/slides.md",
-            "lecture/handout.md",
-            "lecture/rubric.md",
-            "lecture/minutes.json",
-        ],
+        "included_files": included_files,
     }
 
 
@@ -245,10 +324,9 @@ def export_session_package(lecture_id: str, session_id: str | None, output_dir: 
     finally:
         conn.close()
 
-    rendered_prompt = build_rendered_prompt(
-        lecture_id=lecture_id,
-        state=session_bundle.get("session_state_parsed"),
-    )
+    lecture_package = load_lecture_package(lecture_id)
+    template_name = bot_engine.get_tutor_prompt_template(lecture_package)
+    rendered_prompt = build_rendered_prompt(lecture_package, session_bundle)
     chat_agent_messages = [
         {"role": "system", "content": rendered_prompt},
         *[
@@ -264,6 +342,7 @@ def export_session_package(lecture_id: str, session_id: str | None, output_dir: 
     manifest = build_manifest(
         lecture_id=lecture_id,
         session_bundle=session_bundle,
+        template_name=template_name,
         database_path=database_path,
         lecture_dir=lecture_dir,
         zip_path=zip_path,
@@ -272,10 +351,19 @@ def export_session_package(lecture_id: str, session_id: str | None, output_dir: 
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("manifest.json", write_json_bytes(manifest))
         zf.writestr("conversation/session_bundle.json", write_json_bytes(session_bundle))
+        zf.writestr("conversation/chat_transcript.json", write_json_bytes(session_bundle["chat_transcript"]))
+        zf.writestr("conversation/dialogue_turn_audits.json", write_json_bytes(session_bundle["dialogue_turn_audits"]))
+        zf.writestr("conversation/private_artifact_logs.json", write_json_bytes(session_bundle["private_artifact_logs"]))
+        zf.writestr("conversation/messages.txt", transcript_text(session_bundle["messages"]).encode("utf-8"))
         zf.writestr("conversation/messages_for_chat_agent.json", write_json_bytes(chat_agent_messages))
         zf.writestr("prompts/tutor_prompt_rendered_latest.md", rendered_prompt.encode("utf-8"))
+        if session.get("private_artifact_schema_json") is not None:
+            zf.writestr(
+                "conversation/session_private_artifact_schema.json",
+                session["private_artifact_schema_json"].encode("utf-8"),
+            )
 
-        for source_path, archive_name in collect_prompt_files():
+        for source_path, archive_name in collect_prompt_files(template_name):
             zf.write(source_path, archive_name)
 
         for source_path, archive_name in collect_lecture_files(lecture_dir):

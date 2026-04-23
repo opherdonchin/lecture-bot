@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "governing_condition",
+    "locus",
+    "student_model",
+    "dominant_need",
+    "immediate_target",
+    "interaction_plan",
+    "evidence_assessment",
+    "time_awareness",
+    "self_checks"
+  ],
+  "properties": {
+    "governing_condition": {
+      "type": "string",
+      "enum": [
+        "ordinary_content",
+        "lifecycle",
+        "repair_meta",
+        "out_of_scope",
+        "distress_management",
+        "other"
+      ]
+    },
+    "locus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "topic_id",
+        "alternative_topic_id",
+        "comparison_considered"
+      ],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "stay",
+            "deepen",
+            "re_anchor",
+            "integrate",
+            "switch",
+            "close"
+          ]
+        },
+        "topic_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "alternative_topic_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "comparison_considered": {
+          "type": "boolean"
+        }
+      }
+    },
+    "student_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "understanding",
+        "orientation",
+        "engagement",
+        "momentum",
+        "student_goal"
+      ],
+      "properties": {
+        "understanding": {
+          "type": "string",
+          "enum": [
+            "unclear",
+            "fragile",
+            "partial",
+            "usable",
+            "strong"
+          ]
+        },
+        "orientation": {
+          "type": "string",
+          "enum": [
+            "lost",
+            "partial",
+            "oriented"
+          ]
+        },
+        "engagement": {
+          "type": "string",
+          "enum": [
+            "low",
+            "mixed",
+            "engaged",
+            "student_led"
+          ]
+        },
+        "momentum": {
+          "type": "string",
+          "enum": [
+            "opening",
+            "deepening",
+            "looping",
+            "stalling",
+            "broadening_usefully",
+            "counterproductive",
+            "winding_down"
+          ]
+        },
+        "student_goal": {
+          "type": ["string", "null"],
+          "maxLength": 160
+        }
+      }
+    },
+    "dominant_need": {
+      "type": "string",
+      "enum": [
+        "understand_student_better",
+        "help_student_understand_better"
+      ]
+    },
+    "immediate_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "focus"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "criterion",
+            "distinction",
+            "explanation",
+            "application",
+            "integration",
+            "re_orientation",
+            "consolidation",
+            "scope_repair",
+            "distress_reduction",
+            "meta_repair",
+            "other"
+          ]
+        },
+        "focus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "interaction_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_mode",
+        "move_type",
+        "reveal_level"
+      ],
+      "properties": {
+        "primary_mode": {
+          "type": "string",
+          "enum": [
+            "probe_and_diagnose",
+            "orient_and_re_anchor",
+            "scaffold",
+            "consolidate",
+            "extend_and_test_transfer",
+            "integrate"
+          ]
+        },
+        "move_type": {
+          "type": "string",
+          "enum": [
+            "open_question",
+            "contrastive_question",
+            "application_prompt",
+            "request_example",
+            "brief_explanation",
+            "re_anchor",
+            "narrowing_prompt",
+            "consolidation_prompt",
+            "integration_prompt",
+            "scope_redirect",
+            "distress_reduction",
+            "meta_repair",
+            "other"
+          ]
+        },
+        "reveal_level": {
+          "type": "string",
+          "enum": [
+            "minimal",
+            "limited",
+            "moderate"
+          ]
+        }
+      }
+    },
+    "evidence_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topic_id",
+        "strength",
+        "independence",
+        "update_confidence",
+        "note"
+      ],
+      "properties": {
+        "topic_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "strength": {
+          "type": "string",
+          "enum": [
+            "none",
+            "weak",
+            "moderate",
+            "strong"
+          ]
+        },
+        "independence": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "assisted",
+            "mixed",
+            "independent"
+          ]
+        },
+        "update_confidence": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "note": {
+          "type": ["string", "null"],
+          "maxLength": 240
+        }
+      }
+    },
+    "time_awareness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timing_used",
+        "mode",
+        "note"
+      ],
+      "properties": {
+        "timing_used": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "not_used",
+            "normal",
+            "time_limited",
+            "five_minute_warning",
+            "winding_down",
+            "unreliable_or_absent"
+          ]
+        },
+        "note": {
+          "type": ["string", "null"],
+          "maxLength": 160
+        }
+      }
+    },
+    "self_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alignment_with_priorities",
+        "responsive_to_student_goal",
+        "preserves_student_ownership",
+        "avoids_overreveal",
+        "evidence_update_conservative",
+        "fits_governing_condition",
+        "fits_time_context"
+      ],
+      "properties": {
+        "alignment_with_priorities": {
+          "type": "boolean"
+        },
+        "responsive_to_student_goal": {
+          "type": "boolean"
+        },
+        "preserves_student_ownership": {
+          "type": "boolean"
+        },
+        "avoids_overreveal": {
+          "type": "boolean"
+        },
+        "evidence_update_conservative": {
+          "type": "boolean"
+        },
+        "fits_governing_condition": {
+          "type": "boolean"
+        },
+        "fits_time_context": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

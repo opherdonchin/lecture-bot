@@ -10,9 +10,14 @@ from fastapi.templating import Jinja2Templates
 
 import app.admin_workflow as workflow
 import app.config as config_module
+import app.root_path as root_path_module
 
 
 app = fa.FastAPI(title="Lecture Bot Admin", root_path=config_module.get_settings().admin_root_path)
+app.add_middleware(
+    root_path_module.RootPathStripMiddleware,
+    configured_root_path=config_module.get_settings().admin_root_path,
+)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 security = HTTPBasic()

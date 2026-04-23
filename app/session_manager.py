@@ -6,6 +6,7 @@ import sqlalchemy.orm as sqlalchemy_orm
 import app.bot_engine as bot_engine
 import app.config as config_module
 import app.models as models
+import app.prompt_loader as prompt_loader
 
 
 def build_initial_state(lecture_package: dict, topics_sampled: list) -> dict:
@@ -17,7 +18,6 @@ def build_initial_state(lecture_package: dict, topics_sampled: list) -> dict:
         "evidence_notes": {},
         "current_topic_id": None,
         "tutor_comment": "",
-        "private_decision_trace": None,
         "current_grade": 0.0,
         "timeout_warning_sent": False,
         "turn_count": 0,
@@ -25,11 +25,13 @@ def build_initial_state(lecture_package: dict, topics_sampled: list) -> dict:
 
 
 def create_session(db: sqlalchemy_orm.Session, student_id: str, lecture_id: str, lecture_package: dict) -> models.SessionModel:
+    tutor_prompt_template = bot_engine.get_tutor_prompt_template(lecture_package)
     session = models.SessionModel(
         session_id=str(uuid_module.uuid4()),
         student_id=student_id,
         lecture_id=lecture_id,
         current_grade=0.0,
+        private_artifact_schema_json=prompt_loader.load_private_artifact_schema_json(tutor_prompt_template),
     )
     db.add(session)
     db.flush()

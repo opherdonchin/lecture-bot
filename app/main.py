@@ -13,10 +13,15 @@ import app.db as db_module
 import app.language_policy as language_policy
 import app.lecture_loader as lecture_loader
 import app.models as models
+import app.root_path as root_path_module
 import app.schema as schema
 import app.session_manager as session_manager
 
 app = fa.FastAPI(title="Lecture Bot", root_path=config_module.get_settings().student_root_path)
+app.add_middleware(
+    root_path_module.RootPathStripMiddleware,
+    configured_root_path=config_module.get_settings().student_root_path,
+)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -209,14 +214,16 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         topic_defs=topic_defs,
         lecture_context=lecture_context,
         timing_context=timing_context,
+        private_artifact_schema_json=session.private_artifact_schema_json,
     )
 
-    bot_reply, updated_state = bot_engine.generate_reply(
+    bot_reply, updated_state, private_artifact = bot_engine.generate_reply(
         lecture_package=lecture_package,
         recent_messages=recent_messages,
         state=state,
         user_message=request.message,
         timing_context=timing_context,
+        private_artifact_schema_json=session.private_artifact_schema_json,
     )
 
     if should_warn_timeout:
@@ -228,10 +235,11 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         state=updated_state,
         lecture_package=lecture_package,
     )
+    turn_index = int(updated_state.get("turn_count", state.get("turn_count", 0) + 1))
     _record_dialogue_turn_audit(
         db,
         session_id=request.session_id,
-        turn_index=int(updated_state.get("turn_count", state.get("turn_count", 0) + 1)),
+        turn_index=turn_index,
         state_before=state,
         recent_messages=recent_messages,
         normalized_user_message=normalized_user_message,
@@ -242,6 +250,18 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         bot_reply=bot_reply,
         original_user_message=request.message,
     )
+    if session.private_artifact_schema_json is not None:
+        validation_error = bot_engine.validate_private_artifact(
+            private_artifact,
+            session.private_artifact_schema_json,
+        )
+        _record_private_artifact_log(
+            db,
+            session_id=request.session_id,
+            turn_index=turn_index,
+            private_artifact=private_artifact,
+            validation_error=validation_error,
+        )
 
     session_manager.append_message(db, request.session_id, "user", request.message)
     session_manager.append_message(db, request.session_id, "assistant", bot_reply)
@@ -364,31 +384,35 @@ def _record_grade_event(
     ))    
 
 
-def _extract_trace_target_topic_id(updated_state: dict) -> str | None:
-    trace = updated_state.get("private_decision_trace")
-    if not isinstance(trace, dict):
-        return None
-    chosen_topic = trace.get("step_6_chosen_topic")
-    if isinstance(chosen_topic, dict):
-        topic_id = chosen_topic.get("topic_id")
-        if isinstance(topic_id, str) and topic_id:
-            return topic_id
-    step_target = trace.get("step_8_evidence_target")
-    if isinstance(step_target, dict):
-        topic_id = step_target.get("topic_id")
-        if isinstance(topic_id, str) and topic_id:
-            return topic_id
-    step_target = trace.get("step_2_evidence_target")
-    if isinstance(step_target, dict):
-        topic_id = step_target.get("topic_id")
-        if isinstance(topic_id, str) and topic_id:
-            return topic_id
-    legacy_target = trace.get("evidence_target")
-    if isinstance(legacy_target, dict):
-        topic_id = legacy_target.get("topic_id")
+def _extract_turn_target_topic_id(updated_state: dict) -> str | None:
+    current_topic_id = updated_state.get("current_topic_id")
+    if isinstance(current_topic_id, str) and current_topic_id:
+        return current_topic_id
+    mastery = updated_state.get("mastery")
+    if isinstance(mastery, dict) and mastery:
+        topic_id = next(iter(mastery))
         if isinstance(topic_id, str) and topic_id:
             return topic_id
     return None
+
+
+def _record_private_artifact_log(
+    db: sqlalchemy_orm.Session,
+    *,
+    session_id: str,
+    turn_index: int,
+    private_artifact: object,
+    validation_error: str | None,
+) -> None:
+    artifact_json = None
+    if private_artifact is not None:
+        artifact_json = j_.dumps(private_artifact, ensure_ascii=False)
+    db.add(models.PrivateArtifactLogModel(
+        session_id=session_id,
+        turn_index=int(turn_index),
+        artifact_json=artifact_json,
+        validation_error=validation_error,
+    ))
 
 
 def _record_dialogue_turn_audit(
@@ -424,7 +448,7 @@ def _record_dialogue_turn_audit(
         action_hint_json="{}",
         challenge_level=1,
         current_topic_id=current_topic_before if isinstance(current_topic_before, str) else None,
-        target_topic_id=_extract_trace_target_topic_id(updated_state),
+        target_topic_id=_extract_turn_target_topic_id(updated_state),
         ended_with_content_question=bot_reply.strip().endswith("?"),
         repetition_complaint=repetition_complaint,
         switched_topics=(

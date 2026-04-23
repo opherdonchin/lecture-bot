@@ -4,6 +4,7 @@ import math as math_
 import random as random_
 import re as re_
 
+import jsonschema as jsonschema_
 import openai as openai_
 
 import app.config as config_module
@@ -14,36 +15,6 @@ _log = logging_.getLogger(__name__)
 
 _GRADE_WEIGHTS = [55, 25, 13, 4, 3]
 _RUNTIME_CONTEXT_KEYS = ("bot_notes", "slides", "handout", "minutes")
-_DECISION_TARGET_TYPES = {
-    "criterion",
-    "distinction",
-    "explanation",
-    "application",
-    "practical_interpretation",
-    "self_correction",
-}
-_DECISION_MOVE_TYPES = {
-    "open_probe",
-    "narrowing_question",
-    "contrastive_prompt",
-    "criterion_check",
-    "explanation_check",
-    "application_check",
-    "practical_interpretation",
-    "hint",
-    "partial_frame",
-    "compact_explanation",
-    "concise_reformulation",
-    "topic_switch",
-    "self_correction_prompt",
-}
-_DECISION_TRACE_CHECK_KEYS = (
-    "most_productive",
-    "minimally_revealing",
-    "smuggles_answer",
-    "asks_one_contribution",
-)
-
 _TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)(?:\.|\s+[—-])\s+(.+)$', re_.MULTILINE)
 _IMPORTANCE_RE = re_.compile(r'\*\*Importance:\*\*\s+(\w+)')
 _BARE_TOPIC_ID_RE = re_.compile(r"\b(T\d+)\b")
@@ -219,10 +190,11 @@ def generate_reply(
     state: dict,
     user_message: str,
     timing_context: dict | None = None,
-) -> tuple[str, dict]:
+    private_artifact_schema_json: str | None = None,
+) -> tuple[str, dict, object | None]:
     """Generate a tutoring reply using OpenAI.
 
-    Returns (assistant_message, sanitized_updated_state).
+    Returns (assistant_message, sanitized_updated_state, private_artifact).
     Falls back to a generic message if OpenAI fails or returns malformed output.
     """
     settings = config_module.get_settings()
@@ -240,6 +212,7 @@ def generate_reply(
         topic_defs=topic_defs,
         lecture_context=context,
         timing_context=timing_context,
+        private_artifact_schema_json=private_artifact_schema_json,
     )
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -262,18 +235,18 @@ def generate_reply(
             timing_context=timing_context,
         )
         raw_updated_state = parsed.get("updated_state", {})
-        raw_decision_trace = parsed.get("decision_trace")
+        private_artifact = parsed.get("private_artifact")
     except openai_.AuthenticationError:
         _log.exception("generate_reply failed: OpenAI authentication error")
         fallback_state = dict(state)
         fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
+        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state, None
     except openai_.APIError:
         # Rate limits, timeouts, connection errors from the OpenAI API.
         _log.exception("generate_reply failed: OpenAI API error")
         fallback_state = dict(state)
         fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
+        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state, None
     except Exception:
         # Catches malformed JSON, missing model output keys, and other unexpected
         # response-parsing failures. sanitize_state_update (our code) is deliberately
@@ -281,15 +254,14 @@ def generate_reply(
         _log.exception("generate_reply failed")
         fallback_state = dict(state)
         fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state
+        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state, None
     # sanitize_state_update is our own code — bugs here propagate as 500, not masked
     updated_state = sanitize_state_update(
         state,
         raw_updated_state,
         allowed_topic_ids,
-        raw_decision_trace=raw_decision_trace,
     )
-    return assistant_message, updated_state
+    return assistant_message, updated_state, private_artifact
 
 
 # ---------------------------------------------------------------------------
@@ -331,6 +303,7 @@ def build_dialogue_system_prompt(
     topic_defs: list[dict],
     lecture_context: str,
     timing_context: dict | None = None,
+    private_artifact_schema_json: str | None = None,
 ) -> str:
     """Build the runtime system prompt around the committed markdown prompt."""
     prompt_template = get_tutor_prompt_template(lecture_package)
@@ -364,6 +337,8 @@ def build_dialogue_system_prompt(
         "rubric_text": lecture_package["rubric"],
         "lecture_context": lecture_context,
     }
+    if private_artifact_schema_json is not None:
+        injected_context["private_artifact_schema_json"] = private_artifact_schema_json
 
     return (
         f"{prompt_body}\n\n"
@@ -437,299 +412,10 @@ def compute_weighted_grade(topic_scores: list[dict]) -> int:
     return math_.floor(sum(w * s / 100 for w, s in zip(_GRADE_WEIGHTS, padded)))
 
 
-def _sanitize_decision_trace(raw_trace: object, allowed_topic_ids: set[str]) -> dict | None:
-    if not isinstance(raw_trace, dict):
-        return None
-
-    def _sanitize_topic_option(raw_option: object) -> dict:
-        if not isinstance(raw_option, dict):
-            raw_option = {}
-        topic_id = str(raw_option.get("topic_id", "")).strip()
-        return {
-            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
-            "why_consider": str(raw_option.get("why_consider", "")).strip()[:240],
-        }
-
-    def _sanitize_topic_value(raw_value: object) -> dict:
-        if not isinstance(raw_value, dict):
-            raw_value = {}
-        topic_id = str(raw_value.get("topic_id", "")).strip()
-        return {
-            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
-            "grade_value": _safe_rating(raw_value.get("grade_value", 1)),
-            "pedagogical_value": _safe_rating(raw_value.get("pedagogical_value", 1)),
-            "engagement_value": _safe_rating(raw_value.get("engagement_value", 1)),
-            "reason": str(raw_value.get("reason", "")).strip()[:240],
-        }
-
-    def _sanitize_weighted_topic_comparison(raw_comparison: object) -> dict:
-        if not isinstance(raw_comparison, dict):
-            raw_comparison = {}
-        preferred_topic_id = str(raw_comparison.get("preferred_topic_id", "")).strip()
-        current_total_raw = raw_comparison.get("current_topic_total", 0)
-        alternative_total_raw = raw_comparison.get("alternative_topic_total", 0)
-        try:
-            current_topic_total = max(0, min(99, int(current_total_raw or 0)))
-        except (TypeError, ValueError):
-            current_topic_total = 0
-        try:
-            alternative_topic_total = max(0, min(99, int(alternative_total_raw or 0)))
-        except (TypeError, ValueError):
-            alternative_topic_total = 0
-        return {
-            "grade_weight": _safe_rating(raw_comparison.get("grade_weight", 1)),
-            "pedagogical_weight": _safe_rating(raw_comparison.get("pedagogical_weight", 1)),
-            "engagement_weight": _safe_rating(raw_comparison.get("engagement_weight", 1)),
-            "current_topic_total": current_topic_total,
-            "alternative_topic_total": alternative_topic_total,
-            "preferred_topic_id": preferred_topic_id if preferred_topic_id in allowed_topic_ids else None,
-            "reason": str(raw_comparison.get("reason", "")).strip()[:240],
-        }
-
-    def _sanitize_chosen_topic(raw_topic: object) -> dict:
-        if not isinstance(raw_topic, dict):
-            raw_topic = {}
-        topic_id = str(raw_topic.get("topic_id", "")).strip()
-        choice_type = str(raw_topic.get("choice_type", "")).strip()
-        return {
-            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
-            "choice_type": choice_type if choice_type in {"stay", "switch"} else "",
-            "reason": str(raw_topic.get("reason", "")).strip()[:240],
-        }
-
-    def _sanitize_student_model(raw_model: object) -> dict:
-        if not isinstance(raw_model, dict):
-            raw_model = {}
-        return {
-            "understanding": str(raw_model.get("understanding", "")).strip()[:240],
-            "uncertainty": str(raw_model.get("uncertainty", "")).strip()[:240],
-            "failure_mode": str(raw_model.get("failure_mode", "")).strip()[:240],
-        }
-
-    def _sanitize_evidence_target(raw_target: object) -> dict:
-        if not isinstance(raw_target, dict):
-            raw_target = {}
-        topic_id = str(raw_target.get("topic_id", "")).strip()
-        target_type = str(raw_target.get("target_type", "")).strip()
-        return {
-            "topic_id": topic_id if topic_id in allowed_topic_ids else None,
-            "element": str(raw_target.get("element", "")).strip()[:160],
-            "target_type": target_type if target_type in _DECISION_TARGET_TYPES else "",
-            "why_now": str(raw_target.get("why_now", "")).strip()[:240],
-        }
-
-    def _safe_rating(value: object) -> int:
-        try:
-            return max(1, min(5, int(value or 1)))
-        except (TypeError, ValueError):
-            return 1
-
-    def _sanitize_move_candidates(raw_candidates: object) -> list[dict]:
-        move_candidates: list[dict] = []
-        if not isinstance(raw_candidates, list):
-            return move_candidates
-        for item in raw_candidates[:4]:
-            if not isinstance(item, dict):
-                continue
-            move_type = str(item.get("move_type", "")).strip()
-            move_candidates.append(
-                {
-                    "move_type": move_type if move_type in _DECISION_MOVE_TYPES else "open_probe",
-                    "prompt_sketch": str(item.get("prompt_sketch", "")).strip()[:200],
-                    "revealing": _safe_rating(item.get("revealing", 1)),
-                    "productive": _safe_rating(item.get("productive", 1)),
-                    "fit": _safe_rating(item.get("fit", 1)),
-                }
-            )
-        return move_candidates
-
-    def _sanitize_choice(raw_choice: object) -> dict:
-        if not isinstance(raw_choice, dict):
-            raw_choice = {}
-        chosen_move_type = str(
-            raw_choice.get("chosen_move", raw_choice.get("move_type", ""))
-        ).strip()
-        return {
-            "chosen_move": chosen_move_type if chosen_move_type in _DECISION_MOVE_TYPES else "open_probe",
-            "reason": str(raw_choice.get("reason", "")).strip()[:240],
-        }
-
-    def _sanitize_reply_draft(raw_draft: object) -> dict:
-        if not isinstance(raw_draft, dict):
-            raw_draft = {}
-        return {
-            "draft": str(raw_draft.get("draft", "")).strip()[:280],
-        }
-
-    def _sanitize_reply_check(raw_check: object) -> dict:
-        if not isinstance(raw_check, dict):
-            raw_check = {}
-        return {
-            key: bool(raw_check.get(key, False))
-            for key in _DECISION_TRACE_CHECK_KEYS
-        }
-
-    def _sanitize_revision(raw_revision: object) -> dict:
-        if not isinstance(raw_revision, dict):
-            raw_revision = {}
-        return {
-            "revised": bool(raw_revision.get("revised", False)),
-            "reason": str(raw_revision.get("reason", "")).strip()[:240],
-        }
-
-    stepwise_present = any(key.startswith("step_") for key in raw_trace)
-
-    if "step_6_chosen_topic" in raw_trace or "step_14_final_move" in raw_trace:
-        trace = {
-            "step_1_current_topic_option": _sanitize_topic_option(raw_trace.get("step_1_current_topic_option")),
-            "step_2_alternative_topic_option": _sanitize_topic_option(raw_trace.get("step_2_alternative_topic_option")),
-            "step_3_current_topic_value": _sanitize_topic_value(raw_trace.get("step_3_current_topic_value")),
-            "step_4_alternative_topic_value": _sanitize_topic_value(raw_trace.get("step_4_alternative_topic_value")),
-            "step_5_weighted_topic_comparison": _sanitize_weighted_topic_comparison(raw_trace.get("step_5_weighted_topic_comparison")),
-            "step_6_chosen_topic": _sanitize_chosen_topic(raw_trace.get("step_6_chosen_topic")),
-            "step_7_student_model": _sanitize_student_model(raw_trace.get("step_7_student_model")),
-            "step_8_evidence_target": _sanitize_evidence_target(raw_trace.get("step_8_evidence_target")),
-            "step_9_move_candidates": _sanitize_move_candidates(raw_trace.get("step_9_move_candidates")),
-            "step_10_choice": _sanitize_choice(raw_trace.get("step_10_choice")),
-            "step_11_reply_draft": _sanitize_reply_draft(raw_trace.get("step_11_reply_draft")),
-            "step_12_reply_check": _sanitize_reply_check(raw_trace.get("step_12_reply_check")),
-            "step_13_revision": _sanitize_revision(raw_trace.get("step_13_revision")),
-            "step_14_final_move": _sanitize_choice(raw_trace.get("step_14_final_move")),
-        }
-        if (
-            not any(v for v in trace["step_6_chosen_topic"].values() if v)
-            and not any(trace["step_7_student_model"].values())
-            and not any(v for v in trace["step_8_evidence_target"].values() if v)
-            and not trace["step_9_move_candidates"]
-            and not trace["step_11_reply_draft"]["draft"]
-        ):
-            return None
-        return trace
-
-    if stepwise_present:
-        student_model = _sanitize_student_model(raw_trace.get("step_1_student_model"))
-        evidence_target = _sanitize_evidence_target(raw_trace.get("step_2_evidence_target"))
-        move_candidates = _sanitize_move_candidates(raw_trace.get("step_3_move_candidates"))
-        chosen_move = _sanitize_choice(raw_trace.get("step_4_choice"))
-        chosen_topic_id = evidence_target.get("topic_id")
-
-        if (
-            not any(student_model.values())
-            and not move_candidates
-            and not any(v for v in evidence_target.values() if v)
-        ):
-            return None
-
-        return {
-            "step_1_current_topic_option": {
-                "topic_id": chosen_topic_id,
-                "why_consider": "",
-            },
-            "step_2_alternative_topic_option": {
-                "topic_id": None,
-                "why_consider": "",
-            },
-            "step_3_current_topic_value": {
-                "topic_id": chosen_topic_id,
-                "grade_value": 1,
-                "pedagogical_value": 1,
-                "engagement_value": 1,
-                "reason": "",
-            },
-            "step_4_alternative_topic_value": {
-                "topic_id": None,
-                "grade_value": 1,
-                "pedagogical_value": 1,
-                "engagement_value": 1,
-                "reason": "",
-            },
-            "step_5_weighted_topic_comparison": {
-                "grade_weight": 1,
-                "pedagogical_weight": 1,
-                "engagement_weight": 1,
-                "current_topic_total": 0,
-                "alternative_topic_total": 0,
-                "preferred_topic_id": chosen_topic_id,
-                "reason": "",
-            },
-            "step_6_chosen_topic": {
-                "topic_id": chosen_topic_id,
-                "choice_type": "stay" if chosen_topic_id else "",
-                "reason": "",
-            },
-            "step_7_student_model": student_model,
-            "step_8_evidence_target": evidence_target,
-            "step_9_move_candidates": move_candidates,
-            "step_10_choice": chosen_move,
-            "step_11_reply_draft": _sanitize_reply_draft(raw_trace.get("step_5_reply_draft")),
-            "step_12_reply_check": _sanitize_reply_check(raw_trace.get("step_6_reply_check")),
-            "step_13_revision": _sanitize_revision(raw_trace.get("step_7_revision")),
-            "step_14_final_move": _sanitize_choice(raw_trace.get("step_8_final_move")),
-        }
-
-    student_model = _sanitize_student_model(raw_trace.get("student_model"))
-    evidence_target = _sanitize_evidence_target(raw_trace.get("evidence_target"))
-    move_candidates = _sanitize_move_candidates(raw_trace.get("move_candidates"))
-    chosen_move = _sanitize_choice(raw_trace.get("chosen_move"))
-
-    if not any(student_model.values()) and not move_candidates and not any(v for v in evidence_target.values() if v):
-        return None
-
-    # Backward-compatible upgrade path: store legacy traces in the new stepwise shape.
-    return {
-        "step_1_current_topic_option": {
-            "topic_id": evidence_target.get("topic_id"),
-            "why_consider": "",
-        },
-        "step_2_alternative_topic_option": {
-            "topic_id": None,
-            "why_consider": "",
-        },
-        "step_3_current_topic_value": {
-            "topic_id": evidence_target.get("topic_id"),
-            "grade_value": 1,
-            "pedagogical_value": 1,
-            "engagement_value": 1,
-            "reason": "",
-        },
-        "step_4_alternative_topic_value": {
-            "topic_id": None,
-            "grade_value": 1,
-            "pedagogical_value": 1,
-            "engagement_value": 1,
-            "reason": "",
-        },
-        "step_5_weighted_topic_comparison": {
-            "grade_weight": 1,
-            "pedagogical_weight": 1,
-            "engagement_weight": 1,
-            "current_topic_total": 0,
-            "alternative_topic_total": 0,
-            "preferred_topic_id": evidence_target.get("topic_id"),
-            "reason": "",
-        },
-        "step_6_chosen_topic": {
-            "topic_id": evidence_target.get("topic_id"),
-            "choice_type": "stay" if evidence_target.get("topic_id") else "",
-            "reason": "",
-        },
-        "step_7_student_model": student_model,
-        "step_8_evidence_target": evidence_target,
-        "step_9_move_candidates": move_candidates,
-        "step_10_choice": chosen_move,
-        "step_11_reply_draft": {"draft": ""},
-        "step_12_reply_check": {key: False for key in _DECISION_TRACE_CHECK_KEYS},
-        "step_13_revision": {"revised": False, "reason": ""},
-        "step_14_final_move": chosen_move,
-    }
-
-
 def sanitize_state_update(
     old_state: dict,
     llm_state: dict,
     allowed_topic_ids: set,
-    *,
-    raw_decision_trace: object | None = None,
 ) -> dict:
     """Sanitize a model-returned state update.
 
@@ -744,7 +430,6 @@ def sanitize_state_update(
     - current_topic_id: one allowed topic id or None
     - tutor_comment: short string
     - turn_count: old_turn_count + 1
-    - private_decision_trace: backend-stored, never shown to the student
     - unknown keys dropped
     """
     result = {
@@ -811,9 +496,36 @@ def sanitize_state_update(
     result["tutor_comment"] = str(raw_tutor_comment)
 
     result["turn_count"] = old_state.get("turn_count", 0) + 1
-    result["private_decision_trace"] = _sanitize_decision_trace(raw_decision_trace, allowed_topic_ids)
 
     return result
+
+
+def validate_private_artifact(
+    private_artifact: object,
+    private_artifact_schema_json: str | None,
+) -> str | None:
+    """Return a compact validation error, or None when the artifact is valid."""
+    if private_artifact_schema_json is None:
+        return None
+    try:
+        schema = j_.loads(private_artifact_schema_json)
+    except Exception as exc:
+        return _compact_validation_error(f"invalid private_artifact_schema_json: {exc}")
+    if private_artifact is None:
+        return "missing private_artifact"
+    try:
+        jsonschema_.Draft202012Validator.check_schema(schema)
+        jsonschema_.validate(instance=private_artifact, schema=schema)
+    except jsonschema_.ValidationError as exc:
+        return _compact_validation_error(f"private_artifact validation failed: {exc.message}")
+    except jsonschema_.SchemaError as exc:
+        return _compact_validation_error(f"invalid private_artifact_schema_json: {exc.message}")
+    return None
+
+
+def _compact_validation_error(message: str, *, limit: int = 500) -> str:
+    normalized = " ".join(str(message).split())
+    return normalized[:limit]
 
 
 def serialize_messages(rows) -> list[dict]:

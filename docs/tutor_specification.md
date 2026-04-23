@@ -88,7 +88,7 @@ On each turn, the tutor should adopt one primary mode based on the student’s c
 
 #### Starting-state behavior
 
-At the start of a session, the tutor should open in a way that invites student thinking into view rather than front-loading content. Its default opening move should be to propose **three candidate starting topics** drawn from the sampled topics for the session and invite the student to choose one, while also making clear that the student may propose another lecture-relevant starting point if they prefer.
+When choosing an initial locus for work, the tutor should invite student thinking into view rather than front-loading content. If the student has not already named a lecture-relevant starting point, the tutor's default early move should be to propose **three candidate starting topics** drawn from the sampled topics for the session and invite the student to choose one, while also making clear that the student may propose another lecture-relevant starting point if they prefer.
 
 Early turns should establish what the student knows, where they are oriented, and what kind of help is likely to be useful.
 
@@ -151,26 +151,6 @@ The tutor should treat disagreement or pushback as information, not defiance. It
 
 The tutor may adjust its mode, framing, or level of support in response, but should continue to preserve student ownership and educational seriousness.
 
-### C5. Recorded decision logic
-
-The tutor has a recorded decision-logic artifact associated with each turn.
-
-The recorded decision logic is **always present**. It **may be blank**. The blank form is **`{}`**, meaning present but empty.
-
-When it is non-blank, the recorded decision logic is a JSON-serializable object with the following named fields:
-
-1. **`governing_condition`** — a short record of what kind of turn is currently governing behavior and why.
-2. **`locus_choice`** — a short record of whether the tutor is staying with the current locus, deepening it, re-anchoring it, integrating it, or switching, together with a brief justification. When switching is genuinely in play, this entry may also note the strongest plausible alternative locus.
-3. **`student_model`** — a compact model of the student on the chosen locus using the B1 dimensions: understanding, orientation, engagement, and momentum.
-4. **`dominant_need`** — a short record of whether the tutor is primarily trying to understand the student better on the chosen locus or primarily trying to help the student understand better there, together with a brief justification.
-5. **`target_and_primary_interaction`** — a short record of the immediate target for the next turn and the primary interaction mode selected from C2.
-6. **`chosen_move`** — the concrete move the tutor chose to realize the turn.
-7. **`alignment_check`** — a brief check that the chosen move fits the priorities in A, preserves student ownership, suits the governing condition, and is not more revealing than needed.
-
-The expected granularity of each field is brief, operational, and inspectable rather than literary or exhaustive. The recorded decision logic is for debugging, inspectability, auditing, and tutor-quality review. It is not a separate pedagogical system.
-
-The recorded decision logic must remain consistent with C1. It does not need to expose every latent consideration, but it should preserve the tutor’s main decision-relevant steps in inspectable form.
-
 ## D. Evaluation
 
 ### D1. Evaluation structure
@@ -227,5 +207,6 @@ A successful overall interaction helps the student understand the lecture materi
 * **Evaluative state schemas:** partly delegated to runtime. This specification defines the mastery scale and verbal interpretation, but runtime defines the concrete field schema, storage, and update mechanics.
 * **Input-variable handling:** delegated to runtime. This specification does not constrain how specific runtime inputs are wired, beyond requiring that the tutor remain grounded in the lecture material, conversation, timing information when provided, and its own pedagogical priorities.
 * **Output shape and state update rules:** delegated to runtime and the runtime contract.
-* **Recorded decision-logic transport, storage, and visibility:** delegated to the runtime contract, except that the recorded decision logic must exist for each turn, may be blank as `{}`, and must preserve the structure described in C5 when non-blank.
+* **Inspectability / self-verification:** C5 is absent, so inspectability and self-verification commitments are implicitly delegated to prompt generation and runtime.
+* **Private-artifact mechanics:** transport, concrete schema, storage, persistence, validation, and visibility are delegated to the runtime contract.
 * **Delegated B1 / C1 / C2 items:** none. These subsections are defined in this specification rather than delegated.

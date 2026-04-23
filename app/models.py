@@ -19,6 +19,7 @@ class SessionModel(db_module.Base):
     started_at: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)
     ended_at: sqlalchemy_orm.Mapped[dt_module.datetime | None] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), nullable=True)
     current_grade: sqlalchemy_orm.Mapped[float | None] = sqlalchemy_orm.mapped_column(sa.Float, nullable=True)
+    private_artifact_schema_json: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
 
 
 class MessageModel(db_module.Base):
@@ -72,3 +73,14 @@ class DialogueTurnAuditModel(db_module.Base):
     ended_with_content_question: sqlalchemy_orm.Mapped[bool | None] = sqlalchemy_orm.mapped_column(sa.Boolean, default=False)
     repetition_complaint: sqlalchemy_orm.Mapped[bool | None] = sqlalchemy_orm.mapped_column(sa.Boolean, default=False)
     switched_topics: sqlalchemy_orm.Mapped[bool | None] = sqlalchemy_orm.mapped_column(sa.Boolean, default=False)
+
+
+class PrivateArtifactLogModel(db_module.Base):
+    __tablename__ = "private_artifact_logs"
+
+    id: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    session_id: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.ForeignKey("sessions.session_id"), index=True)
+    turn_index: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer, index=True)
+    artifact_json: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+    validation_error: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+    created_at: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)

@@ -90,8 +90,9 @@ def test_prefix_settings_can_be_overridden_by_environment(monkeypatch):
 
 
 def test_student_default_prefix_rendered_in_static_and_api_urls():
-    client = TestClient(student_main.app)
-    response = client.get("/bot/")
+    with _temporary_root_path(student_main.app, "/bot"):
+        client = TestClient(student_main.app)
+        response = client.get("/bot/")
 
     assert response.status_code == 200
     assert 'href="/bot/static/style.css"' in response.text
@@ -131,8 +132,9 @@ def test_admin_default_prefix_rendered_in_index_static_links_and_forms(tmp_path,
     _write_admin_lecture(settings.lectures_dir)
     monkeypatch.setattr(config_module, "get_settings", lambda: settings)
 
-    client = TestClient(admin_main.app)
-    response = client.get("/bot-admin/", auth=_admin_auth())
+    with _temporary_root_path(admin_main.app, "/bot-admin"):
+        client = TestClient(admin_main.app)
+        response = client.get("/bot-admin/", auth=_admin_auth())
 
     assert response.status_code == 200
     assert 'href="/bot-admin/static/style.css"' in response.text
