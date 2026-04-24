@@ -125,9 +125,12 @@ For each ordinary student turn, the backend:
 5. calls OpenAI with `response_format={"type": "json_object"}`,
 6. sanitizes the returned assistant message,
 7. sanitizes and merges state updates,
-8. validates and logs `private_artifact` when a session schema exists,
-9. records a dialogue audit row,
-10. persists the student and assistant messages.
+8. validates `private_artifact` when a session schema exists,
+9. retries the tutor call once with a repair instruction if `private_artifact` is missing or invalid,
+10. uses controlled fallback mode if the repair attempt still fails,
+11. records a dialogue audit row,
+12. logs the valid private artifact, or the post-repair validation failure,
+13. persists the student and assistant messages.
 
 The model is expected to return:
 
@@ -143,7 +146,7 @@ The model is expected to return:
 }
 ```
 
-`private_artifact` is required only when the session has `private_artifact_schema_json`. It is private/backend-facing, validated against the session schema, logged per turn, and never merged into tutoring state, messages, grading state, or lifecycle state. Validation failures are recorded in the private artifact log and do not crash the tutoring turn by themselves.
+`private_artifact` is required only when the session has `private_artifact_schema_json`. It is private/backend-facing, validated against the session schema, logged per turn, and never merged into tutoring state, messages, grading state, or lifecycle state. Missing or invalid private artifacts trigger one bounded repair attempt before the turn is accepted. If repair still fails, the backend uses controlled fallback mode, records the validation failure in the private artifact log, and does not expose the invalid model reply as the accepted student-facing turn.
 
 The backend is conservative: unknown topic IDs are ignored, mastery values are clamped to `0..100`, backend-owned fields are preserved, and `topics_covered` is not trusted as authoritative.
 

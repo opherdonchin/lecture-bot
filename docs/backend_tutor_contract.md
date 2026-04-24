@@ -186,10 +186,14 @@ Validation is intentionally simple:
 
 Validation failure rules:
 
-- If the session schema exists and `private_artifact` is missing, record a validation failure.
-- If the artifact is malformed or invalid against the schema, record a validation failure.
-- Validation failure must not crash the tutoring turn by itself.
-- Validation failure must be logged explicitly in the private-artifact log.
+- If the session schema exists and `private_artifact` is missing, treat the model output as a contract failure.
+- If the artifact is malformed or invalid against the schema, treat the model output as a contract failure.
+- The backend must make one bounded repair attempt before accepting the turn.
+- The repair attempt must ask for the full response JSON for the same student turn, including a top-level `private_artifact` conforming to the injected schema.
+- If repair succeeds, persist the repaired assistant message, repaired state delta, and valid private artifact.
+- If repair fails, enter controlled fallback mode for the tutoring turn, record a validation failure, and avoid accepting the invalid model reply as the student-facing reply.
+- Validation failure after repair must not crash the tutoring turn by itself.
+- Validation failure after repair must be logged explicitly in the private-artifact log.
 - Artifact validation failure must not corrupt tutoring state persistence.
 
 ---

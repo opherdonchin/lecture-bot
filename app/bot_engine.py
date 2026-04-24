@@ -191,6 +191,7 @@ def generate_reply(
     user_message: str,
     timing_context: dict | None = None,
     private_artifact_schema_json: str | None = None,
+    repair_instruction: str | None = None,
 ) -> tuple[str, dict, object | None]:
     """Generate a tutoring reply using OpenAI.
 
@@ -214,6 +215,8 @@ def generate_reply(
         timing_context=timing_context,
         private_artifact_schema_json=private_artifact_schema_json,
     )
+    if repair_instruction:
+        system_prompt = f"{system_prompt}\n\nRepair instruction\n\n{repair_instruction.strip()}"
 
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(recent_messages)

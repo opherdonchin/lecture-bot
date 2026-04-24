@@ -680,7 +680,7 @@ def test_grading_validation_non_dict_entry_skipped():
 
 def test_load_prompt_template_reads_tutor_prompt_markdown():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
-    assert "You are the runtime tutor for a lecture-review dialogue" in loaded
+    assert "You are the runtime tutor for a lecture-review session" in loaded
 
 
 def test_tutor_prompt_uses_backend_runtime_context_names():
@@ -697,20 +697,19 @@ def test_tutor_prompt_uses_backend_runtime_context_names():
 
 def test_tutor_prompt_describes_backend_owned_lifecycle_boundaries():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
-    assert "The backend owns the opening message." in loaded
-    assert "Timeout closure is backend-owned." in loaded
-    assert "session_timing.closing_mode" in loaded
-    assert "session_timing.timeout_warning_sent" in loaded
+    assert "The backend owns the opening message and timeout closure." in loaded
+    assert "Do not assume you are writing the session-opening message." in loaded
+    assert "session_timing" in loaded
+    assert "timeout_warning_sent" in loaded
 
 
 def test_tutor_prompt_keeps_private_artifacts_out_of_state_and_message():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
     assert "If private_artifact_schema_json is present" in loaded
-    assert "Never place private_artifact or any private-artifact content inside updated_state." in loaded
-    assert "Never place private-artifact content inside assistant_message." in loaded
-    assert "private_artifact is not tutoring state" in loaded
-    assert "Do not include topics_covered inside updated_state." in loaded
-    assert "The backend derives topics_covered" in loaded
+    assert "Do not place private_artifact content inside updated_state." in loaded
+    assert "it must not appear inside assistant_message or updated_state" in loaded
+    assert "it is not tutoring state" in loaded
+    assert "Do not return topics_covered." in loaded
 
 
 def test_tutor_generator_prompt_validates_contracts_and_sparse_delta():
@@ -757,15 +756,14 @@ def test_backend_runtime_contract_defines_private_artifact_mechanics():
     assert "private_artifact_schema_json" in contract
     assert "private_artifact" in contract
     assert "`private_artifact` must not appear inside `updated_state`" in contract
-    assert "Validation failure must not crash the tutoring turn by itself." in contract
+    assert "The backend must make one bounded repair attempt before accepting the turn." in contract
+    assert "If repair fails, enter controlled fallback mode" in contract
 
 
-def test_current_tutor_specification_omits_c5_and_delegates_implicitly():
+def test_current_tutor_specification_defines_c5_and_delegates_runtime_mechanics():
     spec = (prompt_loader._REPO_ROOT / "docs" / "tutor_specification.md").read_text(encoding="utf-8")
-    assert "### C5." not in spec
-    assert "C5 is absent" in spec
-    assert "implicitly delegated to prompt generation and runtime" in spec
-    assert "Private-artifact mechanics" in spec
+    assert "### C5. Inspectability / self-verification commitments" in spec
+    assert "concrete private-artifact schema, transport, validation, persistence, and visibility are delegated" in spec
 
 
 def test_generate_reply_uses_tutor_prompt_markdown_with_injected_context():
@@ -829,7 +827,7 @@ def test_generate_reply_uses_tutor_prompt_markdown_with_injected_context():
 
     create_kwargs = mock_client.chat.completions.create.call_args.kwargs
     system_prompt = create_kwargs["messages"][0]["content"]
-    assert "You are the runtime tutor for a lecture-review dialogue" in system_prompt
+    assert "You are the runtime tutor for a lecture-review session" in system_prompt
     assert "Runtime context" in system_prompt
     assert '"topic_id": "T1"' in system_prompt
     assert '"label": "Reality–Data–Model distinction"' in system_prompt

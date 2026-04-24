@@ -34,18 +34,51 @@ def test_send_message_invalid_session(client):
 
 
 VALID_PRIVATE_ARTIFACT = {
-    "governing_condition": "ordinary content turn",
-    "locus_choice": "stay with T1",
+    "governing_condition": "ordinary_content",
+    "locus": {
+        "action": "stay",
+        "topic_id": "T1",
+        "alternative_topic_id": None,
+        "comparison_considered": False,
+    },
     "student_model": {
         "understanding": "partial",
         "orientation": "oriented",
         "engagement": "engaged",
-        "momentum": "moving",
+        "momentum": "deepening",
+        "student_goal": "understand the lecture idea",
     },
-    "dominant_need": "understand the student better",
-    "target_and_primary_interaction": "criterion check through probing",
-    "chosen_move": "ask one focused question",
-    "alignment_check": "fits priorities and preserves ownership",
+    "dominant_need": "understand_student_better",
+    "immediate_target": {
+        "type": "criterion",
+        "focus": "check the student's current understanding",
+    },
+    "interaction_plan": {
+        "primary_mode": "probe_and_diagnose",
+        "move_type": "open_question",
+        "reveal_level": "minimal",
+    },
+    "evidence_assessment": {
+        "topic_id": "T1",
+        "strength": "weak",
+        "independence": "unknown",
+        "update_confidence": "low",
+        "note": "not enough evidence yet",
+    },
+    "time_awareness": {
+        "timing_used": False,
+        "mode": "not_used",
+        "note": None,
+    },
+    "self_checks": {
+        "alignment_with_priorities": True,
+        "responsive_to_student_goal": True,
+        "preserves_student_ownership": True,
+        "avoids_overreveal": True,
+        "evidence_update_conservative": True,
+        "fits_governing_condition": True,
+        "fits_time_context": True,
+    },
 }
 
 
@@ -143,7 +176,7 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
     artifact_row = db.query(models.PrivateArtifactLogModel).filter(
         models.PrivateArtifactLogModel.session_id == session_id
     ).one()
-    assert j.loads(artifact_row.artifact_json)["chosen_move"] == "ask one focused question"
+    assert j.loads(artifact_row.artifact_json)["interaction_plan"]["move_type"] == "open_question"
     assert artifact_row.validation_error is None
 
 
@@ -366,7 +399,7 @@ def test_send_message_writes_dialogue_turn_audit_row(client):
     assert audit_row.turn_index == 1
     assert audit_row.prompt_template_name == "tutor_prompt.md"
     assert audit_row.dialogue_model
-    assert "You are the runtime tutor for a lecture-review dialogue" in audit_row.rendered_system_prompt
+    assert "You are the runtime tutor for a lecture-review session" in audit_row.rendered_system_prompt
     assert audit_row.user_message == "What counts as data"
 
 
@@ -390,49 +423,102 @@ def test_send_message_injects_private_artifact_schema_json(client):
     assert "governing_condition" in system_prompt
 
 
-def test_send_message_missing_private_artifact_logs_validation_failure(client):
+def test_send_message_missing_private_artifact_retries_and_logs_repaired_artifact(client):
     session_id = start_session(client)
-    mock_resp = mock.MagicMock()
-    mock_resp.choices[0].message.content = j.dumps({
+    missing_resp = mock.MagicMock()
+    missing_resp.choices[0].message.content = j.dumps({
         "assistant_message": "What is one example?",
         "updated_state": {},
     })
+    repaired_resp = mock.MagicMock()
+    repaired_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "What is one repaired example?",
+        "updated_state": {},
+        "private_artifact": VALID_PRIVATE_ARTIFACT,
+    })
     mock_client = mock.MagicMock()
-    mock_client.chat.completions.create.return_value = mock_resp
+    mock_client.chat.completions.create.side_effect = [missing_resp, repaired_resp]
 
     with mock.patch("openai.OpenAI", return_value=mock_client):
         response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
 
     assert response.status_code == 200
+    assert response.json()["message"] == "What is one repaired example?"
+    assert mock_client.chat.completions.create.call_count == 2
+    repair_prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+    assert "Repair instruction" in repair_prompt
+    assert "missing private_artifact" in repair_prompt
+    db = next(app.dependency_overrides[db_module.get_db]())
+    artifact_row = db.query(models.PrivateArtifactLogModel).filter(
+        models.PrivateArtifactLogModel.session_id == session_id
+    ).one()
+    assert j.loads(artifact_row.artifact_json) == VALID_PRIVATE_ARTIFACT
+    assert artifact_row.validation_error is None
+    audit_row = db.query(models.DialogueTurnAuditModel).filter(
+        models.DialogueTurnAuditModel.session_id == session_id
+    ).one()
+    assert "Repair instruction" in audit_row.rendered_system_prompt
+    assert "missing private_artifact" in audit_row.rendered_system_prompt
+
+
+def test_send_message_invalid_private_artifact_retries_and_logs_repaired_artifact(client):
+    session_id = start_session(client)
+    invalid_resp = mock.MagicMock()
+    invalid_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "What is one example?",
+        "updated_state": {},
+        "private_artifact": {},
+    })
+    repaired_resp = mock.MagicMock()
+    repaired_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "What is one repaired example?",
+        "updated_state": {},
+        "private_artifact": VALID_PRIVATE_ARTIFACT,
+    })
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.side_effect = [invalid_resp, repaired_resp]
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "What is one repaired example?"
+    assert mock_client.chat.completions.create.call_count == 2
+    db = next(app.dependency_overrides[db_module.get_db]())
+    artifact_row = db.query(models.PrivateArtifactLogModel).filter(
+        models.PrivateArtifactLogModel.session_id == session_id
+    ).one()
+    assert j.loads(artifact_row.artifact_json) == VALID_PRIVATE_ARTIFACT
+    assert artifact_row.validation_error is None
+
+
+def test_send_message_private_artifact_repair_failure_uses_controlled_fallback(client):
+    session_id = start_session(client)
+    missing_resp = mock.MagicMock()
+    missing_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "First unusable reply.",
+        "updated_state": {},
+    })
+    still_missing_resp = mock.MagicMock()
+    still_missing_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "Second unusable reply.",
+        "updated_state": {},
+    })
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.side_effect = [missing_resp, still_missing_resp]
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
+
+    assert response.status_code == 200
+    assert response.json()["message"] == bot_engine._FALLBACK_DIALOGUE_MESSAGE
+    assert mock_client.chat.completions.create.call_count == 2
     db = next(app.dependency_overrides[db_module.get_db]())
     artifact_row = db.query(models.PrivateArtifactLogModel).filter(
         models.PrivateArtifactLogModel.session_id == session_id
     ).one()
     assert artifact_row.artifact_json is None
     assert artifact_row.validation_error == "missing private_artifact"
-
-
-def test_send_message_invalid_private_artifact_logs_validation_failure(client):
-    session_id = start_session(client)
-    mock_resp = mock.MagicMock()
-    mock_resp.choices[0].message.content = j.dumps({
-        "assistant_message": "What is one example?",
-        "updated_state": {},
-        "private_artifact": {},
-    })
-    mock_client = mock.MagicMock()
-    mock_client.chat.completions.create.return_value = mock_resp
-
-    with mock.patch("openai.OpenAI", return_value=mock_client):
-        response = client.post("/send_message", json={"session_id": session_id, "message": "Hello"})
-
-    assert response.status_code == 200
-    db = next(app.dependency_overrides[db_module.get_db]())
-    artifact_row = db.query(models.PrivateArtifactLogModel).filter(
-        models.PrivateArtifactLogModel.session_id == session_id
-    ).one()
-    assert j.loads(artifact_row.artifact_json) == {}
-    assert "private_artifact validation failed" in artifact_row.validation_error
 
 
 def test_private_artifact_inside_updated_state_is_not_persisted(client):

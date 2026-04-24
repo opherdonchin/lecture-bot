@@ -225,6 +225,37 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         timing_context=timing_context,
         private_artifact_schema_json=session.private_artifact_schema_json,
     )
+    validation_error = None
+    if session.private_artifact_schema_json is not None:
+        validation_error = bot_engine.validate_private_artifact(
+            private_artifact,
+            session.private_artifact_schema_json,
+        )
+        if validation_error is not None:
+            repair_instruction = _build_private_artifact_repair_instruction(validation_error)
+            rendered_system_prompt = _append_repair_instruction(
+                rendered_system_prompt,
+                repair_instruction,
+            )
+            bot_reply, updated_state, private_artifact = bot_engine.generate_reply(
+                lecture_package=lecture_package,
+                recent_messages=recent_messages,
+                state=state,
+                user_message=request.message,
+                timing_context=timing_context,
+                private_artifact_schema_json=session.private_artifact_schema_json,
+                repair_instruction=repair_instruction,
+            )
+            validation_error = bot_engine.validate_private_artifact(
+                private_artifact,
+                session.private_artifact_schema_json,
+            )
+            if validation_error is not None:
+                fallback_state = dict(state)
+                fallback_state["turn_count"] = state.get("turn_count", 0) + 1
+                bot_reply = bot_engine._FALLBACK_DIALOGUE_MESSAGE
+                updated_state = fallback_state
+                private_artifact = None
 
     if should_warn_timeout:
         updated_state["timeout_warning_sent"] = True
@@ -251,10 +282,6 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         original_user_message=request.message,
     )
     if session.private_artifact_schema_json is not None:
-        validation_error = bot_engine.validate_private_artifact(
-            private_artifact,
-            session.private_artifact_schema_json,
-        )
         _record_private_artifact_log(
             db,
             session_id=request.session_id,
@@ -382,6 +409,20 @@ def _record_grade_event(
         grade=float(grade),
         payload_json=j_.dumps(payload, ensure_ascii=False),
     ))    
+
+
+def _build_private_artifact_repair_instruction(validation_error: str) -> str:
+    return (
+        "Your previous JSON output violated the private artifact contract: "
+        f"{validation_error}. Return the full response JSON for the same student turn again. "
+        "Because private_artifact_schema_json is present, include a top-level private_artifact "
+        "that conforms exactly to the injected schema. Keep private_artifact out of "
+        "assistant_message and updated_state."
+    )
+
+
+def _append_repair_instruction(rendered_system_prompt: str, repair_instruction: str) -> str:
+    return f"{rendered_system_prompt}\n\nRepair instruction\n\n{repair_instruction.strip()}"
 
 
 def _extract_turn_target_topic_id(updated_state: dict) -> str | None:
