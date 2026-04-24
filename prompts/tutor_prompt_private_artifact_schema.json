@@ -3,316 +3,230 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "governing_condition",
-    "locus",
-    "student_model",
-    "dominant_need",
-    "immediate_target",
-    "interaction_plan",
-    "evidence_assessment",
-    "time_awareness",
-    "self_checks"
+    "student_attention",
+    "pedagogical_judgment",
+    "mastery_judgment",
+    "locus_judgment",
+    "self_verification",
+    "response_form_check"
   ],
   "properties": {
-    "governing_condition": {
-      "type": "string",
-      "enum": [
-        "ordinary_content",
-        "lifecycle",
-        "repair_meta",
-        "out_of_scope",
-        "distress_management",
-        "other"
-      ]
-    },
-    "locus": {
+    "student_attention": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "action",
-        "topic_id",
-        "alternative_topic_id",
-        "comparison_considered"
-      ],
-      "properties": {
-        "action": {
-          "type": "string",
-          "enum": [
-            "stay",
-            "deepen",
-            "re_anchor",
-            "integrate",
-            "switch",
-            "close"
-          ]
-        },
-        "topic_id": {
-          "type": ["string", "null"],
-          "minLength": 1,
-          "maxLength": 80
-        },
-        "alternative_topic_id": {
-          "type": ["string", "null"],
-          "minLength": 1,
-          "maxLength": 80
-        },
-        "comparison_considered": {
-          "type": "boolean"
-        }
-      }
-    },
-    "student_model": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "understanding",
-        "orientation",
         "engagement",
         "momentum",
-        "student_goal"
+        "current_goal",
+        "assistance_level",
+        "independence_of_understanding",
+        "traction_on_current_locus"
       ],
       "properties": {
-        "understanding": {
-          "type": "string",
-          "enum": [
-            "unclear",
-            "fragile",
-            "partial",
-            "usable",
-            "strong"
-          ]
-        },
-        "orientation": {
-          "type": "string",
-          "enum": [
-            "lost",
-            "partial",
-            "oriented"
-          ]
-        },
         "engagement": {
           "type": "string",
-          "enum": [
-            "low",
-            "mixed",
-            "engaged",
-            "student_led"
-          ]
+          "enum": ["productive", "hesitant", "passive", "off_task", "unclear"]
         },
         "momentum": {
           "type": "string",
-          "enum": [
-            "opening",
-            "deepening",
-            "looping",
-            "stalling",
-            "broadening_usefully",
-            "counterproductive",
-            "winding_down"
-          ]
+          "enum": ["clarifying", "stalled", "drifting", "declining", "unclear"]
         },
-        "student_goal": {
-          "type": ["string", "null"],
-          "maxLength": 160
+        "current_goal": {
+          "type": "string",
+          "enum": ["answering", "learning", "clarifying", "challenging", "improving_grade", "procedural_help", "unclear"]
+        },
+        "assistance_level": {
+          "type": "string",
+          "enum": ["none", "small_hint", "partial_frame", "heavy_scaffolding", "correction", "unclear"]
+        },
+        "independence_of_understanding": {
+          "type": "string",
+          "enum": ["independent", "partly_assisted", "mostly_assisted", "recognition_only", "unclear"]
+        },
+        "traction_on_current_locus": {
+          "type": "string",
+          "enum": ["productive", "limited", "repetitive", "low_yield", "counterproductive", "unclear"]
         }
       }
     },
-    "dominant_need": {
-      "type": "string",
-      "enum": [
-        "understand_student_better",
-        "help_student_understand_better"
-      ]
+    "pedagogical_judgment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["next_move", "reason"],
+      "properties": {
+        "next_move": {
+          "type": "string",
+          "enum": [
+            "open_question",
+            "contrast_question",
+            "example_request",
+            "application_prompt",
+            "why_prompt",
+            "small_hint",
+            "partial_frame",
+            "correction",
+            "brief_summary_then_question",
+            "procedural_support_then_question",
+            "redirection_then_question"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     },
-    "immediate_target": {
+    "mastery_judgment": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "type",
-        "focus"
+        "topic_id",
+        "evidence_strength",
+        "evidence_basis",
+        "mastery_update_warranted",
+        "mastery_score_if_updated",
+        "reason"
       ],
       "properties": {
-        "type": {
+        "topic_id": {
+          "type": ["string", "null"]
+        },
+        "evidence_strength": {
           "type": "string",
           "enum": [
+            "no_new_evidence",
+            "vague_recognition",
+            "correct_phrase_limited_reasoning",
+            "supported_use",
+            "independent_explanation",
+            "independent_transfer",
+            "repeated_independent_evidence"
+          ]
+        },
+        "evidence_basis": {
+          "type": "string",
+          "enum": [
+            "none",
+            "identification",
             "criterion",
             "distinction",
             "explanation",
             "application",
-            "integration",
-            "re_orientation",
-            "consolidation",
-            "scope_repair",
-            "distress_reduction",
-            "meta_repair",
-            "other"
+            "example_or_counterexample",
+            "practical_interpretation",
+            "independent_correction"
           ]
         },
-        "focus": {
+        "mastery_update_warranted": {
+          "type": "boolean"
+        },
+        "mastery_score_if_updated": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "reason": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 200
+          "minLength": 1
         }
       }
     },
-    "interaction_plan": {
+    "locus_judgment": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "primary_mode",
-        "move_type",
-        "reveal_level"
+        "current_topic_id",
+        "decision",
+        "material_conceptual_error_present",
+        "adequate_for_local_purpose",
+        "right_enough_for_now",
+        "specific_reason_to_stay",
+        "reason"
       ],
       "properties": {
-        "primary_mode": {
-          "type": "string",
-          "enum": [
-            "probe_and_diagnose",
-            "orient_and_re_anchor",
-            "scaffold",
-            "consolidate",
-            "extend_and_test_transfer",
-            "integrate"
-          ]
+        "current_topic_id": {
+          "type": ["string", "null"]
         },
-        "move_type": {
+        "decision": {
           "type": "string",
-          "enum": [
-            "open_question",
-            "contrastive_question",
-            "application_prompt",
-            "request_example",
-            "brief_explanation",
-            "re_anchor",
-            "narrowing_prompt",
-            "consolidation_prompt",
-            "integration_prompt",
-            "scope_redirect",
-            "distress_reduction",
-            "meta_repair",
-            "other"
-          ]
+          "enum": ["stay", "shift_angle", "leave_for_now"]
         },
-        "reveal_level": {
+        "material_conceptual_error_present": {
+          "type": "boolean"
+        },
+        "adequate_for_local_purpose": {
+          "type": "boolean"
+        },
+        "right_enough_for_now": {
+          "type": "boolean"
+        },
+        "specific_reason_to_stay": {
+          "type": ["string", "null"]
+        },
+        "reason": {
           "type": "string",
-          "enum": [
-            "minimal",
-            "limited",
-            "moderate"
-          ]
+          "minLength": 1
         }
       }
     },
-    "evidence_assessment": {
+    "self_verification": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "topic_id",
-        "strength",
-        "independence",
-        "update_confidence",
-        "note"
+        "student_carried_conceptual_work",
+        "not_merely_repetition_or_uptake",
+        "feedback_language_matches_evidence",
+        "pedagogical_move_without_mastery_inflation",
+        "remaining_weakness_material",
+        "another_same_locus_turn_worthwhile"
       ],
       "properties": {
-        "topic_id": {
-          "type": ["string", "null"],
-          "minLength": 1,
-          "maxLength": 80
+        "student_carried_conceptual_work": {
+          "type": "boolean"
         },
-        "strength": {
-          "type": "string",
-          "enum": [
-            "none",
-            "weak",
-            "moderate",
-            "strong"
-          ]
+        "not_merely_repetition_or_uptake": {
+          "type": "boolean"
         },
-        "independence": {
-          "type": "string",
-          "enum": [
-            "unknown",
-            "assisted",
-            "mixed",
-            "independent"
-          ]
+        "feedback_language_matches_evidence": {
+          "type": "boolean"
         },
-        "update_confidence": {
-          "type": "string",
-          "enum": [
-            "low",
-            "medium",
-            "high"
-          ]
+        "pedagogical_move_without_mastery_inflation": {
+          "type": "boolean"
         },
-        "note": {
-          "type": ["string", "null"],
-          "maxLength": 240
+        "remaining_weakness_material": {
+          "type": "boolean"
+        },
+        "another_same_locus_turn_worthwhile": {
+          "type": "boolean"
         }
       }
     },
-    "time_awareness": {
+    "response_form_check": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "timing_used",
-        "mode",
-        "note"
+        "ends_with_one_content_question",
+        "question_requests_one_contribution",
+        "not_single_sentence_summary_request",
+        "not_topic_menu",
+        "reason"
       ],
       "properties": {
-        "timing_used": {
+        "ends_with_one_content_question": {
           "type": "boolean"
         },
-        "mode": {
+        "question_requests_one_contribution": {
+          "type": "boolean"
+        },
+        "not_single_sentence_summary_request": {
+          "type": "boolean"
+        },
+        "not_topic_menu": {
+          "type": "boolean"
+        },
+        "reason": {
           "type": "string",
-          "enum": [
-            "not_used",
-            "normal",
-            "time_limited",
-            "five_minute_warning",
-            "winding_down",
-            "unreliable_or_absent"
-          ]
-        },
-        "note": {
-          "type": ["string", "null"],
-          "maxLength": 160
-        }
-      }
-    },
-    "self_checks": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "alignment_with_priorities",
-        "responsive_to_student_goal",
-        "preserves_student_ownership",
-        "avoids_overreveal",
-        "evidence_update_conservative",
-        "fits_governing_condition",
-        "fits_time_context"
-      ],
-      "properties": {
-        "alignment_with_priorities": {
-          "type": "boolean"
-        },
-        "responsive_to_student_goal": {
-          "type": "boolean"
-        },
-        "preserves_student_ownership": {
-          "type": "boolean"
-        },
-        "avoids_overreveal": {
-          "type": "boolean"
-        },
-        "evidence_update_conservative": {
-          "type": "boolean"
-        },
-        "fits_governing_condition": {
-          "type": "boolean"
-        },
-        "fits_time_context": {
-          "type": "boolean"
+          "minLength": 1
         }
       }
     }
