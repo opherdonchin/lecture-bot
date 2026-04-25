@@ -680,7 +680,7 @@ def test_grading_validation_non_dict_entry_skipped():
 
 def test_load_prompt_template_reads_tutor_prompt_markdown():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
-    assert "You are the runtime tutor for a lecture-review session" in loaded
+    assert "You are the runtime tutor for one lecture-review tutoring session" in loaded
 
 
 def test_tutor_prompt_uses_backend_runtime_context_names():
@@ -698,7 +698,7 @@ def test_tutor_prompt_uses_backend_runtime_context_names():
 def test_tutor_prompt_describes_backend_owned_lifecycle_boundaries():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
     assert "The backend owns the opening message and timeout closure." in loaded
-    assert "Do not assume you are writing the session-opening message." in loaded
+    assert "The backend owns session creation, opening message behavior" in loaded
     assert "session_timing" in loaded
     assert "timeout_warning_sent" in loaded
 
@@ -706,10 +706,10 @@ def test_tutor_prompt_describes_backend_owned_lifecycle_boundaries():
 def test_tutor_prompt_keeps_private_artifacts_out_of_state_and_message():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
     assert "If private_artifact_schema_json is present" in loaded
-    assert "Do not place private_artifact content inside updated_state." in loaded
-    assert "it must not appear inside assistant_message or updated_state" in loaded
-    assert "it is not tutoring state" in loaded
-    assert "Do not return topics_covered." in loaded
+    assert "Never put private_artifact content inside updated_state." in loaded
+    assert "Never put private_artifact content inside assistant_message." in loaded
+    assert "private_artifact, when required, is private and backend-facing only." in loaded
+    assert "topics_covered" in loaded
 
 
 def test_tutor_generator_prompt_validates_contracts_and_sparse_delta():
@@ -827,7 +827,7 @@ def test_generate_reply_uses_tutor_prompt_markdown_with_injected_context():
 
     create_kwargs = mock_client.chat.completions.create.call_args.kwargs
     system_prompt = create_kwargs["messages"][0]["content"]
-    assert "You are the runtime tutor for a lecture-review session" in system_prompt
+    assert "You are the runtime tutor for one lecture-review tutoring session" in system_prompt
     assert "Runtime context" in system_prompt
     assert '"topic_id": "T1"' in system_prompt
     assert '"label": "Reality–Data–Model distinction"' in system_prompt
