@@ -1,232 +1,261 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "student_attention",
-    "pedagogical_judgment",
-    "mastery_judgment",
-    "locus_judgment",
-    "self_verification",
-    "response_form_check"
+    "latest_message_evidence_gate",
+    "mastery_update_check",
+    "locus_decision_check",
+    "visible_response_check"
   ],
   "properties": {
-    "student_attention": {
+    "latest_message_evidence_gate": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "engagement",
-        "momentum",
-        "current_goal",
-        "assistance_level",
-        "independence_of_understanding",
-        "traction_on_current_locus"
+        "latest_message_function",
+        "has_new_assessable_content",
+        "new_content_evidence_summary",
+        "repair_or_meta_signal",
+        "gate_reason"
       ],
       "properties": {
-        "engagement": {
-          "type": "string",
-          "enum": ["productive", "hesitant", "passive", "off_task", "unclear"]
-        },
-        "momentum": {
-          "type": "string",
-          "enum": ["clarifying", "stalled", "drifting", "declining", "unclear"]
-        },
-        "current_goal": {
-          "type": "string",
-          "enum": ["answering", "learning", "clarifying", "challenging", "improving_grade", "procedural_help", "unclear"]
-        },
-        "assistance_level": {
-          "type": "string",
-          "enum": ["none", "small_hint", "partial_frame", "heavy_scaffolding", "correction", "unclear"]
-        },
-        "independence_of_understanding": {
-          "type": "string",
-          "enum": ["independent", "partly_assisted", "mostly_assisted", "recognition_only", "unclear"]
-        },
-        "traction_on_current_locus": {
-          "type": "string",
-          "enum": ["productive", "limited", "repetitive", "low_yield", "counterproductive", "unclear"]
-        }
-      }
-    },
-    "pedagogical_judgment": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["next_move", "reason"],
-      "properties": {
-        "next_move": {
+        "latest_message_function": {
           "type": "string",
           "enum": [
-            "open_question",
-            "contrast_question",
-            "example_request",
-            "application_prompt",
-            "why_prompt",
-            "small_hint",
-            "partial_frame",
-            "correction",
-            "brief_summary_then_question",
-            "procedural_support_then_question",
-            "redirection_then_question"
+            "new_content_evidence",
+            "mixed_content_and_interaction",
+            "procedural_support",
+            "repair_or_pushback",
+            "clarification_about_interaction",
+            "meta_or_format_request",
+            "off_task",
+            "unclear"
           ]
         },
-        "reason": {
+        "has_new_assessable_content": {
+          "type": "boolean"
+        },
+        "new_content_evidence_summary": {
+          "type": ["string", "null"],
+          "maxLength": 400
+        },
+        "repair_or_meta_signal": {
+          "type": ["string", "null"],
+          "maxLength": 300
+        },
+        "gate_reason": {
           "type": "string",
-          "minLength": 1
+          "maxLength": 500
         }
       }
     },
-    "mastery_judgment": {
+    "mastery_update_check": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "topic_id",
+        "mastery_update_permitted",
+        "mastery_updated",
+        "topic_ids_considered",
         "evidence_strength",
-        "evidence_basis",
-        "mastery_update_warranted",
-        "mastery_score_if_updated",
-        "reason"
+        "assistance_level",
+        "student_independence",
+        "material_conceptual_error_present",
+        "material_error_summary",
+        "scaffolding_cap_applied",
+        "conservative_update_reason"
       ],
       "properties": {
-        "topic_id": {
-          "type": ["string", "null"]
+        "mastery_update_permitted": {
+          "type": "boolean"
+        },
+        "mastery_updated": {
+          "type": "boolean"
+        },
+        "topic_ids_considered": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
         },
         "evidence_strength": {
           "type": "string",
           "enum": [
-            "no_new_evidence",
+            "none",
             "vague_recognition",
             "correct_phrase_limited_reasoning",
             "supported_use",
-            "independent_explanation",
-            "independent_transfer",
-            "repeated_independent_evidence"
+            "independent_explanation_or_distinction",
+            "independent_transfer_or_application",
+            "repeated_independent_evidence",
+            "unclear"
           ]
         },
-        "evidence_basis": {
+        "assistance_level": {
+          "type": "string",
+          "enum": [
+            "none_or_independent",
+            "small_hint",
+            "partial_frame",
+            "heavy_scaffolding_or_correction",
+            "repetition_or_immediate_uptake",
+            "uncertain"
+          ]
+        },
+        "student_independence": {
           "type": "string",
           "enum": [
             "none",
-            "identification",
-            "criterion",
-            "distinction",
-            "explanation",
-            "application",
-            "example_or_counterexample",
-            "practical_interpretation",
-            "independent_correction"
+            "low",
+            "moderate",
+            "high",
+            "uncertain"
           ]
-        },
-        "mastery_update_warranted": {
-          "type": "boolean"
-        },
-        "mastery_score_if_updated": {
-          "type": ["integer", "null"],
-          "minimum": 0,
-          "maximum": 100
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "locus_judgment": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "current_topic_id",
-        "decision",
-        "material_conceptual_error_present",
-        "adequate_for_local_purpose",
-        "right_enough_for_now",
-        "specific_reason_to_stay",
-        "reason"
-      ],
-      "properties": {
-        "current_topic_id": {
-          "type": ["string", "null"]
-        },
-        "decision": {
-          "type": "string",
-          "enum": ["stay", "shift_angle", "leave_for_now"]
         },
         "material_conceptual_error_present": {
           "type": "boolean"
         },
-        "adequate_for_local_purpose": {
-          "type": "boolean"
+        "material_error_summary": {
+          "type": ["string", "null"],
+          "maxLength": 400
         },
-        "right_enough_for_now": {
-          "type": "boolean"
+        "scaffolding_cap_applied": {
+          "type": ["string", "null"],
+          "enum": [
+            "small_hint_cap_about_65",
+            "heavy_scaffold_cap_about_50",
+            "no_cap_needed",
+            "uncertain_treated_as_assisted",
+            null
+          ]
         },
-        "specific_reason_to_stay": {
-          "type": ["string", "null"]
-        },
-        "reason": {
+        "conservative_update_reason": {
           "type": "string",
-          "minLength": 1
+          "maxLength": 600
         }
       }
     },
-    "self_verification": {
+    "locus_decision_check": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "student_carried_conceptual_work",
-        "not_merely_repetition_or_uptake",
-        "feedback_language_matches_evidence",
-        "pedagogical_move_without_mastery_inflation",
-        "remaining_weakness_material",
-        "another_same_locus_turn_worthwhile"
+        "current_locus_summary",
+        "locus_decision",
+        "exact_or_equivalent_question_already_answered",
+        "leave_threshold_met",
+        "traction",
+        "remaining_weakness_type",
+        "reason_for_locus_decision",
+        "if_staying_after_apparent_success_reason",
+        "next_question_relation"
       ],
       "properties": {
-        "student_carried_conceptual_work": {
+        "current_locus_summary": {
+          "type": ["string", "null"],
+          "maxLength": 300
+        },
+        "locus_decision": {
+          "type": "string",
+          "enum": [
+            "stay_on_locus",
+            "shift_angle_within_locus",
+            "leave_locus_for_now",
+            "unclear"
+          ]
+        },
+        "exact_or_equivalent_question_already_answered": {
           "type": "boolean"
         },
-        "not_merely_repetition_or_uptake": {
+        "leave_threshold_met": {
           "type": "boolean"
         },
-        "feedback_language_matches_evidence": {
-          "type": "boolean"
+        "traction": {
+          "type": "string",
+          "enum": [
+            "productive",
+            "stalled",
+            "declining",
+            "unclear"
+          ]
         },
-        "pedagogical_move_without_mastery_inflation": {
-          "type": "boolean"
+        "remaining_weakness_type": {
+          "type": "string",
+          "enum": [
+            "material",
+            "nonmaterial",
+            "none",
+            "unclear"
+          ]
         },
-        "remaining_weakness_material": {
-          "type": "boolean"
+        "reason_for_locus_decision": {
+          "type": "string",
+          "maxLength": 600
         },
-        "another_same_locus_turn_worthwhile": {
-          "type": "boolean"
+        "if_staying_after_apparent_success_reason": {
+          "type": ["string", "null"],
+          "maxLength": 400
+        },
+        "next_question_relation": {
+          "type": "string",
+          "enum": [
+            "same_locus_due_material_error",
+            "transformed_check",
+            "extend",
+            "integrate",
+            "switch_topic",
+            "procedural_pivot_to_content",
+            "none"
+          ]
         }
       }
     },
-    "response_form_check": {
+    "visible_response_check": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "ends_with_one_content_question",
-        "question_requests_one_contribution",
-        "not_single_sentence_summary_request",
-        "not_topic_menu",
-        "reason"
+        "assistant_message_summary",
+        "feedback_language_calibrated",
+        "strong_affirmation_used",
+        "strong_affirmation_justified",
+        "ends_with_one_focused_content_question",
+        "asks_exactly_one_contribution",
+        "avoids_forbidden_question_forms",
+        "private_artifact_excluded_from_student_message",
+        "state_delta_uses_allowed_keys_only",
+        "visible_response_self_check_reason"
       ],
       "properties": {
-        "ends_with_one_content_question": {
-          "type": "boolean"
-        },
-        "question_requests_one_contribution": {
-          "type": "boolean"
-        },
-        "not_single_sentence_summary_request": {
-          "type": "boolean"
-        },
-        "not_topic_menu": {
-          "type": "boolean"
-        },
-        "reason": {
+        "assistant_message_summary": {
           "type": "string",
-          "minLength": 1
+          "maxLength": 300
+        },
+        "feedback_language_calibrated": {
+          "type": "boolean"
+        },
+        "strong_affirmation_used": {
+          "type": "boolean"
+        },
+        "strong_affirmation_justified": {
+          "type": "boolean"
+        },
+        "ends_with_one_focused_content_question": {
+          "type": "boolean"
+        },
+        "asks_exactly_one_contribution": {
+          "type": "boolean"
+        },
+        "avoids_forbidden_question_forms": {
+          "type": "boolean"
+        },
+        "private_artifact_excluded_from_student_message": {
+          "type": "boolean"
+        },
+        "state_delta_uses_allowed_keys_only": {
+          "type": "boolean"
+        },
+        "visible_response_self_check_reason": {
+          "type": "string",
+          "maxLength": 700
         }
       }
     }
