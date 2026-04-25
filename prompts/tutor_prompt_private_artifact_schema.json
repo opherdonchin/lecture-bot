@@ -1,0 +1,366 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "latest_message_check",
+    "evidence_update_check",
+    "current_characterization_check",
+    "next_question_value_check",
+    "same_locus_stopping_check",
+    "state_update_check",
+    "visible_response_check"
+  ],
+  "properties": {
+    "latest_message_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role_in_interaction",
+        "contains_new_assessable_content",
+        "contains_repair_or_pushback",
+        "contains_procedural_or_meta_content",
+        "relevant_topic_id",
+        "brief_account"
+      ],
+      "properties": {
+        "role_in_interaction": {
+          "type": "string",
+          "enum": [
+            "new_assessable_content",
+            "mixed_content_and_interaction_evidence",
+            "procedural_or_meta_question",
+            "repair_or_pushback",
+            "off_task",
+            "unclear_mixture"
+          ]
+        },
+        "contains_new_assessable_content": {
+          "type": "boolean"
+        },
+        "contains_repair_or_pushback": {
+          "type": "boolean"
+        },
+        "contains_procedural_or_meta_content": {
+          "type": "boolean"
+        },
+        "relevant_topic_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "brief_account": {
+          "type": "string"
+        }
+      }
+    },
+    "evidence_update_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mastery_increase_recorded",
+        "basis_for_update",
+        "independence_judgment",
+        "evidence_strength",
+        "scaffolding_effect",
+        "feedback_language_calibrated",
+        "why_no_mastery_increase_if_applicable"
+      ],
+      "properties": {
+        "mastery_increase_recorded": {
+          "type": "boolean"
+        },
+        "basis_for_update": {
+          "type": "string",
+          "enum": [
+            "new_independent_content_evidence",
+            "new_assisted_content_evidence",
+            "new_weak_content_evidence",
+            "no_new_content_evidence",
+            "repair_or_pushback_only",
+            "procedural_or_meta_only",
+            "off_task_or_unclear",
+            "not_applicable"
+          ]
+        },
+        "independence_judgment": {
+          "type": "string",
+          "enum": [
+            "independent",
+            "assisted_by_small_hint",
+            "assisted_by_heavy_scaffolding_or_correction",
+            "recognition_or_repetition",
+            "unclear_treated_as_assisted",
+            "not_applicable"
+          ]
+        },
+        "evidence_strength": {
+          "type": "string",
+          "enum": [
+            "no_evidence",
+            "vague_recognition",
+            "correct_phrase_limited_reasoning",
+            "supported_use",
+            "independent_explanation_criterion_or_distinction",
+            "independent_transfer_application_or_example",
+            "dense_or_repeated_independent_evidence"
+          ]
+        },
+        "scaffolding_effect": {
+          "type": "string",
+          "enum": [
+            "none",
+            "small_hint_cap_applies",
+            "heavy_scaffolding_or_correction_cap_applies",
+            "unclear_assistance_treated_as_assisted",
+            "not_applicable"
+          ]
+        },
+        "feedback_language_calibrated": {
+          "type": "boolean"
+        },
+        "why_no_mastery_increase_if_applicable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "current_characterization_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topic_id",
+        "characterization",
+        "uses_latest_evidence_or_prior_evidence",
+        "material_conceptual_error_remaining",
+        "material_uncertainty_remaining",
+        "adequate_for_current_local_purpose",
+        "next_evidence_that_would_matter"
+      ],
+      "properties": {
+        "topic_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "characterization": {
+          "type": "string"
+        },
+        "uses_latest_evidence_or_prior_evidence": {
+          "type": "string",
+          "enum": [
+            "latest_evidence",
+            "prior_accumulated_evidence",
+            "latest_and_prior_evidence",
+            "no_substantive_content_evidence"
+          ]
+        },
+        "material_conceptual_error_remaining": {
+          "type": "boolean"
+        },
+        "material_uncertainty_remaining": {
+          "type": "boolean"
+        },
+        "adequate_for_current_local_purpose": {
+          "type": "boolean"
+        },
+        "next_evidence_that_would_matter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "next_question_value_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "visible_move_type",
+        "asks_content_question",
+        "question_text",
+        "correct_answer_would_change",
+        "incorrect_answer_would_change",
+        "is_low_value_retest",
+        "time_yield_judgment",
+        "target_selection_reason"
+      ],
+      "properties": {
+        "visible_move_type": {
+          "type": "string",
+          "enum": [
+            "open_question",
+            "contrast_question",
+            "example_request",
+            "application_prompt",
+            "why_prompt",
+            "integration_prompt",
+            "coverage_move",
+            "small_hint",
+            "partial_frame",
+            "correction",
+            "brief_summary",
+            "procedural_support",
+            "redirection",
+            "repair_acknowledgment",
+            "consolidation_without_question",
+            "runtime_closure_or_no_question"
+          ]
+        },
+        "asks_content_question": {
+          "type": "boolean"
+        },
+        "question_text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "correct_answer_would_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "incorrect_answer_would_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "is_low_value_retest": {
+          "type": "boolean"
+        },
+        "time_yield_judgment": {
+          "type": "string",
+          "enum": [
+            "high_yield_with_available_time",
+            "low_yield_with_available_time",
+            "little_time_high_yield",
+            "little_time_better_to_consolidate",
+            "no_reliable_time_information"
+          ]
+        },
+        "target_selection_reason": {
+          "type": "string"
+        }
+      }
+    },
+    "same_locus_stopping_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "same_or_equivalent_question_recently_answered",
+        "remaining_issue_type",
+        "stay_or_leave_locus",
+        "reason"
+      ],
+      "properties": {
+        "same_or_equivalent_question_recently_answered": {
+          "type": "boolean"
+        },
+        "remaining_issue_type": {
+          "type": "string",
+          "enum": [
+            "material_conceptual_error",
+            "unclear_independence_after_scaffolding",
+            "new_high_value_transformed_demand",
+            "only_imprecision_incompleteness_or_noncanonical_wording",
+            "already_adequate_for_now",
+            "not_applicable"
+          ]
+        },
+        "stay_or_leave_locus": {
+          "type": "string",
+          "enum": [
+            "stay",
+            "shift_angle_once",
+            "extend_apply_or_integrate",
+            "switch_topic",
+            "consolidate_without_new_question"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "state_update_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "updated_state_keys_returned",
+        "mastery_updates_are_sparse_and_evidence_based",
+        "evidence_notes_function_as_characterizations",
+        "no_backend_owned_fields_returned",
+        "canonical_topic_ids_only",
+        "state_update_rationale"
+      ],
+      "properties": {
+        "updated_state_keys_returned": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "mastery",
+              "evidence_notes",
+              "current_topic_id",
+              "tutor_comment"
+            ]
+          }
+        },
+        "mastery_updates_are_sparse_and_evidence_based": {
+          "type": "boolean"
+        },
+        "evidence_notes_function_as_characterizations": {
+          "type": "boolean"
+        },
+        "no_backend_owned_fields_returned": {
+          "type": "boolean"
+        },
+        "canonical_topic_ids_only": {
+          "type": "boolean"
+        },
+        "state_update_rationale": {
+          "type": "string"
+        }
+      }
+    },
+    "visible_response_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assistant_message_matches_decision",
+        "private_artifact_not_exposed",
+        "asks_at_most_one_contribution",
+        "does_not_overstate_mastery",
+        "does_not_retest_low_value_same_locus",
+        "brief_actual_response_account"
+      ],
+      "properties": {
+        "assistant_message_matches_decision": {
+          "type": "boolean"
+        },
+        "private_artifact_not_exposed": {
+          "type": "boolean"
+        },
+        "asks_at_most_one_contribution": {
+          "type": "boolean"
+        },
+        "does_not_overstate_mastery": {
+          "type": "boolean"
+        },
+        "does_not_retest_low_value_same_locus": {
+          "type": "boolean"
+        },
+        "brief_actual_response_account": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

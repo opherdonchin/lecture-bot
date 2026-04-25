@@ -6,6 +6,7 @@ import app.bot_engine as bot_engine
 import app.config as config_module
 import app.db as db_module
 import app.models as models
+import app.prompt_loader as prompt_loader
 from app.main import app
 
 
@@ -79,6 +80,58 @@ def test_start_session_topics_sampled_populated(client):
     state = json.loads(row.state_json)
     assert isinstance(state["topics_sampled"], list)
     assert len(state["topics_sampled"]) > 0
+
+
+def test_start_session_snapshots_active_private_artifact_schema(client):
+    session_id = start_session(client)
+    db = next(app.dependency_overrides[db_module.get_db]())
+    row = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    schema = json.loads(row.private_artifact_schema_json)
+    assert schema["type"] == "object"
+    assert "governing_condition" in schema["required"]
+
+
+def test_start_session_with_no_schema_leaves_private_artifact_schema_null(client):
+    lectures_dir = config_module.get_settings().lectures_dir
+    config_path = lectures_dir / "lecture_01" / "lecture_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["tutor_prompt_template"] = "no_schema_prompt.md"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    session_id = start_session(client)
+    db = next(app.dependency_overrides[db_module.get_db]())
+    row = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    assert row.private_artifact_schema_json is None
+
+
+def test_session_private_artifact_schema_remains_fixed_after_source_changes(client, tmp_path, monkeypatch):
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "custom_prompt.md").write_text("Prompt\n", encoding="utf-8")
+    schema_path = prompts_dir / "custom_prompt_private_artifact_schema.json"
+    first_schema = {"type": "object", "required": ["first"]}
+    second_schema = {"type": "object", "required": ["second"]}
+    schema_path.write_text(json.dumps(first_schema), encoding="utf-8")
+    monkeypatch.setattr(prompt_loader, "_PROMPTS_DIR", prompts_dir)
+
+    lectures_dir = config_module.get_settings().lectures_dir
+    config_path = lectures_dir / "lecture_01" / "lecture_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["tutor_prompt_template"] = "custom_prompt.md"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    session_id = start_session(client)
+    schema_path.write_text(json.dumps(second_schema), encoding="utf-8")
+
+    db = next(app.dependency_overrides[db_module.get_db]())
+    row = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    assert json.loads(row.private_artifact_schema_json) == first_schema
 
 
 def test_start_session_topics_sampled_stable(client):
@@ -301,6 +354,22 @@ def test_get_grade_does_not_call_generate_topic_scores(client):
         response = client.post("/get_grade", json={"session_id": session_id})
     assert response.status_code == 200
     assert response.json()["grade"] == 55.0
+
+
+def test_get_grade_does_not_read_private_artifact_logs(client):
+    session_id = start_session(client)
+    db = next(app.dependency_overrides[db_module.get_db]())
+    db.add(models.PrivateArtifactLogModel(
+        session_id=session_id,
+        turn_index=1,
+        artifact_json=json.dumps({"mastery": {"T1": 100}}),
+        validation_error=None,
+    ))
+    db.commit()
+
+    response = client.post("/get_grade", json={"session_id": session_id})
+    assert response.status_code == 200
+    assert response.json()["grade"] == 0.0
 
 
 # ---------------------------------------------------------------------------

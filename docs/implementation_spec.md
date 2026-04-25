@@ -1,342 +1,208 @@
-# Implementation Spec (v1)
+# Implementation Spec
 
-This document defines the exact behavior of the lecture-bot system.
-All implementation should follow this specification.
+This document describes the current lecture-bot implementation. The README is the operational quick reference; this file is the compact architecture/spec view.
 
----
+## 1. Stack
 
-## 0. Technologies and implementation conventions
-
-### Core stack
 - Python 3.12
-- FastAPI for the web application
-- SQLAlchemy 2.x for ORM/database access
-- SQLite for v1 persistence
-- Pixi for environment and task management
-- Uvicorn as the ASGI server
-- Nginx + systemd for deployment; current target is Ubuntu 24.04 LTS
+- FastAPI and Uvicorn
+- SQLAlchemy with SQLite
+- Pydantic and pydantic-settings
+- Pixi for the development and deployment environment
+- Jinja2 templates plus vanilla JavaScript
+- OpenAI Python SDK for tutor replies, final report prose, and optional lecture artifact generation
 
-### API style
-- Use a simple RPC-style API for v1.
-- Primary workflow endpoints:
-  - `POST /start_session`
-  - `POST /send_message`
-- Internal data model should still remain resource-oriented.
+## 2. Applications
 
-### UI conventions
-- Main interaction is a chat UI.
-- Minimal control buttons are preferred for:
-  - Get current grade
-  - Generate final report
-  - Restart session
-- Avoid quiz-style UI elements.
+The project runs two separate FastAPI apps.
 
-### Persistence conventions
-- Store sessions, messages, session state, and optional grade events in SQLite.
-- The database is runtime state for the current semester, not long-term archival storage.
-- Logs, exports, databases, roster files, and secrets remain local and are never committed.
+| App | Entrypoint | Default root path | Production root path | Port |
+|---|---|---:|---:|---:|
+| Student chat | `app.main:app` | `/bot` | `/stats` | `8000` |
+| Admin UI | `app.admin_main:app` | `/bot-admin` | `/stats-admin` | `8001` |
 
-### LLM integration conventions
-- Use real OpenAI API calls from the beginning.
-- Separate:
-  - dialogue prompt path for ordinary tutoring turns
-  - grading/report prompt path for current-grade and final-report actions
-- Pass the full rubric and full concatenated lecture text to the model in v1.
+Root paths are configured with:
 
-### Grading conventions
-- Use weighted best-topic scoring:
-  - 55
-  - 25
-  - 13
-  - 4
-  - 3
-- Grade is the sum of the best demonstrated five topic scores, rounded down.
-- The stored grade field is the current grade.
-- Grade/report requests may be logged as grade events.
+- `LECTURE_BOT_STUDENT_ROOT_PATH`
+- `LECTURE_BOT_ADMIN_ROOT_PATH`
 
-### Lecture package conventions
-Each runtime lecture package must contain:
+The production launch tasks call `scripts/serve_student.sh` and `scripts/serve_admin.sh`, which pass the matching Uvicorn `--root-path`.
+
+## 3. Student API
+
+The student app exposes a browser chat UI plus RPC-style JSON endpoints.
+
+| Endpoint | Method | Behavior |
+|---|---|---|
+| `/` | GET | Render the chat UI. |
+| `/health` | GET | Return `{"status": "ok"}`. |
+| `/lectures` | GET | List lecture IDs with a `lecture_config.json`. |
+| `/start_session` | POST | Load the lecture package, create a session, sample focus topics, persist the backend opening message. |
+| `/send_message` | POST | Validate session, enforce timeout, reject non-English student text, call the tutor model, sanitize state, validate/log any private artifact, persist messages and audit row. |
+| `/get_grade` | POST | Compute current grade from backend-owned best mastery state. |
+| `/generate_report` | POST | Build the same authoritative grade snapshot and ask OpenAI for report prose, with a local fallback. |
+| `/restart_session` | POST | End the current session and create a fresh one for the same student and lecture. |
+
+## 4. Admin App
+
+The admin app is protected by HTTP Basic Auth using `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
+
+Current admin capabilities:
+
+- list, create, and reopen lecture folders under `LECTURES_DIR`
+- edit lecture metadata
+- upload and delete lecture files
+- select source files for slides, handout, notebook, and transcript
+- run local conversion to processed text/markdown artifacts
+- download manual prompt text and support bundles for minutes and rubric generation
+- upload generated `minutes.json` and `rubric.md`
+- refresh `topics` in `lecture_config.json` from uploaded rubric headings
+
+## 5. Lecture Packages
+
+Runtime lecture packages live under `LECTURES_DIR`, normally `lectures/`.
+
+Each usable lecture directory requires:
+
 - `lecture_config.json`
 - `rubric.md`
 - `slides.md`
 - `handout.md`
 - `minutes.json`
-- optional `bot_notes.md`
 
-The build/admin pipeline may also produce or use:
+Optional runtime context:
+
+- `bot_notes.md`
+
+Build/admin workflows may also use:
+
 - `notebook.md`
 - `transcript.md`
-- raw source files such as `.pptx`, `.qmd`, `.ipynb`, `.vtt`, and sometimes `.pdf`
+- raw `.pptx`, `.qmd`, `.ipynb`, `.vtt`, `.md`, `.txt`, and sometimes `.pdf` sources
 
-Source files such as `.pptx`, `.qmd`, and `.ipynb` may also be present.  
-The app reads only processed markdown/text outputs.
+The runtime tutor context is assembled from configured context sections, currently limited by `app.bot_engine._RUNTIME_CONTEXT_KEYS` to `bot_notes`, `slides`, `handout`, and `minutes`.
 
-### File conversion conventions
-- `lecture_config.json` defines source/target file mappings under `files`.
-- Conversion/build logic lives in `scripts/`.
-- A master build script should generate processed lecture files from raw sources.
-- v1 conversion is text-only and does not attempt figure understanding.
+## 6. Session State
 
-### Deployment conventions
-
-- The current student app entrypoint is `app.main:app`.
-- The current admin app entrypoint is `app.admin_main:app`.
-- Canonical production launch uses `pixi run serve` for the student app and `pixi run admin-serve` for the admin app.
-- The committed public path defaults are `/bot` for students and `/bot-admin` for admin.
-- The intended production public paths are `/stats` for students and `/stats-admin` for admin.
-- Prefixes are configurable with `LECTURE_BOT_STUDENT_ROOT_PATH` and `LECTURE_BOT_ADMIN_ROOT_PATH`; the canonical startup scripts pass matching Uvicorn `--root-path` values.
-
-### Repository conventions
-- Repository code/spec may remain public.
-- Never commit:
-  - `.env`
-  - API keys
-  - OAuth secrets
-  - student roster / ID files
-  - local databases
-  - runtime logs
-  - exports
-
-### Coding conventions
-- Prefer simple modules and explicit code over abstraction.
-- Keep prototype velocity high.
-- Add tests where they materially help implementation stay aligned with the spec.
-- If behavior is unclear, update the spec before implementing.
-
-## 1. API (RPC-style)
-
-### 1.1 Start Session
-
-POST /start_session
-
-Request:
-
-```json
-{
-  "student_id": "string",
-  "lecture_id": "string"
-}
-```
-
-Response:
-
-```json
-{
-  "session_id": "string",
-  "message": "string"
-}
-```
-
-Behavior:
-
-* Create session
-* Initialize state
-* Sample rubric topics
-
----
-
-### 1.2 Send Message
-
-POST /send_message
-
-Request:
-
-```json
-{
-  "session_id": "string",
-  "message": "string"
-}
-```
-
-Response:
-
-```json
-{
-  "message": "string",
-  "session_active": true
-}
-```
-
-Behavior:
-
-* Check timeout
-* Append message
-* Run bot engine
-* Update state
-
----
-
-## 2. Control Actions
-
-Triggered via UI buttons (preferred) or commands.
-
-### 2.1 Get Current Grade
-
-Returns:
-
-```json
-{
-  "grade": 0-100,
-  "explanation": "string",
-  "missing_topics": ["string"]
-}
-```
-
-Uses backend-owned best mastery state and Python weighted grade computation. The older dedicated grading-prompt path remains in `app/bot_engine.py` but is not used by the current `/get_grade` endpoint.
-
----
-
-### 2.2 Generate Final Report
-
-Returns:
-
-```json
-{
-  "report_text": "string",
-  "report_json": {
-    "session_id": "string",
-    "student_id": "string",
-    "timestamp": "ISO",
-    "final_grade": number
-  }
-}
-```
-
-Uses the same authoritative backend grade snapshot, then asks the report-generation path to write report text. If the OpenAI report call fails, the backend returns a local fallback report.
-
----
-
-### 2.3 Restart Session
-
-* Ends current session
-* Creates new session
-
----
-
-## 3. Session State
-
-Stored per session:
+Initial state is created in `app/session_manager.py`.
 
 ```json
 {
   "topics_sampled": [],
   "topics_covered": [],
   "mastery": {},
-  "turn_count": 0,
-  "confidence": 0.0
+  "best_mastery": {},
+  "evidence_notes": {},
+  "current_topic_id": null,
+  "tutor_comment": "",
+  "current_grade": 0.0,
+  "timeout_warning_sent": false,
+  "turn_count": 0
 }
 ```
 
----
+Field ownership:
 
-## 4. Grading Model
+- Backend-owned: `topics_sampled`, `best_mastery`, `current_grade`, `timeout_warning_sent`, `turn_count`
+- Tutor-updated through sanitized model output: `mastery`, `evidence_notes`
+- Backend-derived: `topics_covered`, derived from topics whose mastery is at least a meaningful foothold
+- Tutor-local support: `current_topic_id`, `tutor_comment`
 
-Topic-weighted scoring:
+Private artifacts are not part of `session_state`. When a session has a fixed private artifact schema, each ordinary tutoring turn logs the returned private artifact in a separate table.
 
-* 55
-* 25
-* 13
-* 4
-* 3
+## 7. Tutor Runtime
 
-Rules:
+The default runtime tutor prompt is `prompts/tutor_prompt.md`, selected by `Settings.tutor_prompt_template`.
 
-* Select best 5 topics
-* Score each independently
-* Sum and round down
+The active private artifact schema, when present, is loaded from the generated schema file accompanying the active prompt. At session creation, the backend snapshots that schema text into `sessions.private_artifact_schema_json`. If no schema file exists for the active prompt, the session field is null and ordinary turns do not use private artifacts. Prompt history and schema history are not stored.
 
----
+For each ordinary student turn, the backend:
 
-## 5. Bot Engine Contract
+1. loads recent messages,
+2. computes timing context,
+3. builds lecture context with deterministic truncation,
+4. renders the tutor prompt plus injected runtime JSON, including `private_artifact_schema_json` when the session has one,
+5. calls OpenAI with `response_format={"type": "json_object"}`,
+6. sanitizes the returned assistant message,
+7. sanitizes and merges state updates,
+8. validates `private_artifact` when a session schema exists,
+9. retries the tutor call once with a repair instruction if `private_artifact` is missing or invalid,
+10. uses controlled fallback mode if the repair attempt still fails,
+11. records a dialogue audit row,
+12. logs the valid private artifact, or the post-repair validation failure,
+13. persists the student and assistant messages.
 
-### Input
-
-* system prompt
-* rubric (full)
-* lecture content (full)
-* session state
-* recent messages
-
-### Output
+The model is expected to return:
 
 ```json
 {
   "assistant_message": "string",
-  "updated_state": {}
+  "updated_state": {
+    "mastery": {},
+    "evidence_notes": {},
+    "topics_covered": []
+  },
+  "private_artifact": {}
 }
 ```
 
-Responsibilities:
+`private_artifact` is required only when the session has `private_artifact_schema_json`. It is private/backend-facing, validated against the session schema, logged per turn, and never merged into tutoring state, messages, grading state, or lifecycle state. Missing or invalid private artifacts trigger one bounded repair attempt before the turn is accepted. If repair still fails, the backend uses controlled fallback mode, records the validation failure in the private artifact log, and does not expose the invalid model reply as the accepted student-facing turn.
 
-* Ask next question
-* Evaluate answer
-* Update mastery
-* Move topic if needed
+The backend is conservative: unknown topic IDs are ignored, mastery values are clamped to `0..100`, backend-owned fields are preserved, and `topics_covered` is not trusted as authoritative.
 
----
+## 8. Grading
 
-## 6. Data Model
+Current-grade and final-report endpoints do not ask the model to compute the grade.
 
-### sessions
+The backend computes grades by:
 
-* session_id
-* student_id
-* lecture_id
-* started_at
-* ended_at
-* current_grade
+1. maintaining best demonstrated mastery per topic,
+2. ranking topic mastery scores from highest to lowest,
+3. applying fixed weights `[55, 25, 13, 4, 3]`,
+4. flooring the weighted sum.
 
-### messages
+`grade_events` store accepted grade/report snapshots. The authoritative payload helper checks accepted `grade` and `report` events so both endpoints see the same best demonstrated grade.
 
-* id
-* session_id
-* role
-* content
-* timestamp
+## 9. Reports
 
-### session_state
+`/generate_report` uses the authoritative backend grade snapshot, then calls the OpenAI report path to write student-facing prose. If the OpenAI report call fails or returns malformed output, the backend returns local fallback report text using the authoritative grade.
 
-* session_id
-* state_json
+The report JSON includes:
 
-### grade_events (optional)
+- session and lecture identifiers
+- start timestamp and report timestamp
+- final grade
+- elapsed, remaining, and total session minutes
 
-* session_id
-* timestamp
-* type
-* grade
+## 10. Error Handling
 
----
+Expected client and resource errors become 4xx responses. OpenAI auth/API/parse failures use explicit fallback paths for dialogue and report generation. Internal invariant violations are allowed to surface as 500s rather than being disguised as successful tutoring behavior.
 
-## 7. Constraints
+See [`error_policy.md`](error_policy.md) for details.
 
-* Student app: no authentication
-* Admin app: HTTP Basic Auth configured by `ADMIN_USERNAME` and `ADMIN_PASSWORD`
-* No tokens
-* No resume
-* Text-only
-* Full rubric each turn
+## 11. Persistence
 
----
+Core tables are defined in `app/models.py`:
 
-## 8. Current Admin UI
+- `sessions`
+- `messages`
+- `session_state`
+- `grade_events`
+- `dialogue_turn_audits`
+- `private_artifact_logs`
 
-The repository includes a separate admin FastAPI app in `app/admin_main.py`.
+`sessions.private_artifact_schema_json` is nullable. Non-null values are fixed for that session and written once at session creation.
 
-Current admin capabilities:
+`private_artifact_logs` stores one row per ordinary tutoring turn when the session has a private artifact schema. The log stores the artifact JSON text and a nullable validation error. Artifact internals are not decomposed into relational columns.
 
-* list, create, and reopen lecture folders under `LECTURES_DIR`
-* upload and delete files in a lecture folder
-* select source files for slides, handout, notebook, and transcript
-* run local conversion to `slides.md`, `handout.md`, `notebook.md`, and `transcript.md`
-* download manual prompt text and support bundles for minutes/rubric generation
-* upload `minutes.json` and `rubric.md`
-* refresh `topics` in `lecture_config.json` from uploaded rubric headings
+The SQLite database is runtime state, not a long-term archive. Databases, logs, private lecture material, exports, rosters, and `.env` files must not be committed.
 
-## 9. Extensions (future)
+## 12. Tests
 
-* Token system
-* Path-prefix-aware deployment under `/stats`
-* Multi-lecture routing
-* Figure handling
-* REST API
+Run:
+
+```bash
+pixi run test
+```
+
+Tests use temporary SQLite databases and fixture lecture packages. OpenAI calls are mocked in normal tests; passing tests do not prove API credentials, model availability, DNS, Nginx, systemd, or Moodle end-to-end behavior.

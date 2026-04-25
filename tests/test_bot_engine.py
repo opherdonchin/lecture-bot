@@ -359,7 +359,6 @@ OLD_STATE = {
     "evidence_notes": {},
     "current_topic_id": None,
     "tutor_comment": "",
-    "private_decision_trace": None,
     "current_grade": 0.0,
     "timeout_warning_sent": False,
     "turn_count": 1,
@@ -440,136 +439,33 @@ def test_sanitize_unknown_keys_dropped():
     assert "extra_field" not in result
 
 
-def test_sanitize_decision_trace_stored_privately():
-    llm_state = {"topics_covered": [], "mastery": {}}
-    raw_trace = {
-        "student_model": {
-            "understanding": "partial distinction",
-            "uncertainty": "mixing up prior and likelihood",
-            "failure_mode": "label recognition only",
-        },
-        "evidence_target": {
-            "topic_id": "T1",
-            "element": "prior vs likelihood arrows",
-            "target_type": "distinction",
-            "why_now": "student is close but still blurry",
-        },
-        "move_candidates": [
-            {
-                "move_type": "contrastive_prompt",
-                "prompt_sketch": "Which arrow means prior and which means likelihood?",
-                "revealing": 2,
-                "productive": 4,
-                "fit": 5,
-            }
-        ],
-        "chosen_move": {
-            "move_type": "contrastive_prompt",
-            "reason": "best low-revealing clarification",
-        },
+def test_sanitize_private_artifact_not_merged_into_state():
+    llm_state = {
+        "topics_covered": [],
+        "mastery": {},
+        "private_artifact": {"governing_condition": "ordinary turn"},
     }
-    result = bot_engine.sanitize_state_update(
-        OLD_STATE,
-        llm_state,
-        ALLOWED_IDS,
-        raw_decision_trace=raw_trace,
-    )
-    assert result["private_decision_trace"]["step_6_chosen_topic"]["topic_id"] == "T1"
-    assert result["private_decision_trace"]["step_8_evidence_target"]["topic_id"] == "T1"
-    assert result["private_decision_trace"]["step_10_choice"]["chosen_move"] == "contrastive_prompt"
+    result = bot_engine.sanitize_state_update(OLD_STATE, llm_state, ALLOWED_IDS)
+    assert "private_artifact" not in result
+    assert "private_decision_trace" not in result
 
 
-def test_sanitize_stepwise_decision_trace_preserved():
-    llm_state = {"topics_covered": [], "mastery": {}}
-    raw_trace = {
-        "step_1_current_topic_option": {
-            "topic_id": "T1",
-            "why_consider": "current line still has value",
-        },
-        "step_2_alternative_topic_option": {
-            "topic_id": "T2",
-            "why_consider": "strong breadth alternative",
-        },
-        "step_3_current_topic_value": {
-            "topic_id": "T1",
-            "grade_value": 4,
-            "pedagogical_value": 3,
-            "engagement_value": 2,
-            "reason": "one more check could land",
-        },
-        "step_4_alternative_topic_value": {
-            "topic_id": "T2",
-            "grade_value": 3,
-            "pedagogical_value": 5,
-            "engagement_value": 4,
-            "reason": "better momentum",
-        },
-        "step_5_weighted_topic_comparison": {
-            "grade_weight": 3,
-            "pedagogical_weight": 5,
-            "engagement_weight": 4,
-            "current_topic_total": 29,
-            "alternative_topic_total": 41,
-            "preferred_topic_id": "T2",
-            "reason": "alternative topic wins overall",
-        },
-        "step_6_chosen_topic": {
-            "topic_id": "T2",
-            "choice_type": "switch",
-            "reason": "better overall value",
-        },
-        "step_7_student_model": {
-            "understanding": "basic prior role",
-            "uncertainty": "support constraints still blurry",
-            "failure_mode": "speaks generically",
-        },
-        "step_8_evidence_target": {
-            "topic_id": "T2",
-            "element": "support of beta prior",
-            "target_type": "criterion",
-            "why_now": "needed for the next check",
-        },
-        "step_9_move_candidates": [
-            {
-                "move_type": "contrastive_prompt",
-                "prompt_sketch": "Can the parameter be outside [0,1]?",
-                "revealing": 2,
-                "productive": 5,
-                "fit": 5,
-            }
-        ],
-        "step_10_choice": {
-            "chosen_move": "contrastive_prompt",
-            "reason": "best low-reveal move",
-        },
-        "step_11_reply_draft": {
-            "draft": "Can a coin probability ever be outside [0,1]?",
-        },
-        "step_12_reply_check": {
-            "most_productive": True,
-            "minimally_revealing": True,
-            "smuggles_answer": False,
-            "asks_one_contribution": True,
-        },
-        "step_13_revision": {
-            "revised": False,
-            "reason": "draft already fits",
-        },
-        "step_14_final_move": {
-            "move_type": "contrastive_prompt",
-            "reason": "same as chosen move after review",
-        },
-    }
-    result = bot_engine.sanitize_state_update(
-        OLD_STATE,
-        llm_state,
-        ALLOWED_IDS,
-        raw_decision_trace=raw_trace,
-    )
-    assert result["private_decision_trace"]["step_6_chosen_topic"]["topic_id"] == "T2"
-    assert result["private_decision_trace"]["step_7_student_model"]["understanding"] == "basic prior role"
-    assert result["private_decision_trace"]["step_12_reply_check"]["asks_one_contribution"] is True
-    assert result["private_decision_trace"]["step_14_final_move"]["chosen_move"] == "contrastive_prompt"
+def test_validate_private_artifact_accepts_schema_conformant_object():
+    schema_json = '{"type": "object", "required": ["check"], "properties": {"check": {"type": "string"}}}'
+    error = bot_engine.validate_private_artifact({"check": "ok"}, schema_json)
+    assert error is None
+
+
+def test_validate_private_artifact_reports_missing_artifact():
+    schema_json = '{"type": "object"}'
+    error = bot_engine.validate_private_artifact(None, schema_json)
+    assert error == "missing private_artifact"
+
+
+def test_validate_private_artifact_reports_schema_mismatch():
+    schema_json = '{"type": "object", "required": ["check"]}'
+    error = bot_engine.validate_private_artifact({}, schema_json)
+    assert "private_artifact validation failed" in error
 
 
 # ---------------------------------------------------------------------------
@@ -782,46 +678,95 @@ def test_grading_validation_non_dict_entry_skipped():
 # prompt loading
 # ---------------------------------------------------------------------------
 
-def test_load_prompt_template_reads_dialogue_prompt_markdown():
-    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
-    assert "You are a focused, natural, pedagogically intelligent lecture-review tutor" in loaded
+def test_load_prompt_template_reads_tutor_prompt_markdown():
+    loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
+    assert "You are the runtime tutor for a lecture-review session" in loaded
 
 
-def test_dialogue_prompt_requires_stepwise_decision_trace():
-    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
-    assert "The `decision_trace` must document these steps separately." in loaded
-    assert "* `step_1_current_topic_option`" in loaded
-    assert "* `step_14_final_move`" in loaded
-    assert "`step_12_reply_check` should explicitly record" in loaded
-    assert "Topic control" in loaded
-    assert "weighted current-versus-alternative totals" in loaded
-    assert "Move binding" in loaded
-    assert "must implement the same move family as `step_10_choice.chosen_move`" in loaded
-    assert "briefly tell the student that the session is in its final few minutes" in loaded
+def test_tutor_prompt_uses_backend_runtime_context_names():
+    loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
+    assert "current_tutoring_state" in loaded
+    assert "session_timing" in loaded
+    assert "rubric_text" in loaded
+    assert "sampled_topics" in loaded
+    assert "private_artifact_schema_json" in loaded
+    assert "private_artifact" in loaded
+    assert "turn_context" not in loaded
+    assert "warning_reason" not in loaded
 
 
-def test_dialogue_prompt_has_explicit_move_preference_order():
-    loaded = prompt_loader.load_prompt_template("dialogue_system_prompt.md")
-    assert "Move preference order" in loaded
-    assert "1. `contrastive_prompt`" in loaded
-    assert "7. `compact_explanation`" in loaded
-    assert "prefer the earlier move in this list" in loaded
+def test_tutor_prompt_describes_backend_owned_lifecycle_boundaries():
+    loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
+    assert "The backend owns the opening message and timeout closure." in loaded
+    assert "Do not assume you are writing the session-opening message." in loaded
+    assert "session_timing" in loaded
+    assert "timeout_warning_sent" in loaded
 
 
-def test_tutor_generation_prompt_requires_stepwise_trace_and_move_order():
-    loaded = prompt_loader.load_prompt_template("tutor_generation_prompt.md")
-    assert "each step be documented separately and sequentially" in loaded
-    assert "- `step_1_current_topic_option`" in loaded
-    assert "- `step_14_final_move`" in loaded
-    assert "weighted current-versus-alternative comparison" in loaded
-    assert "default move value ordering explicit" in loaded
-    assert "1. contrastive prompt" in loaded
-    assert "7. compact explanation" in loaded
-    assert "strong move-binding section" in loaded
-    assert "must change the move rather than keep the move and emit a different question" in loaded
+def test_tutor_prompt_keeps_private_artifacts_out_of_state_and_message():
+    loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
+    assert "If private_artifact_schema_json is present" in loaded
+    assert "Do not place private_artifact content inside updated_state." in loaded
+    assert "it must not appear inside assistant_message or updated_state" in loaded
+    assert "it is not tutoring state" in loaded
+    assert "Do not return topics_covered." in loaded
 
 
-def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
+def test_tutor_generator_prompt_validates_contracts_and_sparse_delta():
+    loaded = prompt_loader.load_prompt_template("tutor_generator_prompt.md")
+    assert "You are given three authoritative inputs" in loaded
+    assert "Tutor Specification Contract" in loaded
+    assert "Backend–Tutor Runtime Contract" in loaded
+    assert "Step 1 — Check tutor-spec conformance" in loaded
+    assert "Step 2 — Check backend compatibility" in loaded
+    assert "Step 4 — Generate the private artifact JSON Schema and runtime tutor prompt only if Steps 1 and 2 both pass" in loaded
+    assert "`current_tutoring_state`" in loaded
+    assert "`session_timing`" in loaded
+    assert "`rubric_text`" in loaded
+    assert "`private_artifact_schema_json`" in loaded
+    assert "`turn_context`" not in loaded
+    assert "`updated_state` is a **sparse delta**" in loaded
+    assert "Missing C5 means implicit delegation to prompt generation and runtime." in loaded
+    assert "Do not include missing C5 in Recommended omissions" in loaded
+    assert "If C5 is present, preserve and operationalize it." in loaded
+    assert "If C5 is absent, synthesize inspectability / self-verification commitments" in loaded
+    assert "be structural, minimal, runtime-facing, and derived from pedagogical commitments" in loaded
+    assert "The backend derives or sanitizes `topics_covered`; do not allow the tutor to return it as a tutor-updatable field." in loaded
+    assert "`best_mastery`" in loaded
+    assert "`current_grade`" in loaded
+    assert "`timeout_warning_sent`" in loaded
+    assert "### Private artifact schema" in loaded
+    assert "Do **not** generate the private artifact schema." in loaded
+    assert "Do not drift into full-state replacement language." in loaded
+    assert "schema registries" in loaded
+    assert "prompt history" in loaded
+    assert "Do not output the runtime tutor prompt unless both checks pass." in loaded
+
+
+def test_tutor_specification_contract_defines_c5_implicit_delegation():
+    contract = (prompt_loader._REPO_ROOT / "docs" / "tutor_specification_contract.md").read_text(encoding="utf-8")
+    assert "C5. Inspectability / self-verification commitments" in contract
+    assert "If C5 is present, it governs" in contract
+    assert "If C5 is absent, inspectability and self-verification commitments are implicitly delegated" in contract
+    assert "Missing C5 is therefore not a conformance failure" in contract
+
+
+def test_backend_runtime_contract_defines_private_artifact_mechanics():
+    contract = (prompt_loader._REPO_ROOT / "docs" / "backend_tutor_contract.md").read_text(encoding="utf-8")
+    assert "private_artifact_schema_json" in contract
+    assert "private_artifact" in contract
+    assert "`private_artifact` must not appear inside `updated_state`" in contract
+    assert "The backend must make one bounded repair attempt before accepting the turn." in contract
+    assert "If repair fails, enter controlled fallback mode" in contract
+
+
+def test_current_tutor_specification_defines_c5_and_delegates_runtime_mechanics():
+    spec = (prompt_loader._REPO_ROOT / "docs" / "tutor_specification.md").read_text(encoding="utf-8")
+    assert "### C5. Inspectability / self-verification commitments" in spec
+    assert "concrete private-artifact schema, transport, validation, persistence, and visibility are delegated" in spec
+
+
+def test_generate_reply_uses_tutor_prompt_markdown_with_injected_context():
     lecture_package = {
         "lecture_id": "lecture_01",
         "config": {"title": "Lecture 1"},
@@ -852,20 +797,20 @@ def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
         "current_grade": 55.0,
         "timeout_warning_sent": False,
         "turn_count": 2,
-        "private_decision_trace": None,
     }
     mock_resp = mock.MagicMock()
     mock_resp.choices[0].message.content = (
         '{"assistant_message": "Next question", '
         '"updated_state": {"topics_covered": ["T1"], "mastery": {"T1": 80}, '
         '"evidence_notes": {"T1": "student made a real distinction"}, '
-        '"current_topic_id": "T1", "tutor_comment": "Keep pressing on T1."}}'
+        '"current_topic_id": "T1", "tutor_comment": "Keep pressing on T1."}, '
+        '"private_artifact": {"check": "ok"}}'
     )
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.return_value = mock_resp
 
     with mock.patch("openai.OpenAI", return_value=mock_client):
-        assistant_message, updated_state = bot_engine.generate_reply(
+        assistant_message, updated_state, private_artifact = bot_engine.generate_reply(
             lecture_package=lecture_package,
             recent_messages=[],
             state=state,
@@ -877,23 +822,28 @@ def test_generate_reply_uses_dialogue_prompt_markdown_with_injected_context():
                 "closing_mode": True,
                 "timeout_warning_sent": False,
             },
+            private_artifact_schema_json='{"type": "object", "required": ["check"]}',
         )
 
     create_kwargs = mock_client.chat.completions.create.call_args.kwargs
     system_prompt = create_kwargs["messages"][0]["content"]
-    assert "You are a focused, natural, pedagogically intelligent lecture-review tutor" in system_prompt
+    assert "You are the runtime tutor for a lecture-review session" in system_prompt
     assert "Runtime context" in system_prompt
     assert '"topic_id": "T1"' in system_prompt
     assert '"label": "Reality–Data–Model distinction"' in system_prompt
     assert '"topics_covered": [' in system_prompt
     assert '"best_mastery": {' in system_prompt
     assert '"session_timing": {' in system_prompt
+    assert '"current_tutoring_state": {' in system_prompt
+    assert '"rubric_text":' in system_prompt
     assert '"closing_mode": true' in system_prompt
     assert '"minutes_elapsed": 16' in system_prompt
     assert '"session_duration_minutes": 20' in system_prompt
+    assert '"private_artifact_schema_json":' in system_prompt
     assert "## Instructional Minutes" in system_prompt
     assert "## Notebook" not in system_prompt
     assert '"turn_count": 3' in system_prompt
     assert assistant_message == "Next question"
     assert updated_state["turn_count"] == 3
     assert updated_state["evidence_notes"]["T1"] == "student made a real distinction"
+    assert private_artifact == {"check": "ok"}

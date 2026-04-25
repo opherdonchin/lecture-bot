@@ -13,10 +13,15 @@ import app.db as db_module
 import app.language_policy as language_policy
 import app.lecture_loader as lecture_loader
 import app.models as models
+import app.root_path as root_path_module
 import app.schema as schema
 import app.session_manager as session_manager
 
 app = fa.FastAPI(title="Lecture Bot", root_path=config_module.get_settings().student_root_path)
+app.add_middleware(
+    root_path_module.RootPathStripMiddleware,
+    configured_root_path=config_module.get_settings().student_root_path,
+)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -209,15 +214,48 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         topic_defs=topic_defs,
         lecture_context=lecture_context,
         timing_context=timing_context,
+        private_artifact_schema_json=session.private_artifact_schema_json,
     )
 
-    bot_reply, updated_state = bot_engine.generate_reply(
+    bot_reply, updated_state, private_artifact = bot_engine.generate_reply(
         lecture_package=lecture_package,
         recent_messages=recent_messages,
         state=state,
         user_message=request.message,
         timing_context=timing_context,
+        private_artifact_schema_json=session.private_artifact_schema_json,
     )
+    validation_error = None
+    if session.private_artifact_schema_json is not None:
+        validation_error = bot_engine.validate_private_artifact(
+            private_artifact,
+            session.private_artifact_schema_json,
+        )
+        if validation_error is not None:
+            repair_instruction = _build_private_artifact_repair_instruction(validation_error)
+            rendered_system_prompt = _append_repair_instruction(
+                rendered_system_prompt,
+                repair_instruction,
+            )
+            bot_reply, updated_state, private_artifact = bot_engine.generate_reply(
+                lecture_package=lecture_package,
+                recent_messages=recent_messages,
+                state=state,
+                user_message=request.message,
+                timing_context=timing_context,
+                private_artifact_schema_json=session.private_artifact_schema_json,
+                repair_instruction=repair_instruction,
+            )
+            validation_error = bot_engine.validate_private_artifact(
+                private_artifact,
+                session.private_artifact_schema_json,
+            )
+            if validation_error is not None:
+                fallback_state = dict(state)
+                fallback_state["turn_count"] = state.get("turn_count", 0) + 1
+                bot_reply = bot_engine._FALLBACK_DIALOGUE_MESSAGE
+                updated_state = fallback_state
+                private_artifact = None
 
     if should_warn_timeout:
         updated_state["timeout_warning_sent"] = True
@@ -228,19 +266,29 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         state=updated_state,
         lecture_package=lecture_package,
     )
+    turn_index = int(updated_state.get("turn_count", state.get("turn_count", 0) + 1))
     _record_dialogue_turn_audit(
         db,
         session_id=request.session_id,
-        turn_index=int(updated_state.get("turn_count", state.get("turn_count", 0) + 1)),
+        turn_index=turn_index,
         state_before=state,
         recent_messages=recent_messages,
         normalized_user_message=normalized_user_message,
         rendered_system_prompt=rendered_system_prompt,
+        prompt_template_name=bot_engine.get_tutor_prompt_template(lecture_package),
         settings=settings,
         updated_state=updated_state,
         bot_reply=bot_reply,
         original_user_message=request.message,
     )
+    if session.private_artifact_schema_json is not None:
+        _record_private_artifact_log(
+            db,
+            session_id=request.session_id,
+            turn_index=turn_index,
+            private_artifact=private_artifact,
+            validation_error=validation_error,
+        )
 
     session_manager.append_message(db, request.session_id, "user", request.message)
     session_manager.append_message(db, request.session_id, "assistant", bot_reply)
@@ -363,31 +411,49 @@ def _record_grade_event(
     ))    
 
 
-def _extract_trace_target_topic_id(updated_state: dict) -> str | None:
-    trace = updated_state.get("private_decision_trace")
-    if not isinstance(trace, dict):
-        return None
-    chosen_topic = trace.get("step_6_chosen_topic")
-    if isinstance(chosen_topic, dict):
-        topic_id = chosen_topic.get("topic_id")
-        if isinstance(topic_id, str) and topic_id:
-            return topic_id
-    step_target = trace.get("step_8_evidence_target")
-    if isinstance(step_target, dict):
-        topic_id = step_target.get("topic_id")
-        if isinstance(topic_id, str) and topic_id:
-            return topic_id
-    step_target = trace.get("step_2_evidence_target")
-    if isinstance(step_target, dict):
-        topic_id = step_target.get("topic_id")
-        if isinstance(topic_id, str) and topic_id:
-            return topic_id
-    legacy_target = trace.get("evidence_target")
-    if isinstance(legacy_target, dict):
-        topic_id = legacy_target.get("topic_id")
+def _build_private_artifact_repair_instruction(validation_error: str) -> str:
+    return (
+        "Your previous JSON output violated the private artifact contract: "
+        f"{validation_error}. Return the full response JSON for the same student turn again. "
+        "Because private_artifact_schema_json is present, include a top-level private_artifact "
+        "that conforms exactly to the injected schema. Keep private_artifact out of "
+        "assistant_message and updated_state."
+    )
+
+
+def _append_repair_instruction(rendered_system_prompt: str, repair_instruction: str) -> str:
+    return f"{rendered_system_prompt}\n\nRepair instruction\n\n{repair_instruction.strip()}"
+
+
+def _extract_turn_target_topic_id(updated_state: dict) -> str | None:
+    current_topic_id = updated_state.get("current_topic_id")
+    if isinstance(current_topic_id, str) and current_topic_id:
+        return current_topic_id
+    mastery = updated_state.get("mastery")
+    if isinstance(mastery, dict) and mastery:
+        topic_id = next(iter(mastery))
         if isinstance(topic_id, str) and topic_id:
             return topic_id
     return None
+
+
+def _record_private_artifact_log(
+    db: sqlalchemy_orm.Session,
+    *,
+    session_id: str,
+    turn_index: int,
+    private_artifact: object,
+    validation_error: str | None,
+) -> None:
+    artifact_json = None
+    if private_artifact is not None:
+        artifact_json = j_.dumps(private_artifact, ensure_ascii=False)
+    db.add(models.PrivateArtifactLogModel(
+        session_id=session_id,
+        turn_index=int(turn_index),
+        artifact_json=artifact_json,
+        validation_error=validation_error,
+    ))
 
 
 def _record_dialogue_turn_audit(
@@ -399,6 +465,7 @@ def _record_dialogue_turn_audit(
     recent_messages: list[dict],
     normalized_user_message: str,
     rendered_system_prompt: str,
+    prompt_template_name: str,
     settings: config_module.Settings,
     updated_state: dict,
     bot_reply: str,
@@ -412,7 +479,7 @@ def _record_dialogue_turn_audit(
         session_id=session_id,
         turn_index=int(turn_index),
         effective_policy="default",
-        prompt_template_name="dialogue_system_prompt.md",
+        prompt_template_name=prompt_template_name,
         dialogue_model=settings.openai_model,
         state_before_json=j_.dumps(state_before, ensure_ascii=False),
         recent_messages_json=j_.dumps(recent_messages, ensure_ascii=False),
@@ -422,7 +489,7 @@ def _record_dialogue_turn_audit(
         action_hint_json="{}",
         challenge_level=1,
         current_topic_id=current_topic_before if isinstance(current_topic_before, str) else None,
-        target_topic_id=_extract_trace_target_topic_id(updated_state),
+        target_topic_id=_extract_turn_target_topic_id(updated_state),
         ended_with_content_question=bot_reply.strip().endswith("?"),
         repetition_complaint=repetition_complaint,
         switched_topics=(

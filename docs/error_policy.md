@@ -1,164 +1,141 @@
 # Error Handling Policy
 
-This document defines the error-handling approach for lecture-bot.
+This document describes the current error-handling approach for lecture-bot.
 
----
+## 1. Principles
 
-## Guiding principles
+- Expected user/client mistakes should produce clear 4xx responses.
+- Missing runtime resources should produce clear 404 responses.
+- OpenAI failures may fall back when a degraded user experience is better than ending the session.
+- Backend invariants and programmer errors should not be disguised as normal tutoring behavior.
+- Logs should identify the failing OpenAI call site.
+- Fallback paths should not invent assessment evidence.
 
-- User-facing behavior should feel coherent and intentional.
-- Internal bugs must not silently masquerade as normal tutoring behavior.
-- Fallback is allowed only where a degraded experience is preferable to a hard failure.
-- Logs must contain enough context to diagnose any failure without re-running.
-- Do not add defensive checks for impossible or already-validated conditions.
+## 2. User And Input Errors
 
----
+Examples:
 
-## Error classes
+- missing required request fields
+- empty messages
+- invalid Pydantic request shapes
+- sending a message to an ended session
 
-### 1. User / input errors
+Policy:
 
-**Examples:** missing required field, invalid session_id format, empty message body.
+- HTTP status: `422` from Pydantic or explicit `400`
+- no model call
+- no speculative state update
+- no special logging for ordinary client mistakes
 
-| Dimension | Policy |
-|---|---|
-| HTTP status | 422 (Pydantic validation) or 400 |
-| User experience | Clear error message returned in response body |
-| Fallback | Not applicable |
-| State mutation | None |
-| Logging | Not logged (expected client-side error) |
+## 3. Missing Resources
 
----
+Examples:
 
-### 2. Missing resource errors
+- unknown `session_id`
+- unknown `lecture_id`
+- missing lecture package files
 
-**Examples:** `session_id` not found in DB, `lecture_id` not found on disk.
+Policy:
 
-| Dimension | Policy |
-|---|---|
-| HTTP status | 404 |
-| User experience | "Session not found" / "Lecture not found" |
-| Fallback | Not applicable |
-| State mutation | None |
-| Logging | Not logged (expected operational condition) |
+- HTTP status: `404`
+- clear response detail such as `"Session not found"` or lecture-loader error text
+- no fallback model behavior
 
----
+## 4. Language Policy
 
-### 3. Session-lifecycle errors
+Student messages are checked before the tutor model is called.
 
-**Examples:** message sent to an already-ended session, session timed out.
+If the text is rejected as non-English:
 
-| Dimension | Policy |
-|---|---|
-| HTTP status | 400 |
-| User experience | "Session has ended" / "Session has timed out" |
-| Fallback | Not applicable — client must start a new session |
-| State mutation | Timeout sets `ended_at` before raising |
-| Logging | Not logged |
+- the original user message is persisted
+- the English-only assistant refusal is persisted
+- current state is preserved
+- no tutor model call is made
+- the session remains active
 
----
+Assistant messages returned from OpenAI are also passed through English-only fallback handling before being shown.
 
-### 4. OpenAI authentication / configuration errors
+## 5. Timeout Policy
 
-**Examples:** missing API key, invalid API key, account suspended.
+When `/send_message` detects that a session has exceeded `SESSION_TIMEOUT_MINUTES`:
 
-| Dimension | Policy |
-|---|---|
-| HTTP status | 200 (dialogue fallback) or 200 (grade returns 0) |
-| User experience | Dialogue: generic tutoring fallback message. Grade/report: fallback text. |
-| Fallback | Allowed — session continues in degraded mode |
-| State mutation | Dialogue: turn_count incremented in fallback state. Grade: no grade update. |
-| Logging | `log.exception(...)` with message identifying the call site |
-| Notes | Caught as `openai.AuthenticationError` for differentiated logging |
+- the backend computes the authoritative grade snapshot from current state
+- the backend records a grade event
+- the backend generates or falls back to a final report
+- the backend persists a closing assistant message
+- `ended_at` is set
+- the response includes `session_active=false`, final grade fields, and final report data
 
----
+The ordinary tutor model is not used to decide timeout lifecycle behavior.
 
-### 5. Transient vendor / network errors
+## 6. OpenAI Dialogue Failures
 
-**Examples:** connection timeout, rate limit, temporary server error from OpenAI.
+`app.bot_engine.generate_reply` catches:
 
-| Dimension | Policy |
-|---|---|
-| HTTP status | 200 (with fallback) |
-| User experience | Same as auth errors — degraded fallback |
-| Fallback | Allowed |
-| State mutation | Same as auth errors |
-| Logging | `log.exception(...)` — distinguishable from auth error in log output |
-| Notes | `max_retries=0` on all OpenAI clients — no retry backoff |
+- `openai_.AuthenticationError`
+- `openai_.APIError`
+- response parsing/shape errors inside the API/parsing block
 
----
+Policy:
 
-### 6. Malformed model output
+- HTTP status remains `200`
+- user sees `_FALLBACK_DIALOGUE_MESSAGE`
+- prior assessment evidence is preserved
+- `turn_count` is incremented
+- no new mastery/evidence is invented
+- failure is logged with `log.exception(...)`
 
-**Examples:** model returns invalid JSON, missing required key, wrong type.
+The sanitizer runs outside the OpenAI try/except block. Bugs in sanitizer logic should surface instead of being masked as model fallback.
 
-| Dimension | Policy |
-|---|---|
-| HTTP status | 200 (with fallback) |
-| User experience | Dialogue: generic tutoring fallback. Grade: 0 or prior grade retained. |
-| Fallback | Allowed |
-| State mutation | Dialogue: turn_count incremented. Grade: no update on empty parse. |
-| Logging | `log.exception(...)` |
-| Notes | Validation/sanitisation is the primary defence; fallback only for complete parse failure |
+## 7. Current Grade Failures
 
----
+Current-grade computation is backend-owned.
 
-### 7. Internal programmer errors / invariant violations
+The `/get_grade` endpoint:
 
-**Examples:** missing session state row, unexpected None where impossible, logic bugs.
+- loads state
+- updates `best_mastery` from sanitized `mastery`
+- computes weighted grade in Python
+- records an accepted grade event
+- returns timing fields with the grade response
 
-| Dimension | Policy |
-|---|---|
-| HTTP status | 500 (unhandled, propagated to FastAPI default handler) |
-| User experience | Generic 500 response — not masked |
-| Fallback | Not allowed — these indicate bugs, not expected runtime failures |
-| State mutation | None (transaction not committed) |
-| Logging | Python default traceback via FastAPI |
-| Notes | Do not catch `Exception` broadly to mask these. The `ValueError` raised by `session_manager.load_state` when state is missing is an invariant violation and should propagate as 500. |
+It does not call `generate_topic_scores` in the current endpoint path.
 
----
+Expected missing resources still produce 404. Internal state/database invariants should surface as application errors.
 
-## Implementation notes
+## 8. Report Failures
 
-### OpenAI call sites (`bot_engine.py`)
+`/generate_report` uses the authoritative backend grade snapshot, then calls the OpenAI report writer for prose.
 
-Three call sites exist: `generate_reply`, `generate_topic_scores`, `generate_report`.
+If OpenAI auth/API/parsing fails in `generate_report`:
 
-Each wraps the OpenAI call with three structured catches:
+- the authoritative backend grade is preserved
+- report JSON is still returned
+- report text falls back to local deterministic prose
+- the failure is logged
 
-```python
-except openai_.AuthenticationError:
-    _log.exception("<function> failed: authentication error")
-    <fallback>
-except openai_.APIError:
-    # Rate limits, timeouts, connection errors from the OpenAI API.
-    _log.exception("<function> failed: OpenAI API error")
-    <fallback>
-except Exception:
-    # Catches malformed JSON, missing model output keys, and other
-    # unexpected response-parsing failures.
-    _log.exception("<function> failed")
-    <fallback>
-```
+The report model does not own the numeric grade.
 
-`openai_.AuthenticationError` is caught first for a clearly labelled log entry.
-`openai_.APIError` covers remaining vendor errors (rate limits, timeouts, connection issues).
-`except Exception` is retained and justified for the API call and response-parsing lines only —
-it catches malformed model output (`JSONDecodeError`, unexpected key structure, etc.).
+## 9. Legacy Grading Helper
 
-**Crucially, our own code is placed outside the try block.**
-In `generate_reply`, `sanitize_state_update(...)` is called after the except clauses.
-In `generate_topic_scores`, the validation/deduplication loop is after the except clauses.
-Bugs in that code propagate as 500, not silently masked as apparent tutoring fallback behaviour.
+`app.bot_engine.generate_topic_scores` still exists as a helper, but current `/get_grade` and `/generate_report` behavior no longer depends on it.
 
-### Grade fallback
+If that helper is used by future code, it should be treated as an OpenAI-backed assessor with the same fallback expectations:
 
-When `generate_topic_scores` returns empty scores (any failure), `compute_weighted_grade([])` returns 0.
-If 0 ≤ stored_grade, the new candidate is not accepted and the stored grade is unchanged.
-The user sees their previously accepted grade — correct behaviour.
+- OpenAI failures produce empty topic scores
+- validation runs outside the API/parsing fallback where possible
+- Python remains responsible for final weighted-grade arithmetic
 
-### Dialogue fallback
+## 10. Internal Errors
 
-`_FALLBACK_DIALOGUE_MESSAGE` is a neutral tutoring prompt that invites the
-student to continue. It is deliberate and appropriate as a degraded state.
-The turn_count is still incremented in the fallback state.
+Examples:
+
+- missing `session_state` row for an existing session
+- impossible database state
+- programmer errors in sanitizer or grade computation
+
+Policy:
+
+- do not broadly catch and hide these as successful tutoring
+- let FastAPI return an application error
+- fix the invariant or bug directly

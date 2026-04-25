@@ -44,3 +44,6 @@ lectures/**
 !lectures/
 !lectures/config.json
 !lectures/**/.gitkeep
+
+# Ensure tutor_prompt.md is tracked
+!prompts/tutor_prompt.md

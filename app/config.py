@@ -23,6 +23,7 @@ class Settings(ps.BaseSettings):
     max_grading_context_chars: int = 70000
     sampled_topic_count: int = 5
     opening_topic_choice_count: int = 3
+    tutor_prompt_template: str = "tutor_prompt.md"  # Default prompt template name
 
     @pd.field_validator("student_root_path", "admin_root_path")
     @classmethod

@@ -7,7 +7,7 @@ A lecture-specific tutoring bot for university courses. Students choose a lectur
 - Student-facing FastAPI app in `app/main.py`.
 - Browser chat UI in `app/templates/chat.html` and `app/static/chat.js`.
 - OpenAI-backed tutoring turns in `app/bot_engine.py`.
-- Backend-owned session state, weighted grade computation, grade events, and dialogue-turn audit rows stored through SQLAlchemy.
+- Backend-owned session state, weighted grade computation, grade events, dialogue-turn audit rows, and private artifact logs stored through SQLAlchemy.
 - Current-grade and final-report endpoints compute from the best demonstrated topic mastery stored in backend state. Final report text is OpenAI-backed with a local fallback.
 - Separate admin FastAPI app in `app/admin_main.py` for lecture setup and upload workflow.
 
@@ -37,12 +37,12 @@ For real tutoring behavior, set `OPENAI_API_KEY` in `.env` or the process enviro
 
 | Command | Purpose |
 |---|---|
-| `pixi run dev` | Start the student app with auto-reload on `0.0.0.0:8000` and root path `/bot`. |
-| `pixi run admin-dev` | Start the separate admin app with auto-reload on `0.0.0.0:8001` and root path `/bot-admin`. |
-| `pixi run stats-dev` | Start the student app with auto-reload and root path `/stats`. |
-| `pixi run stats-admin-dev` | Start the admin app with auto-reload and root path `/stats-admin`. |
-| `pixi run serve` | Start the student app for production-style use through `scripts/serve_student.sh`. |
-| `pixi run admin-serve` | Start the admin app for production-style use through `scripts/serve_admin.sh`. |
+| `pixi run dev` | Initialize the SQLite schema if needed, then start the student app with auto-reload on `0.0.0.0:8000` and local dev path `/bot`. |
+| `pixi run admin-dev` | Initialize the SQLite schema if needed, then start the admin app with auto-reload on `0.0.0.0:8001` and local dev path `/bot-admin`. |
+| `pixi run stats-dev` | Initialize the SQLite schema if needed, then start the student app with auto-reload and path `/stats`. |
+| `pixi run stats-admin-dev` | Initialize the SQLite schema if needed, then start the admin app with auto-reload and path `/stats-admin`. |
+| `pixi run serve` | Start the student app for production-style use through `scripts/serve_student.sh`, using exported env vars or `.env` defaults. |
+| `pixi run admin-serve` | Start the admin app for production-style use through `scripts/serve_admin.sh`, using exported env vars or `.env` defaults. |
 | `pixi run stop` | Stop a process listening on port `8000`. |
 | `pixi run admin-stop` | Stop a process listening on port `8001`. |
 | `pixi run test` | Run the pytest suite. |
@@ -57,7 +57,9 @@ pixi run serve
 pixi run admin-serve
 ```
 
-Use the admin process only when the admin UI is needed. The tasks read host, port, and root path from environment variables and pass the matching Uvicorn `--root-path` internally. See [docs/path_prefix_change_note.md](docs/path_prefix_change_note.md) for prefix configuration and [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) for Ubuntu, systemd, and Nginx notes.
+Use the admin process only when the admin UI is needed. The production-style serve scripts read host, port, and root path from exported environment variables or repo-root `.env` defaults and pass the matching Uvicorn `--root-path` internally. The local dev tasks force `/bot` and `/bot-admin` so they work consistently on a plain machine without matching the production prefix. Prefix configuration is summarized below in "Path Prefix Status"; see [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) for Ubuntu, systemd, and Nginx notes.
+
+For a map of the docs directory, see [docs/README.md](docs/README.md).
 
 ## Student Routes
 
@@ -71,7 +73,7 @@ The student app is defined in `app/main.py`.
 | `/health` | GET | Health check. |
 | `/lectures` | GET | List lecture IDs found under `LECTURES_DIR` with `lecture_config.json`. |
 | `/start_session` | POST | Start a tutoring session for `student_id` and `lecture_id`. |
-| `/send_message` | POST | Send a chat turn, call the tutor model, update state, and persist messages/audit rows. |
+| `/send_message` | POST | Send a chat turn, call the tutor model, update state, validate/log private artifacts when configured, and persist messages/audit rows. |
 | `/get_grade` | POST | Return current backend-computed grade, topic coverage labels, and timing fields. |
 | `/generate_report` | POST | Generate final report text from the authoritative grade snapshot. |
 | `/restart_session` | POST | End an existing session and create a new one for the same student/lecture. |
@@ -178,6 +180,7 @@ Default repo-relative runtime locations:
 |---|---|---|
 | `data/lecture_bot.db` | SQLite database | Keep private; mount or symlink to persistent storage. |
 | `lectures/` | Lecture packages and admin uploads | Private course material; mount or symlink to persistent storage. |
+| `prompts/*_private_artifact_schema.json` | Generated private artifact schemas accompanying runtime tutor prompts | Public only if they contain no course or student data. |
 | `exports/` | Session/investigation exports from scripts | Private; do not publish. |
 | `app.log`, `admin.log` | Legacy/dev log files used by local background runs | Avoid for production secrets; prefer journald or private `logs/`. |
 
@@ -189,6 +192,7 @@ Safe for the public repo:
 
 - application code
 - prompts
+- generated private artifact schemas that contain no course or student data
 - docs
 - tests
 - `lectures/config.json`
@@ -239,6 +243,7 @@ Current coverage includes:
 - root page and health endpoint
 - lecture loading and context-file requirements
 - session creation, restart, timeout behavior, message persistence, and audit rows
+- session-fixed private artifact schema snapshots and per-turn artifact logging
 - backend weighted grade computation and report response structure
 - OpenAI fallback behavior for failed dialogue/report calls
 - admin Basic Auth, lecture creation, source selection, local build, and generated-artifact upload
