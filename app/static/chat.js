@@ -1,4 +1,5 @@
 let sessionId = null;
+let pendingTutorResponse = false;
 const appRoutes = window.APP_ROUTES || {};
 
 function appRoute(name) {
@@ -46,6 +47,12 @@ const startSessionBtn = document.getElementById("startSessionBtn");
 
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
+const commentBtn = document.getElementById("commentBtn");
+const commentModal = document.getElementById("commentModal");
+const commentInput = document.getElementById("commentInput");
+const commentError = document.getElementById("commentError");
+const submitCommentBtn = document.getElementById("submitCommentBtn");
+const cancelCommentBtn = document.getElementById("cancelCommentBtn");
 
 // Enter submits; Shift+Enter or Ctrl+Enter inserts a newline
 messageInput.addEventListener("keydown", function (e) {
@@ -73,9 +80,20 @@ function clearError() {
   errorBox.classList.add("hidden");
 }
 
+function showCommentError(msg) {
+  commentError.textContent = msg;
+  commentError.classList.remove("hidden");
+}
+
+function clearCommentError() {
+  commentError.textContent = "";
+  commentError.classList.add("hidden");
+}
+
 function setSessionActive(active) {
   messageInput.disabled = !active;
   sendBtn.disabled = !active;
+  commentBtn.disabled = !active;
   gradeBtn.disabled = !active;
   reportBtn.disabled = !active;
 }
@@ -96,6 +114,21 @@ function appendMessage(role, content) {
   renderMath(row);
   transcript.scrollTop = transcript.scrollHeight;
   return row;
+}
+
+function appendLatestResponse(latestResponse) {
+  if (!latestResponse) return;
+  appendMessage("assistant", latestResponse);
+}
+
+function formatMinutes(value) {
+  const minutes = Number.isFinite(Number(value)) ? Number(value) : 0;
+  return minutes + " minute" + (minutes === 1 ? "" : "s");
+}
+
+function formatCount(value, singular, plural) {
+  const count = Number.isFinite(Number(value)) ? Number(value) : 0;
+  return count + " " + (count === 1 ? singular : plural);
 }
 
 function appendThinking() {
@@ -178,6 +211,7 @@ async function sendMessage() {
   // Show user message immediately before waiting for the response
   messageInput.value = "";
   sendBtn.disabled = true;
+  pendingTutorResponse = true;
   const userRow = appendMessage("user", message);
   const thinkingRow = appendThinking();
 
@@ -212,6 +246,7 @@ async function sendMessage() {
     messageInput.value = message; // restore on failure
     showError("Network error while sending message: " + err.message);
   } finally {
+    pendingTutorResponse = false;
     if (sessionId && !messageInput.disabled) {
       sendBtn.disabled = false;
     }
@@ -219,10 +254,77 @@ async function sendMessage() {
   }
 }
 
+function openCommentModal() {
+  clearError();
+  if (!sessionId) {
+    showError("Start a session first.");
+    return;
+  }
+  clearCommentError();
+  commentInput.value = "";
+  commentModal.classList.remove("hidden");
+  commentInput.focus();
+}
+
+function closeCommentModal() {
+  clearCommentError();
+  commentModal.classList.add("hidden");
+  commentInput.value = "";
+  messageInput.focus();
+}
+
+async function submitComment() {
+  clearError();
+
+  if (!sessionId) {
+    closeCommentModal();
+    showError("Start a session first.");
+    return;
+  }
+
+  clearCommentError();
+  const note = commentInput.value.trim();
+  if (!note) {
+    showCommentError("Comment cannot be empty.");
+    return;
+  }
+
+  submitCommentBtn.disabled = true;
+  cancelCommentBtn.disabled = true;
+
+  try {
+    const res = await fetch(appRoute("submit_note"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, note }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      showCommentError("Failed to submit comment (" + res.status + "): " + body);
+      return;
+    }
+
+    const data = await res.json();
+    closeCommentModal();
+    appendMessage("assistant", data.message || "Your note has been submitted");
+    appendLatestResponse(data.latest_response);
+  } catch (err) {
+    showCommentError("Network error while submitting comment: " + err.message);
+  } finally {
+    submitCommentBtn.disabled = false;
+    cancelCommentBtn.disabled = false;
+    if (!commentModal.classList.contains("hidden")) {
+      commentInput.focus();
+    }
+  }
+}
+
 async function getGrade() {
   clearError();
   if (!sessionId) { showError("Start a session first."); return; }
 
+  const suppressLatestReplay = pendingTutorResponse;
   appendMessage("user", "Get current grade");
   const thinkingRow = appendThinking();
 
@@ -241,6 +343,9 @@ async function getGrade() {
     const data = await res.json();
     thinkingRow.remove();
     appendGradeMessage(data);
+    if (!suppressLatestReplay) {
+      appendLatestResponse(data.latest_response);
+    }
   } catch (err) {
     thinkingRow.remove();
     showError("Network error: " + err.message);
@@ -255,6 +360,12 @@ function appendGradeMessage(data) {
   header.className = "grade-header";
   header.innerHTML = "Current grade: <strong>" + data.grade + " / 100</strong>";
   row.appendChild(header);
+
+  const meta = document.createElement("p");
+  meta.className = "session-meta";
+  meta.textContent = "Elapsed time: " + formatMinutes(data.minutes_elapsed)
+    + ". Turns: " + formatCount(data.replies_sent, "reply sent", "replies sent") + ".";
+  row.appendChild(meta);
 
   if (data.explanation) {
     const exp = document.createElement("p");
@@ -381,6 +492,13 @@ function appendReportMessage(data) {
   header.innerHTML = "Final Report &mdash; <strong>" + (data.report_json && data.report_json.final_grade != null ? data.report_json.final_grade + " / 100" : "") + "</strong>";
   row.appendChild(header);
 
+  const rj = data.report_json || {};
+  const meta = document.createElement("p");
+  meta.className = "session-meta";
+  meta.textContent = "Time spent: " + formatMinutes(rj.minutes_elapsed)
+    + ". Moves: " + formatCount(rj.moves_count, "move", "moves") + ".";
+  row.appendChild(meta);
+
   const reportText = data.report_text || "[No report text returned]";
   appendStructuredReportText(row, reportText);
 
@@ -389,7 +507,6 @@ function appendReportMessage(data) {
   dl.className = "download-btn";
   dl.textContent = "Download report";
   dl.addEventListener("click", function () {
-    const rj = data.report_json || {};
     const grade = rj.final_grade != null ? rj.final_grade : "?";
     const student = rj.student_id || studentIdInput.value.trim() || "student";
     const lecture = rj.lecture_id || lectureIdInput.value || "lecture";
@@ -408,6 +525,8 @@ function appendReportMessage(data) {
       "Grade: " + grade + " / 100",
       "Session started: " + startedAt,
       "Report generated: " + generatedAt,
+      "Time spent: " + (rj.minutes_elapsed != null ? rj.minutes_elapsed : "?") + " minutes",
+      "Moves: " + (rj.moves_count != null ? rj.moves_count : "?"),
     ];
     if (durationStr) lines.push(durationStr);
     lines.push("--- Report ---", "", reportText);
@@ -465,6 +584,19 @@ async function restartSession() {
 
 startSessionBtn.addEventListener("click", startSession);
 sendBtn.addEventListener("click", sendMessage);
+commentBtn.addEventListener("click", openCommentModal);
+submitCommentBtn.addEventListener("click", submitComment);
+cancelCommentBtn.addEventListener("click", closeCommentModal);
+commentModal.addEventListener("click", function (e) {
+  if (e.target === commentModal) {
+    closeCommentModal();
+  }
+});
+commentInput.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") {
+    closeCommentModal();
+  }
+});
 gradeBtn.addEventListener("click", getGrade);
 reportBtn.addEventListener("click", generateReport);
 restartBtn.addEventListener("click", restartSession);

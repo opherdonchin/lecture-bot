@@ -128,6 +128,13 @@ input, select, button {
   line-height: 1.5;
 }
 
+.session-meta {
+  margin: 6px 0 8px;
+  color: #263226;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .info-block {
   margin-top: 8px;
 }
@@ -199,4 +206,48 @@ input, select, button {
   color: #667085;
   font-size: 0.9rem;
   margin: 0;
+}
+
+.modal {
+  align-items: center;
+  background: rgba(16, 24, 40, 0.48);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 16px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 10;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-panel {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 20px 40px rgba(16, 24, 40, 0.22);
+  max-width: 520px;
+  padding: 16px;
+  width: 100%;
+}
+
+.modal-panel textarea {
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  min-height: 150px;
+  resize: vertical;
+  width: 100%;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 10px;
 }

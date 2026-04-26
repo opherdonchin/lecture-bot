@@ -35,6 +35,16 @@ class SessionIdRequest(pd.BaseModel):
     session_id: str
 
 
+class SubmitNoteRequest(pd.BaseModel):
+    session_id: str
+    note: str = pd.Field(min_length=1)
+
+
+class SubmitNoteResponse(pd.BaseModel):
+    message: str
+    latest_response: str | None = None
+
+
 class RestartSessionRequest(pd.BaseModel):
     session_id: str
     student_id: str
@@ -49,6 +59,8 @@ class GradeResponse(pd.BaseModel):
     minutes_elapsed: int
     minutes_remaining: int
     session_duration_minutes: int
+    replies_sent: int
+    latest_response: str | None = None
 
 
 class ReportJson(pd.BaseModel):
@@ -61,6 +73,7 @@ class ReportJson(pd.BaseModel):
     minutes_elapsed: int
     minutes_remaining: int
     session_duration_minutes: int
+    moves_count: int
 
 
 class ReportResponse(pd.BaseModel):

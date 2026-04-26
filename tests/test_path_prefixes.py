@@ -103,6 +103,7 @@ def test_student_default_prefix_rendered_in_static_and_api_urls():
         "list_lectures": "/bot/lectures",
         "start_session": "/bot/start_session",
         "send_message": "/bot/send_message",
+        "submit_note": "/bot/submit_note",
         "get_grade": "/bot/get_grade",
         "generate_report": "/bot/generate_report",
         "restart_session": "/bot/restart_session",
@@ -122,6 +123,7 @@ def test_student_override_prefix_example_rendered_in_static_and_api_urls():
     assert routes["list_lectures"] == "/stats/lectures"
     assert routes["start_session"] == "/stats/start_session"
     assert routes["send_message"] == "/stats/send_message"
+    assert routes["submit_note"] == "/stats/submit_note"
     assert routes["get_grade"] == "/stats/get_grade"
     assert routes["generate_report"] == "/stats/generate_report"
     assert routes["restart_session"] == "/stats/restart_session"

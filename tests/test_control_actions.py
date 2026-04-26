@@ -233,11 +233,65 @@ def test_get_grade_returns_grade_structure(client):
     assert "minutes_elapsed" in data
     assert "minutes_remaining" in data
     assert "session_duration_minutes" in data
+    assert "replies_sent" in data
+    assert "latest_response" in data
 
 
 def test_get_grade_invalid_session(client):
     response = client.post("/get_grade", json={"session_id": "does-not-exist"})
     assert response.status_code == 404
+
+
+def test_submit_note_logs_note_without_message_or_turn_progress(client):
+    session_id = start_session(client)
+    db = next(app.dependency_overrides[db_module.get_db]())
+    state_row = db.query(models.SessionStateModel).filter(
+        models.SessionStateModel.session_id == session_id
+    ).first()
+    state_before = json.loads(state_row.state_json)
+    message_count_before = db.query(models.MessageModel).filter(
+        models.MessageModel.session_id == session_id
+    ).count()
+    latest_assistant = db.query(models.MessageModel).filter(
+        models.MessageModel.session_id == session_id,
+        models.MessageModel.role == "assistant",
+    ).order_by(models.MessageModel.id.desc()).first()
+
+    response = client.post(
+        "/submit_note",
+        json={"session_id": session_id, "note": "The previous question repeated itself."},
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["message"] == "Your note has been submitted"
+    assert data["latest_response"] == latest_assistant.content
+
+    db2 = next(app.dependency_overrides[db_module.get_db]())
+    note = db2.query(models.SessionNoteModel).filter(
+        models.SessionNoteModel.session_id == session_id
+    ).one()
+    assert note.note_text == "The previous question repeated itself."
+    assert note.turn_index == 0
+    assert note.latest_assistant_message_id == latest_assistant.id
+    assert json.loads(note.state_json) == state_before
+    assert db2.query(models.MessageModel).filter(
+        models.MessageModel.session_id == session_id
+    ).count() == message_count_before
+    state_after = json.loads(db2.query(models.SessionStateModel).filter(
+        models.SessionStateModel.session_id == session_id
+    ).first().state_json)
+    assert state_after == state_before
+
+
+def test_submit_note_rejects_blank_note(client):
+    session_id = start_session(client)
+    response = client.post(
+        "/submit_note",
+        json={"session_id": session_id, "note": "   "},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Note cannot be empty"
 
 
 def _set_mastery_state(session_id, *, best_scores=None, current_scores=None):
@@ -269,6 +323,17 @@ def _set_mastery_state(session_id, *, best_scores=None, current_scores=None):
     ]))
     row.state_json = json.dumps(state)
     session.current_grade = state["current_grade"]
+    db.commit()
+
+
+def _set_turn_count(session_id, turn_count):
+    db = next(app.dependency_overrides[db_module.get_db]())
+    row = db.query(models.SessionStateModel).filter(
+        models.SessionStateModel.session_id == session_id
+    ).first()
+    state = json.loads(row.state_json)
+    state["turn_count"] = turn_count
+    row.state_json = json.dumps(state)
     db.commit()
 
 
@@ -402,6 +467,7 @@ def test_generate_report_returns_report_structure(client):
 def test_get_grade_returns_session_timing_fields(client):
     session_id = start_session(client)
     _set_mastery_state(session_id, best_scores=[80])
+    _set_turn_count(session_id, 3)
     db = next(app.dependency_overrides[db_module.get_db]())
     session_row = db.query(models.SessionModel).filter(
         models.SessionModel.session_id == session_id
@@ -414,11 +480,30 @@ def test_get_grade_returns_session_timing_fields(client):
     assert data["minutes_elapsed"] >= 7
     assert data["minutes_remaining"] <= 13
     assert data["session_duration_minutes"] == 20
+    assert data["replies_sent"] == 3
+    assert data["latest_response"]
+
+
+def test_get_grade_rounds_elapsed_minutes(client):
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[80])
+    db = next(app.dependency_overrides[db_module.get_db]())
+    session_row = db.query(models.SessionModel).filter(
+        models.SessionModel.session_id == session_id
+    ).first()
+    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=7, seconds=31)
+    db.commit()
+
+    response = client.post("/get_grade", json={"session_id": session_id})
+
+    assert response.status_code == 200
+    assert response.json()["minutes_elapsed"] == 8
 
 
 def test_generate_report_includes_session_timing_fields(client):
     session_id = start_session(client)
     _set_mastery_state(session_id, best_scores=[80])
+    _set_turn_count(session_id, 4)
     db = next(app.dependency_overrides[db_module.get_db]())
     session_row = db.query(models.SessionModel).filter(
         models.SessionModel.session_id == session_id
@@ -433,6 +518,7 @@ def test_generate_report_includes_session_timing_fields(client):
     assert data["report_json"]["minutes_elapsed"] >= 9
     assert data["report_json"]["minutes_remaining"] <= 11
     assert data["report_json"]["session_duration_minutes"] == 20
+    assert data["report_json"]["moves_count"] == 4
 
 
 def test_generate_report_invalid_session(client):

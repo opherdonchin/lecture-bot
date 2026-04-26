@@ -36,6 +36,7 @@ def _student_route_config(request: fa.Request) -> dict[str, str]:
         "list_lectures": _url_path(request, "list_lectures"),
         "start_session": _url_path(request, "start_session"),
         "send_message": _url_path(request, "send_message"),
+        "submit_note": _url_path(request, "submit_note"),
         "get_grade": _url_path(request, "get_grade"),
         "generate_report": _url_path(request, "generate_report"),
         "restart_session": _url_path(request, "restart_session"),
@@ -191,7 +192,7 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
     )
     timing_context = {
         "minutes_remaining": minutes_left,
-        "minutes_elapsed": int(elapsed_seconds // 60),
+        "minutes_elapsed": _round_elapsed_minutes(elapsed_seconds),
         "session_duration_minutes": settings.session_timeout_minutes,
         "closing_mode": remaining_seconds <= settings.session_warning_minutes * 60,
         "timeout_warning_sent": bool(state.get("timeout_warning_sent", False)),
@@ -395,6 +396,25 @@ def _load_session_messages(db: sqlalchemy_orm.Session, session_id: str) -> list[
     return bot_engine.serialize_messages(all_msgs)
 
 
+def _latest_message_row(db: sqlalchemy_orm.Session, session_id: str) -> models.MessageModel | None:
+    return (
+        db.query(models.MessageModel)
+        .filter(models.MessageModel.session_id == session_id)
+        .order_by(models.MessageModel.id.desc())
+        .first()
+    )
+
+
+def _latest_assistant_message_row(db: sqlalchemy_orm.Session, session_id: str) -> models.MessageModel | None:
+    return (
+        db.query(models.MessageModel)
+        .filter(models.MessageModel.session_id == session_id)
+        .filter(models.MessageModel.role == "assistant")
+        .order_by(models.MessageModel.id.desc())
+        .first()
+    )
+
+
 def _record_grade_event(
     db: sqlalchemy_orm.Session,
     *,
@@ -423,6 +443,10 @@ def _build_private_artifact_repair_instruction(validation_error: str) -> str:
 
 def _append_repair_instruction(rendered_system_prompt: str, repair_instruction: str) -> str:
     return f"{rendered_system_prompt}\n\nRepair instruction\n\n{repair_instruction.strip()}"
+
+
+def _round_elapsed_minutes(elapsed_seconds: float) -> int:
+    return int((max(0.0, elapsed_seconds) + 30) // 60)
 
 
 def _extract_turn_target_topic_id(updated_state: dict) -> str | None:
@@ -513,10 +537,17 @@ def _build_session_timing_snapshot(
     elapsed_seconds = max(0.0, (now - started_at).total_seconds())
     remaining_seconds = max(0.0, settings.session_timeout_minutes * 60 - elapsed_seconds)
     return {
-        "minutes_elapsed": int(elapsed_seconds // 60),
+        "minutes_elapsed": _round_elapsed_minutes(elapsed_seconds),
         "minutes_remaining": int((remaining_seconds + 59) // 60) if remaining_seconds > 0 else 0,
         "session_duration_minutes": settings.session_timeout_minutes,
     }
+
+
+def _session_move_count(state: dict) -> int:
+    try:
+        return max(0, int(state.get("turn_count", 0) or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _update_backend_grade_state(
@@ -724,6 +755,7 @@ def _generate_authoritative_report_result(
             minutes_elapsed=timing["minutes_elapsed"],
             minutes_remaining=timing["minutes_remaining"],
             session_duration_minutes=timing["session_duration_minutes"],
+            moves_count=_session_move_count(state),
         ),
     )
 
@@ -758,6 +790,7 @@ def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.
     )
     db.commit()
     timing = _build_session_timing_snapshot(session, settings)
+    latest_response = _latest_assistant_message_row(db, session.session_id)
 
     return schema.GradeResponse(
         grade=grade_snapshot["grade"],
@@ -767,6 +800,33 @@ def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.
         minutes_elapsed=timing["minutes_elapsed"],
         minutes_remaining=timing["minutes_remaining"],
         session_duration_minutes=timing["session_duration_minutes"],
+        replies_sent=_session_move_count(state),
+        latest_response=latest_response.content if latest_response is not None else None,
+    )
+
+
+@app.post("/submit_note", response_model=schema.SubmitNoteResponse, name="submit_note")
+def submit_note(request: schema.SubmitNoteRequest, db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db)):
+    """Record a student note without adding a tutoring turn or changing progress."""
+    note_text = request.note.strip()
+    if not note_text:
+        raise fa.HTTPException(status_code=400, detail="Note cannot be empty")
+    session = _get_active_session(db, request.session_id)
+    state = session_manager.load_state(db, session.session_id)
+    latest_message = _latest_message_row(db, session.session_id)
+    latest_assistant = _latest_assistant_message_row(db, session.session_id)
+    db.add(models.SessionNoteModel(
+        session_id=session.session_id,
+        note_text=note_text,
+        turn_index=_session_move_count(state),
+        latest_message_id=latest_message.id if latest_message is not None else None,
+        latest_assistant_message_id=latest_assistant.id if latest_assistant is not None else None,
+        state_json=j_.dumps(state, ensure_ascii=False),
+    ))
+    db.commit()
+    return schema.SubmitNoteResponse(
+        message="Your note has been submitted",
+        latest_response=latest_assistant.content if latest_assistant is not None else None,
     )
 
 

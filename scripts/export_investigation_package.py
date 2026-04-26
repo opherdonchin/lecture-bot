@@ -123,6 +123,17 @@ def load_session_data(conn: sqlite3.Connection, session_id: str, lecture_id: str
         """,
         (session_id,),
     )
+    session_notes = fetch_all_dicts(
+        conn,
+        """
+        select id, session_id, note_text, turn_index, latest_message_id,
+               latest_assistant_message_id, state_json, created_at
+        from session_notes
+        where session_id = ?
+        order by created_at asc, id asc
+        """,
+        (session_id,),
+    )
     state_row = fetch_one_dict(
         conn,
         """
@@ -159,6 +170,15 @@ def load_session_data(conn: sqlite3.Connection, session_id: str, lecture_id: str
             enriched["payload_parse_error"] = parse_error
         grade_events_enriched.append(enriched)
 
+    session_notes_enriched = []
+    for note in session_notes:
+        enriched = dict(note)
+        state, parse_error = parse_json_field(note.get("state_json"))
+        enriched["state"] = state
+        if parse_error:
+            enriched["state_json_parse_error"] = parse_error
+        session_notes_enriched.append(enriched)
+
     chat_transcript = [
         {"role": message["role"], "content": message["content"]}
         for message in messages
@@ -173,6 +193,7 @@ def load_session_data(conn: sqlite3.Connection, session_id: str, lecture_id: str
         "session_state_parsed": state_parsed,
         "session_state_parse_error": state_parse_error,
         "grade_events": grade_events_enriched,
+        "session_notes": session_notes_enriched,
     }
 
 
@@ -314,6 +335,7 @@ def export_package(
             write_json(session_dir / "session_bundle.json", session_data)
             write_json(session_dir / "chat_transcript.json", session_data["chat_transcript"])
             write_json(session_dir / "dialogue_turn_audits.json", session_data["dialogue_turn_audits"])
+            write_json(session_dir / "session_notes.json", session_data["session_notes"])
             (session_dir / "messages.txt").write_text(
                 transcript_text(session_data["messages"]),
                 encoding="utf-8",

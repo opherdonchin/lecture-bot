@@ -7,7 +7,7 @@ A lecture-specific tutoring bot for university courses. Students choose a lectur
 - Student-facing FastAPI app in `app/main.py`.
 - Browser chat UI in `app/templates/chat.html` and `app/static/chat.js`.
 - OpenAI-backed tutoring turns in `app/bot_engine.py`.
-- Backend-owned session state, weighted grade computation, grade events, dialogue-turn audit rows, and private artifact logs stored through SQLAlchemy.
+- Backend-owned session state, weighted grade computation, grade events, dialogue-turn audit rows, private artifact logs, and separate student note logs stored through SQLAlchemy.
 - Current-grade and final-report endpoints compute from the best demonstrated topic mastery stored in backend state. Final report text is OpenAI-backed with a local fallback.
 - Separate admin FastAPI app in `app/admin_main.py` for lecture setup and upload workflow.
 
@@ -74,8 +74,9 @@ The student app is defined in `app/main.py`.
 | `/lectures` | GET | List lecture IDs found under `LECTURES_DIR` with `lecture_config.json`. |
 | `/start_session` | POST | Start a tutoring session for `student_id` and `lecture_id`. |
 | `/send_message` | POST | Send a chat turn, call the tutor model, update state, validate/log private artifacts when configured, and persist messages/audit rows. |
-| `/get_grade` | POST | Return current backend-computed grade, topic coverage labels, and timing fields. |
-| `/generate_report` | POST | Generate final report text from the authoritative grade snapshot. |
+| `/submit_note` | POST | Record a student note with session/turn context without adding a move or exposing it to the tutor. |
+| `/get_grade` | POST | Return current backend-computed grade, topic coverage labels, latest tutor response, elapsed time, and reply count. |
+| `/generate_report` | POST | Generate final report text and timing/move metadata from the authoritative grade snapshot. |
 | `/restart_session` | POST | End an existing session and create a new one for the same student/lecture. |
 
 ## Admin App

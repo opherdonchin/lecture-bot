@@ -138,6 +138,17 @@ def load_session_bundle(conn: sqlite3.Connection, session: dict) -> dict:
         """,
         (session_id,),
     )
+    session_notes = fetch_all_dicts(
+        conn,
+        """
+        select id, session_id, note_text, turn_index, latest_message_id,
+               latest_assistant_message_id, state_json, created_at
+        from session_notes
+        where session_id = ?
+        order by created_at asc, id asc
+        """,
+        (session_id,),
+    )
     session_state_row = fetch_one_dict(
         conn,
         """
@@ -181,6 +192,15 @@ def load_session_bundle(conn: sqlite3.Connection, session: dict) -> dict:
             parsed_log["artifact_json_parse_error"] = parse_error
         parsed_private_artifact_logs.append(parsed_log)
 
+    parsed_session_notes = []
+    for note in session_notes:
+        parsed_state, parse_error = parse_json_field(note.get("state_json"))
+        parsed_note = dict(note)
+        parsed_note["state"] = parsed_state
+        if parse_error:
+            parsed_note["state_json_parse_error"] = parse_error
+        parsed_session_notes.append(parsed_note)
+
     chat_transcript = [
         {"role": message["role"], "content": message["content"]}
         for message in messages
@@ -196,6 +216,7 @@ def load_session_bundle(conn: sqlite3.Connection, session: dict) -> dict:
         "grade_events": parsed_grade_events,
         "dialogue_turn_audits": parsed_dialogue_turn_audits,
         "private_artifact_logs": parsed_private_artifact_logs,
+        "session_notes": parsed_session_notes,
     }
 
 
@@ -319,6 +340,7 @@ def build_manifest(
         "conversation/messages_for_chat_agent.json",
         "conversation/dialogue_turn_audits.json",
         "conversation/private_artifact_logs.json",
+        "conversation/session_notes.json",
         "schemas/sqlite_schema.json",
         "prompts/tutor_prompt_rendered_latest.md",
         f"prompts/{template_name}",
@@ -410,6 +432,7 @@ def export_session_package(lecture_id: str | None, session_id: str | None, outpu
         zf.writestr("conversation/chat_transcript.json", write_json_bytes(session_bundle["chat_transcript"]))
         zf.writestr("conversation/dialogue_turn_audits.json", write_json_bytes(session_bundle["dialogue_turn_audits"]))
         zf.writestr("conversation/private_artifact_logs.json", write_json_bytes(session_bundle["private_artifact_logs"]))
+        zf.writestr("conversation/session_notes.json", write_json_bytes(session_bundle["session_notes"]))
         zf.writestr("conversation/messages.txt", transcript_text(session_bundle["messages"]).encode("utf-8"))
         zf.writestr("conversation/messages_for_chat_agent.json", write_json_bytes(chat_agent_messages))
         zf.writestr("schemas/sqlite_schema.json", write_json_bytes(sqlite_schema))

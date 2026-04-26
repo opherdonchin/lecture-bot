@@ -39,8 +39,9 @@ The student app exposes a browser chat UI plus RPC-style JSON endpoints.
 | `/lectures` | GET | List lecture IDs with a `lecture_config.json`. |
 | `/start_session` | POST | Load the lecture package, create a session, sample focus topics, persist the backend opening message. |
 | `/send_message` | POST | Validate session, enforce timeout, reject non-English student text, call the tutor model, sanitize state, validate/log any private artifact, persist messages and audit row. |
-| `/get_grade` | POST | Compute current grade from backend-owned best mastery state. |
-| `/generate_report` | POST | Build the same authoritative grade snapshot and ask OpenAI for report prose, with a local fallback. |
+| `/submit_note` | POST | Record a student note with session/turn/latest-message context without adding a move, changing state, or exposing the text to the tutor. |
+| `/get_grade` | POST | Compute current grade from backend-owned best mastery state and return timing, reply count, and the latest tutor response. |
+| `/generate_report` | POST | Build the same authoritative grade snapshot and ask OpenAI for report prose, with a local fallback and timing/move metadata. |
 | `/restart_session` | POST | End the current session and create a fresh one for the same student and lecture. |
 
 ## 4. Admin App
@@ -190,10 +191,13 @@ Core tables are defined in `app/models.py`:
 - `grade_events`
 - `dialogue_turn_audits`
 - `private_artifact_logs`
+- `session_notes`
 
 `sessions.private_artifact_schema_json` is nullable. Non-null values are fixed for that session and written once at session creation.
 
 `private_artifact_logs` stores one row per ordinary tutoring turn when the session has a private artifact schema. The log stores the artifact JSON text and a nullable validation error. Artifact internals are not decomposed into relational columns.
+
+`session_notes` stores student-submitted notes separately from `messages`. Each note includes the current turn index, latest message IDs, and a state snapshot so it can be attached to the correct point in a session without affecting tutoring history or grading.
 
 The SQLite database is runtime state, not a long-term archive. Databases, logs, private lecture material, exports, rosters, and `.env` files must not be committed.
 

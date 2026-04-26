@@ -84,3 +84,16 @@ class PrivateArtifactLogModel(db_module.Base):
     artifact_json: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
     validation_error: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
     created_at: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)
+
+
+class SessionNoteModel(db_module.Base):
+    __tablename__ = "session_notes"
+
+    id: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    session_id: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.ForeignKey("sessions.session_id"), index=True)
+    note_text: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    turn_index: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer, index=True)
+    latest_message_id: sqlalchemy_orm.Mapped[int | None] = sqlalchemy_orm.mapped_column(sa.Integer, nullable=True)
+    latest_assistant_message_id: sqlalchemy_orm.Mapped[int | None] = sqlalchemy_orm.mapped_column(sa.Integer, nullable=True)
+    state_json: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    created_at: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)

@@ -33,7 +33,7 @@
         <div id="transcript" class="transcript" aria-live="polite"></div>
         <div class="chat-input-row">
           <textarea id="messageInput" placeholder="Type a message... (Enter to send, Shift+Enter for new line)" disabled rows="3"></textarea>
-          <button id="sendBtn" disabled>Send</button>
+          <button id="sendBtn" type="button" disabled>Send</button>
         </div>
       </section>
 
@@ -42,11 +42,23 @@
         <div class="controls">
           <button id="gradeBtn" type="button">Get current grade</button>
           <button id="reportBtn" type="button">Generate final report</button>
+          <button id="commentBtn" type="button" disabled>Comment</button>
           <button id="restartBtn" type="button">Restart session</button>
         </div>
-
       </section>
     </main>
+
+    <div id="commentModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="commentTitle">
+      <div class="modal-panel">
+        <h2 id="commentTitle">Comment</h2>
+        <div id="commentError" class="error hidden"></div>
+        <textarea id="commentInput" rows="6" placeholder="Write a comment about this session..."></textarea>
+        <div class="modal-actions">
+          <button id="cancelCommentBtn" type="button">Cancel</button>
+          <button id="submitCommentBtn" type="button">Submit</button>
+        </div>
+      </div>
+    </div>
 
     <script>
       window.APP_ROUTES = {{ app_routes | tojson }};
