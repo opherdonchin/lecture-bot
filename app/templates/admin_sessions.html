@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Sessions Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_lectures') }}" class="back-link">All Lecture Folders</a>
+        <span class="muted">{{ session_page.total }} sessions</span>
+      </div>
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Admin App</p>
+          <h1>Sessions</h1>
+          <p class="lead">Review student activity and export selected sessions for analysis.</p>
+        </div>
+        <div class="step-chip">Export cap {{ max_export_sessions }}</div>
+      </section>
+
+      {% if error %}
+      <div class="notice error">{{ error }}</div>
+      {% endif %}
+
+      <section class="card admin-card">
+        <h2>Filters</h2>
+        <form method="get" action="{{ url_path('admin_sessions') }}" class="session-filter-form">
+          <label>
+            <span>Student ID</span>
+            <input type="text" name="student_id" value="{{ filters.student_id }}" />
+          </label>
+          <label>
+            <span>Match</span>
+            <select name="student_match">
+              <option value="contains" {% if filters.student_match != "exact" %}selected{% endif %}>Contains</option>
+              <option value="exact" {% if filters.student_match == "exact" %}selected{% endif %}>Exact</option>
+            </select>
+          </label>
+          <label>
+            <span>Lecture</span>
+            <select name="lecture_id">
+              <option value="">All lectures</option>
+              {% for lecture in lectures %}
+              <option value="{{ lecture }}" {% if filters.lecture_id == lecture %}selected{% endif %}>{{ lecture }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            <span>Start Date</span>
+            <input type="date" name="start_date" value="{{ filters.start_date }}" />
+          </label>
+          <label>
+            <span>End Date</span>
+            <input type="date" name="end_date" value="{{ filters.end_date }}" />
+          </label>
+          <label>
+            <span>Min User Turns</span>
+            <input type="number" name="min_user_turns" min="0" value="{{ filters.min_user_turns }}" />
+          </label>
+          <label>
+            <span>Max User Turns</span>
+            <input type="number" name="max_user_turns" min="0" value="{{ filters.max_user_turns }}" />
+          </label>
+          <label>
+            <span>Min Grade</span>
+            <input type="number" name="min_grade" step="0.1" value="{{ filters.min_grade }}" />
+          </label>
+          <label>
+            <span>Max Grade</span>
+            <input type="number" name="max_grade" step="0.1" value="{{ filters.max_grade }}" />
+          </label>
+          <label>
+            <span>Page Size</span>
+            <input type="number" name="page_size" min="1" max="200" value="{{ session_page.page_size }}" />
+          </label>
+          <input type="hidden" name="page" value="1" />
+          <button type="submit">Apply Filters</button>
+          <a href="{{ url_path('admin_sessions') }}" class="secondary-action">Clear</a>
+        </form>
+      </section>
+
+      <section class="card admin-card">
+        <div class="section-header">
+          <h2>Session Results</h2>
+          <span class="muted">Page {{ session_page.page }}</span>
+        </div>
+
+        <form method="post" action="{{ url_path('export_sessions') }}">
+          {% if session_page.rows %}
+          <div class="session-table-wrap">
+            <table class="session-table">
+              <thead>
+                <tr>
+                  <th>Select</th>
+                  <th>Started</th>
+                  <th>Student ID</th>
+                  <th>Lecture</th>
+                  <th>User Turns</th>
+                  <th>Assistant Turns</th>
+                  <th>Notes</th>
+                  <th>Grade Events</th>
+                  <th>Grade</th>
+                  <th>Session ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in session_page.rows %}
+                <tr>
+                  <td><input type="checkbox" name="session_id" value="{{ row.session_id }}" /></td>
+                  <td>{{ row.started_at }}</td>
+                  <td>{{ row.student_id }}</td>
+                  <td>{{ row.lecture_id }}</td>
+                  <td>{{ row.user_messages }}</td>
+                  <td>{{ row.assistant_messages }}</td>
+                  <td>{{ row.notes }}</td>
+                  <td>{{ row.grade_events }}</td>
+                  <td>{{ row.current_grade if row.current_grade is not none else "" }}</td>
+                  <td><code>{{ row.session_id }}</code></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <button type="submit">Export Selected</button>
+          {% else %}
+          <p class="muted">No sessions match these filters.</p>
+          {% endif %}
+        </form>
+
+        <div class="pagination-actions">
+          {% if session_page.has_previous %}
+          <form method="get" action="{{ url_path('admin_sessions') }}">
+            <input type="hidden" name="student_id" value="{{ filters.student_id }}" />
+            <input type="hidden" name="student_match" value="{{ filters.student_match }}" />
+            <input type="hidden" name="lecture_id" value="{{ filters.lecture_id }}" />
+            <input type="hidden" name="start_date" value="{{ filters.start_date }}" />
+            <input type="hidden" name="end_date" value="{{ filters.end_date }}" />
+            <input type="hidden" name="min_user_turns" value="{{ filters.min_user_turns }}" />
+            <input type="hidden" name="max_user_turns" value="{{ filters.max_user_turns }}" />
+            <input type="hidden" name="min_grade" value="{{ filters.min_grade }}" />
+            <input type="hidden" name="max_grade" value="{{ filters.max_grade }}" />
+            <input type="hidden" name="page_size" value="{{ session_page.page_size }}" />
+            <input type="hidden" name="page" value="{{ session_page.page - 1 }}" />
+            <button type="submit">Previous</button>
+          </form>
+          {% endif %}
+          {% if session_page.has_next %}
+          <form method="get" action="{{ url_path('admin_sessions') }}">
+            <input type="hidden" name="student_id" value="{{ filters.student_id }}" />
+            <input type="hidden" name="student_match" value="{{ filters.student_match }}" />
+            <input type="hidden" name="lecture_id" value="{{ filters.lecture_id }}" />
+            <input type="hidden" name="start_date" value="{{ filters.start_date }}" />
+            <input type="hidden" name="end_date" value="{{ filters.end_date }}" />
+            <input type="hidden" name="min_user_turns" value="{{ filters.min_user_turns }}" />
+            <input type="hidden" name="max_user_turns" value="{{ filters.max_user_turns }}" />
+            <input type="hidden" name="min_grade" value="{{ filters.min_grade }}" />
+            <input type="hidden" name="max_grade" value="{{ filters.max_grade }}" />
+            <input type="hidden" name="page_size" value="{{ session_page.page_size }}" />
+            <input type="hidden" name="page" value="{{ session_page.page + 1 }}" />
+            <button type="submit">Next</button>
+          </form>
+          {% endif %}
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

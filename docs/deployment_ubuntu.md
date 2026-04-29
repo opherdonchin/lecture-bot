@@ -44,6 +44,10 @@ Use this layout:
 │  ├─ serve_student.sh
 │  └─ serve_admin.sh
 └─ ... repo files ...
+
+/var/log/lecture-bot/
+├─ student.log
+└─ admin.log
 ```
 
 Service/user model:
@@ -53,6 +57,7 @@ Service/user model:
 - optional other operator users: `<TA_UNIX_USER>`, sysop, etc.
 - service user: `lecturebot`
 - main group for shared repo operations: `appops`
+- production app logs: `/var/log/lecture-bot/student.log` and `/var/log/lecture-bot/admin.log`
 
 Network model:
 
@@ -127,6 +132,7 @@ Why add `lecturebot` to `appops`:
 
 - the repo will be human-managed under the `appops` group
 - the service still needs read access to repo files and the built Pixi environment
+- the systemd units run with group `appops`, so deployment operators can read production log files without using the service account
 
 ## 5. Create the main deployment directory
 
@@ -158,15 +164,15 @@ sudo find /srv/lecture-bot/.git -type f -exec chmod g+r {} \;
 ```bash
 cd /srv/lecture-bot
 sudo mkdir -p data lectures exports
-sudo chown -R lecturebot:lecturebot data exports
+sudo chown -R lecturebot:appops data exports
 sudo chown -R lecturebot:appops lectures
-sudo chmod -R u=rwX,g=rX,o= data exports
+sudo chmod -R u=rwX,g=rwX,o= data exports
 sudo chmod -R u=rwX,g=rwX,o= lectures
 ```
 
 Why these permissions:
 
-- `data/` and `exports/` are private runtime state for the service
+- `data/` and `exports/` are private runtime state, but members of `appops` can inspect the database and write exports for debugging
 - `lectures/` is writable by the service and also accessible to course operators when they need to copy or inspect lecture packages manually
 
 ## 8. Install Pixi
@@ -292,6 +298,13 @@ sudo ls -l /srv/lecture-bot/data
 sudo sqlite3 /srv/lecture-bot/data/lecture_bot.db ".tables"
 ```
 
+If the database file was created before `data/` used the `appops` group, align the existing files:
+
+```bash
+sudo chown -R lecturebot:appops /srv/lecture-bot/data /srv/lecture-bot/exports
+sudo chmod -R u=rwX,g=rwX,o= /srv/lecture-bot/data /srv/lecture-bot/exports
+```
+
 ## 12. Run both apps manually before creating services
 
 This is the most important early gate.
@@ -371,6 +384,17 @@ Passing tests are necessary, but not sufficient. They do **not** prove that:
 
 ## 14. Create systemd services
 
+Create the production log directory and files first:
+
+```bash
+sudo install -d -o lecturebot -g appops -m 2775 /var/log/lecture-bot
+sudo touch /var/log/lecture-bot/student.log /var/log/lecture-bot/admin.log
+sudo chown lecturebot:appops /var/log/lecture-bot/student.log /var/log/lecture-bot/admin.log
+sudo chmod 0660 /var/log/lecture-bot/student.log /var/log/lecture-bot/admin.log
+```
+
+This gives the service user write access and gives members of `appops` read access. The service units below also include `LogsDirectory=lecture-bot`, so systemd will recreate `/var/log/lecture-bot` on a fresh machine if needed; the explicit `install` commands keep the first log files private from the start.
+
 You may use the committed examples as a base:
 
 ```bash
@@ -385,16 +409,24 @@ A clean final version for the student app is:
 ```ini
 [Unit]
 Description=Lecture Bot student app
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
+Type=simple
 User=lecturebot
-Group=lecturebot
+Group=appops
 WorkingDirectory=/srv/lecture-bot
+Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=/srv/lecture-bot/.env
 ExecStart=/home/lecturebot/.pixi/bin/pixi run serve
-Restart=always
+Restart=on-failure
 RestartSec=5
+UMask=0007
+LogsDirectory=lecture-bot
+LogsDirectoryMode=02775
+StandardOutput=append:/var/log/lecture-bot/student.log
+StandardError=append:/var/log/lecture-bot/student.log
 
 [Install]
 WantedBy=multi-user.target
@@ -405,16 +437,24 @@ A clean final version for the admin app is:
 ```ini
 [Unit]
 Description=Lecture Bot admin app
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
+Type=simple
 User=lecturebot
-Group=lecturebot
+Group=appops
 WorkingDirectory=/srv/lecture-bot
+Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=/srv/lecture-bot/.env
 ExecStart=/home/lecturebot/.pixi/bin/pixi run admin-serve
-Restart=always
+Restart=on-failure
 RestartSec=5
+UMask=0007
+LogsDirectory=lecture-bot
+LogsDirectoryMode=02775
+StandardOutput=append:/var/log/lecture-bot/admin.log
+StandardError=append:/var/log/lecture-bot/admin.log
 
 [Install]
 WantedBy=multi-user.target
@@ -433,9 +473,12 @@ Check them:
 ```bash
 sudo systemctl status lecture-bot.service --no-pager -l
 sudo systemctl status lecture-bot-admin.service --no-pager -l
-journalctl -u lecture-bot.service -n 100 --no-pager
-journalctl -u lecture-bot-admin.service -n 100 --no-pager
+sudo ls -ld /var/log/lecture-bot
+sudo tail -n 100 /var/log/lecture-bot/student.log
+sudo tail -n 100 /var/log/lecture-bot/admin.log
 ```
+
+The unit files intentionally append stdout and stderr to log files instead of leaving app output only in journald. Use `systemctl status` for process state and restart history; use `/var/log/lecture-bot/*.log` for application runtime output.
 
 ## 15. Configure Nginx
 
@@ -567,19 +610,76 @@ Do one genuine end-to-end session using one of the real lectures.
 Confirm all of these:
 
 - the model replies sensibly
-- no API/auth errors appear in journald logs
+- no API/auth errors appear in `/var/log/lecture-bot/student.log`
 - grade endpoint works
 - report endpoint works
 
 Watch logs while doing it:
 
 ```bash
-journalctl -u lecture-bot.service -f
+sudo tail -f /var/log/lecture-bot/student.log
 ```
 
 This is important because a wrong key can cause the tutor to fall back gracefully without crashing the whole service.
 
-## 20. DNS / IT follow-up
+## 20. Operational session review and exports
+
+Members of `appops` should be able to inspect the database, read logs, and write exports without becoming the service user.
+
+List recent sessions:
+
+```bash
+cd /srv/lecture-bot
+pixi run python scripts/list_sessions.py --limit 50
+```
+
+Or use the admin UI:
+
+```text
+http://<SERVER_FQDN>/stats-admin/sessions
+```
+
+The admin Sessions page supports filters for student id, lecture id, date range, user turn range, and grade range. Selected sessions download as one ZIP with one top-level directory per session.
+
+List sessions since a date:
+
+```bash
+pixi run python scripts/list_sessions.py --since 2026-04-20
+```
+
+Export one session for analysis:
+
+```bash
+pixi run python scripts/export_session_package.py --session-id <SESSION_ID> --output-dir exports
+```
+
+Export the latest session for a lecture:
+
+```bash
+pixi run python scripts/export_session_package.py --lecture-id <LECTURE_ID> --output-dir exports
+```
+
+The export ZIP is written under `/srv/lecture-bot/exports/`. Keep it private; it can contain student content, private lecture material, prompts, model audit rows, and grades.
+
+The current systemd app logs live here:
+
+```bash
+tail -n 200 /var/log/lecture-bot/student.log
+tail -n 200 /var/log/lecture-bot/admin.log
+```
+
+If the services used journald before file logging was enabled, copy the old journal output into the same log directory:
+
+```bash
+sudo journalctl -u lecture-bot.service --since '14 days ago' --no-pager > /tmp/lecture-bot-old-student.log
+sudo journalctl -u lecture-bot-admin.service --since '14 days ago' --no-pager > /tmp/lecture-bot-old-admin.log
+sudo mv /tmp/lecture-bot-old-student.log /var/log/lecture-bot/old-student-journal.log
+sudo mv /tmp/lecture-bot-old-admin.log /var/log/lecture-bot/old-admin-journal.log
+sudo chown lecturebot:appops /var/log/lecture-bot/old-*-journal.log
+sudo chmod 0660 /var/log/lecture-bot/old-*-journal.log
+```
+
+## 21. DNS / IT follow-up
 
 Deployment can proceed by IP, but final student-facing use should be by hostname.
 
@@ -601,7 +701,7 @@ and from your own machine:
 nslookup <SERVER_FQDN>
 ```
 
-## 21. Reboot test
+## 22. Reboot test
 
 Before announcing the system to students:
 
@@ -614,6 +714,8 @@ After reboot, verify:
 ```bash
 sudo systemctl status lecture-bot.service --no-pager
 sudo systemctl status lecture-bot-admin.service --no-pager
+sudo tail -n 50 /var/log/lecture-bot/student.log
+sudo tail -n 50 /var/log/lecture-bot/admin.log
 curl -i -H 'Host: <SERVER_FQDN>' http://127.0.0.1/stats/health
 curl -i -u '<REAL_ADMIN_USERNAME>:<REAL_ADMIN_PASSWORD>' -H 'Host: <SERVER_FQDN>' http://127.0.0.1/stats-admin/
 ```
@@ -650,4 +752,3 @@ pixi run test
 ```
 
 If the code update includes changes to the private lecture packages, sync those too before restarting.
-
