@@ -97,6 +97,8 @@ Admin routes include:
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/` | GET | Admin index. |
+| `/sessions` | GET | Review/filter tutoring sessions by student, lecture, date, user turns, and grade. |
+| `/sessions/export` | POST | Download a ZIP containing one top-level folder per selected exported session. |
 | `/lectures` | GET/POST | List lecture folders or create a lecture folder. |
 | `/lectures/{lecture_id}` | GET | Lecture setup page. |
 | `/lectures/{lecture_id}/metadata` | POST | Update title, course, and active flag. |
@@ -183,9 +185,31 @@ Default repo-relative runtime locations:
 | `lectures/` | Lecture packages and admin uploads | Private course material; mount or symlink to persistent storage. |
 | `prompts/*_private_artifact_schema.json` | Generated private artifact schemas accompanying runtime tutor prompts | Public only if they contain no course or student data. |
 | `exports/` | Session/investigation exports from scripts | Private; do not publish. |
-| `app.log`, `admin.log` | Legacy/dev log files used by local background runs | Avoid for production secrets; prefer journald or private `logs/`. |
+| `/var/log/lecture-bot/student.log` | Production student-app stdout/stderr from systemd | Private operational log; readable by root and deployment operators. |
+| `/var/log/lecture-bot/admin.log` | Production admin-app stdout/stderr from systemd | Private operational log; readable by root and deployment operators. |
+| `app.log`, `admin.log` | Legacy/dev log files from ad hoc local background runs | Do not use as the production log location. |
 
 If `DATABASE_URL` points to a SQLite file outside `data/`, create its parent directory before running `pixi run init-db`.
+
+On Ubuntu/systemd deployments, follow [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md). The committed service examples configure systemd to append service output to `/var/log/lecture-bot/student.log` and `/var/log/lecture-bot/admin.log`; journald remains useful for service status, but these files are the expected place to inspect live app logs.
+
+For operational review, list recent sessions with:
+
+```bash
+pixi run python scripts/list_sessions.py --limit 50
+```
+
+The admin app also includes a Sessions page for filtering and exporting one or more sessions through the browser. With the production root path, open `/stats-admin/sessions`.
+
+Export a specific session from the CLI with:
+
+```bash
+pixi run python scripts/export_session_package.py --session-id <SESSION_ID> --output-dir exports
+```
+
+Admin multi-session exports preserve the same rich session package shape under one top-level directory per selected session and include `conversation/session_notes.json` for comments submitted through the tutor UI.
+
+On production hosts, `data/`, `exports/`, and `/var/log/lecture-bot/` should be private but group-accessible to `appops` so operators can review activity and create exports without switching to the service account.
 
 ## Public / Private Split
 

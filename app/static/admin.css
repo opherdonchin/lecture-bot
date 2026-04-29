@@ -82,6 +82,20 @@ body {
   color: #445065;
 }
 
+.session-filter-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.session-filter-form label span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: #445065;
+}
+
 .checkbox-line {
   display: flex;
   align-items: center;
@@ -198,10 +212,43 @@ body {
 }
 
 .download-list a,
-.inline-actions a {
+.inline-actions a,
+.secondary-action {
   color: #2753a5;
   text-decoration: none;
   font-weight: 600;
+}
+
+.session-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 14px;
+}
+
+.session-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 980px;
+  font-size: 0.92rem;
+}
+
+.session-table th,
+.session-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #dbe3ef;
+  text-align: left;
+  vertical-align: top;
+}
+
+.session-table th {
+  color: #445065;
+  background: #f5f8ff;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
 }
 
 .status-ready {

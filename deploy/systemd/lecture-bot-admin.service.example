@@ -7,13 +7,18 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=lecturebot
-Group=lecturebot
+Group=appops
 WorkingDirectory=/srv/lecture-bot
 Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=/srv/lecture-bot/.env
 ExecStart=/home/lecturebot/.pixi/bin/pixi run admin-serve
 Restart=on-failure
 RestartSec=5
+UMask=0007
+LogsDirectory=lecture-bot
+LogsDirectoryMode=02775
+StandardOutput=append:/var/log/lecture-bot/admin.log
+StandardError=append:/var/log/lecture-bot/admin.log
 
 [Install]
 WantedBy=multi-user.target
