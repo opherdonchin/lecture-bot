@@ -143,6 +143,7 @@ def test_admin_default_prefix_rendered_in_index_static_links_and_forms(tmp_path,
     assert 'href="/bot-admin/static/admin.css"' in response.text
     assert 'action="/bot-admin/lectures"' in response.text
     assert 'href="/bot-admin/lectures/lecture_01"' in response.text
+    assert 'href="/bot-admin/sessions"' in response.text
 
 
 def test_admin_override_prefix_rendered_in_detail_links_and_forms(tmp_path, monkeypatch):
@@ -181,6 +182,7 @@ def test_prefix_sensitive_frontend_files_do_not_keep_root_relative_urls():
         pathlib.Path("app/templates/chat.html"),
         pathlib.Path("app/templates/admin_index.html"),
         pathlib.Path("app/templates/admin_lecture.html"),
+        pathlib.Path("app/templates/admin_sessions.html"),
     ]:
         template = template_path.read_text(encoding="utf-8")
         assert not re.search(r"\b(?:href|src|action)=['\"]/", template)

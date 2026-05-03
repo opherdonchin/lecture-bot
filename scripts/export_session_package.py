@@ -246,6 +246,13 @@ def write_json_bytes(payload: object) -> bytes:
     return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
 
 
+def prefixed_archive_name(archive_prefix: str, archive_name: str) -> str:
+    prefix = archive_prefix.strip("/")
+    if not prefix:
+        return archive_name
+    return f"{prefix}/{archive_name}"
+
+
 def collect_lecture_files(lecture_dir: pathlib.Path) -> list[tuple[pathlib.Path, str]]:
     wanted = [
         ("lecture_config.json", "lecture/lecture_config.json"),
@@ -263,21 +270,21 @@ def collect_lecture_files(lecture_dir: pathlib.Path) -> list[tuple[pathlib.Path,
     return files
 
 
-def collect_prompt_files(template_name: str) -> list[tuple[pathlib.Path, str]]:
+def collect_prompt_files(template_name: str, prompts_dir: pathlib.Path = PROMPTS_DIR) -> list[tuple[pathlib.Path, str]]:
     wanted = [
         (template_name, f"prompts/{template_name}"),
         ("tutor_generator_prompt.md", "prompts/tutor_generator_prompt.md"),
         ("master_rubric_generation_prompt.md", "prompts/master_rubric_generation_prompt.md"),
         ("minutes_generation_prompt.md", "prompts/minutes_generation_prompt.md"),
     ]
-    files = [(PROMPTS_DIR / name, archive_name) for name, archive_name in wanted]
+    files = [(prompts_dir / name, archive_name) for name, archive_name in wanted]
     schema_path = prompt_loader.private_artifact_schema_path(template_name)
     if schema_path.exists():
         files.append((schema_path, f"prompts/{schema_path.name}"))
     return files
 
 
-def collect_contract_files() -> list[tuple[pathlib.Path, str]]:
+def collect_contract_files(docs_dir: pathlib.Path = DOCS_DIR) -> list[tuple[pathlib.Path, str]]:
     wanted = [
         ("tutor_specification.md", "contracts/tutor_specification.md"),
         ("tutor_specification_contract.md", "contracts/tutor_specification_contract.md"),
@@ -286,13 +293,13 @@ def collect_contract_files() -> list[tuple[pathlib.Path, str]]:
         ("error_policy.md", "contracts/error_policy.md"),
         ("grading_policy.md", "contracts/grading_policy.md"),
     ]
-    return [(DOCS_DIR / name, archive_name) for name, archive_name in wanted]
+    return [(docs_dir / name, archive_name) for name, archive_name in wanted]
 
 
-def collect_schema_files(template_name: str) -> list[tuple[pathlib.Path, str]]:
+def collect_schema_files(template_name: str, app_dir: pathlib.Path = APP_DIR) -> list[tuple[pathlib.Path, str]]:
     files = [
-        (APP_DIR / "schema.py", "schemas/api_schema.py"),
-        (APP_DIR / "models.py", "schemas/database_models.py"),
+        (app_dir / "schema.py", "schemas/api_schema.py"),
+        (app_dir / "models.py", "schemas/database_models.py"),
     ]
     schema_path = prompt_loader.private_artifact_schema_path(template_name)
     if schema_path.exists():
@@ -383,26 +390,28 @@ def build_manifest(
     }
 
 
-def export_session_package(lecture_id: str | None, session_id: str | None, output_dir: pathlib.Path) -> pathlib.Path:
-    database_path = DATABASE_PATH.resolve()
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    conn = sqlite3.connect(database_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        session = get_session(conn, lecture_id=lecture_id, session_id=session_id)
-        session_bundle = load_session_bundle(conn, session)
-        sqlite_schema = collect_sqlite_schema(conn)
-    finally:
-        conn.close()
-
+def write_session_package_to_zip(
+    zf: zipfile.ZipFile,
+    *,
+    conn: sqlite3.Connection,
+    session_id: str,
+    lectures_dir: pathlib.Path,
+    archive_prefix: str = "",
+    zip_path: pathlib.Path | None = None,
+    database_path: pathlib.Path | None = None,
+    prompts_dir: pathlib.Path = PROMPTS_DIR,
+    docs_dir: pathlib.Path = DOCS_DIR,
+    app_dir: pathlib.Path = APP_DIR,
+) -> dict:
+    session = get_session(conn, lecture_id=None, session_id=session_id)
+    session_bundle = load_session_bundle(conn, session)
+    sqlite_schema = collect_sqlite_schema(conn)
     resolved_lecture_id = session["lecture_id"]
-    lecture_dir = (LECTURES_DIR / resolved_lecture_id).resolve()
+    lecture_dir = (lectures_dir / resolved_lecture_id).resolve()
     if not lecture_dir.exists():
         raise FileNotFoundError(f"Lecture directory not found: {lecture_dir}")
 
-    lecture_package = load_lecture_package(resolved_lecture_id)
+    lecture_package = load_lecture_package(resolved_lecture_id, lectures_dir=lectures_dir)
     template_name = bot_engine.get_tutor_prompt_template(lecture_package)
     rendered_prompt = build_rendered_prompt(lecture_package, session_bundle)
     chat_agent_messages = [
@@ -413,57 +422,80 @@ def export_session_package(lecture_id: str | None, session_id: str | None, outpu
         ],
     ]
 
-    timestamp = session["started_at"].replace(":", "").replace("-", "").replace(" ", "T").split(".")[0]
-    zip_name = f"{resolved_lecture_id}_{session['session_id']}_{timestamp}.zip"
-    zip_path = (output_dir / zip_name).resolve()
-
     manifest = build_manifest(
         lecture_id=resolved_lecture_id,
         session_bundle=session_bundle,
         template_name=template_name,
-        database_path=database_path,
+        database_path=(database_path or DATABASE_PATH).resolve(),
         lecture_dir=lecture_dir,
-        zip_path=zip_path,
+        zip_path=zip_path or pathlib.Path(""),
     )
 
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("manifest.json", write_json_bytes(manifest))
-        zf.writestr("conversation/session_bundle.json", write_json_bytes(session_bundle))
-        zf.writestr("conversation/chat_transcript.json", write_json_bytes(session_bundle["chat_transcript"]))
-        zf.writestr("conversation/dialogue_turn_audits.json", write_json_bytes(session_bundle["dialogue_turn_audits"]))
-        zf.writestr("conversation/private_artifact_logs.json", write_json_bytes(session_bundle["private_artifact_logs"]))
-        zf.writestr("conversation/session_notes.json", write_json_bytes(session_bundle["session_notes"]))
-        zf.writestr("conversation/messages.txt", transcript_text(session_bundle["messages"]).encode("utf-8"))
-        zf.writestr("conversation/messages_for_chat_agent.json", write_json_bytes(chat_agent_messages))
-        zf.writestr("schemas/sqlite_schema.json", write_json_bytes(sqlite_schema))
-        zf.writestr("prompts/tutor_prompt_rendered_latest.md", rendered_prompt.encode("utf-8"))
-        if session.get("private_artifact_schema_json") is not None:
-            zf.writestr(
-                "conversation/session_private_artifact_schema.json",
-                session["private_artifact_schema_json"].encode("utf-8"),
+    zf.writestr(prefixed_archive_name(archive_prefix, "manifest.json"), write_json_bytes(manifest))
+    zf.writestr(prefixed_archive_name(archive_prefix, "conversation/session_bundle.json"), write_json_bytes(session_bundle))
+    zf.writestr(prefixed_archive_name(archive_prefix, "conversation/chat_transcript.json"), write_json_bytes(session_bundle["chat_transcript"]))
+    zf.writestr(prefixed_archive_name(archive_prefix, "conversation/dialogue_turn_audits.json"), write_json_bytes(session_bundle["dialogue_turn_audits"]))
+    zf.writestr(prefixed_archive_name(archive_prefix, "conversation/private_artifact_logs.json"), write_json_bytes(session_bundle["private_artifact_logs"]))
+    zf.writestr(prefixed_archive_name(archive_prefix, "conversation/session_notes.json"), write_json_bytes(session_bundle["session_notes"]))
+    zf.writestr(prefixed_archive_name(archive_prefix, "conversation/messages.txt"), transcript_text(session_bundle["messages"]).encode("utf-8"))
+    zf.writestr(prefixed_archive_name(archive_prefix, "conversation/messages_for_chat_agent.json"), write_json_bytes(chat_agent_messages))
+    zf.writestr(prefixed_archive_name(archive_prefix, "schemas/sqlite_schema.json"), write_json_bytes(sqlite_schema))
+    zf.writestr(prefixed_archive_name(archive_prefix, "prompts/tutor_prompt_rendered_latest.md"), rendered_prompt.encode("utf-8"))
+    if session.get("private_artifact_schema_json") is not None:
+        zf.writestr(
+            prefixed_archive_name(archive_prefix, "conversation/session_private_artifact_schema.json"),
+            session["private_artifact_schema_json"].encode("utf-8"),
+        )
+
+    for source_path, archive_name in collect_prompt_files(template_name, prompts_dir=prompts_dir):
+        zf.write(source_path, prefixed_archive_name(archive_prefix, archive_name))
+
+    for source_path, archive_name in collect_contract_files(docs_dir=docs_dir):
+        zf.write(source_path, prefixed_archive_name(archive_prefix, archive_name))
+
+    for source_path, archive_name in collect_schema_files(template_name, app_dir=app_dir):
+        zf.write(source_path, prefixed_archive_name(archive_prefix, archive_name))
+
+    for source_path, archive_name in collect_lecture_files(lecture_dir):
+        zf.write(source_path, prefixed_archive_name(archive_prefix, archive_name))
+
+    return manifest
+
+
+def export_session_package(lecture_id: str | None, session_id: str | None, output_dir: pathlib.Path) -> pathlib.Path:
+    database_path = DATABASE_PATH.resolve()
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(database_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        session = get_session(conn, lecture_id=lecture_id, session_id=session_id)
+        timestamp = session["started_at"].replace(":", "").replace("-", "").replace(" ", "T").split(".")[0]
+        zip_name = f"{session['lecture_id']}_{session['session_id']}_{timestamp}.zip"
+        zip_path = (output_dir / zip_name).resolve()
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            write_session_package_to_zip(
+                zf,
+                conn=conn,
+                session_id=session["session_id"],
+                lectures_dir=LECTURES_DIR,
+                archive_prefix="",
+                zip_path=zip_path,
+                database_path=database_path,
             )
-
-        for source_path, archive_name in collect_prompt_files(template_name):
-            zf.write(source_path, archive_name)
-
-        for source_path, archive_name in collect_contract_files():
-            zf.write(source_path, archive_name)
-
-        for source_path, archive_name in collect_schema_files(template_name):
-            zf.write(source_path, archive_name)
-
-        for source_path, archive_name in collect_lecture_files(lecture_dir):
-            zf.write(source_path, archive_name)
+    finally:
+        conn.close()
 
     return zip_path
 
 
-def load_lecture_package(lecture_id: str) -> dict:
-    lecture_dir = LECTURES_DIR / lecture_id
+def load_lecture_package(lecture_id: str, lectures_dir: pathlib.Path = LECTURES_DIR) -> dict:
+    lecture_dir = lectures_dir / lecture_id
     if not lecture_dir.exists():
         raise FileNotFoundError(f"Lecture directory not found: {lecture_dir}")
 
-    defaults_path = LECTURES_DIR / "config.json"
+    defaults_path = lectures_dir / "config.json"
     lecture_config_path = lecture_dir / "lecture_config.json"
     rubric_path = lecture_dir / "rubric.md"
     if not lecture_config_path.exists():

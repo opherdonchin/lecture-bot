@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import pathlib
+import datetime as dt_module
 
 import fastapi as fa
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import sqlalchemy.orm as sqlalchemy_orm
 
+import app.admin_sessions as admin_sessions
 import app.admin_workflow as workflow
 import app.config as config_module
+import app.db as db_module
 import app.root_path as root_path_module
 
 
@@ -81,6 +85,71 @@ def _render_index(request: fa.Request, notice: str | None = None, error: str | N
     )
 
 
+def _session_filters_from_params(
+    *,
+    student_id: str = "",
+    student_match: str = "contains",
+    lecture_id: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    min_user_turns: str = "",
+    max_user_turns: str = "",
+    min_grade: str = "",
+    max_grade: str = "",
+    page: int = 1,
+    page_size: int = admin_sessions.DEFAULT_PAGE_SIZE,
+) -> admin_sessions.SessionFilters:
+    return admin_sessions.SessionFilters(
+        student_id=student_id,
+        student_match="exact" if student_match == "exact" else "contains",
+        lecture_id=lecture_id,
+        start_date=start_date,
+        end_date=end_date,
+        min_user_turns=min_user_turns,
+        max_user_turns=max_user_turns,
+        min_grade=min_grade,
+        max_grade=max_grade,
+        page=page,
+        page_size=page_size,
+    )
+
+
+def _render_sessions(
+    request: fa.Request,
+    db: sqlalchemy_orm.Session,
+    filters: admin_sessions.SessionFilters,
+    error: str | None = None,
+):
+    try:
+        session_page = admin_sessions.list_sessions(db, filters)
+    except ValueError as exc:
+        session_page = {
+            "rows": [],
+            "total": 0,
+            "page": admin_sessions.normalized_page(filters.page),
+            "page_size": admin_sessions.normalized_page_size(filters.page_size),
+            "has_previous": False,
+            "has_next": False,
+        }
+        error = str(exc)
+
+    lectures = [lecture_dir.name for lecture_dir in workflow.list_lecture_dirs(_lectures_dir())]
+    return templates.TemplateResponse(
+        request,
+        "admin_sessions.html",
+        _template_context(
+            request,
+            {
+                "filters": filters,
+                "session_page": session_page,
+                "lectures": lectures,
+                "error": error,
+                "max_export_sessions": admin_sessions.MAX_EXPORT_SESSIONS,
+            },
+        ),
+    )
+
+
 def _render_lecture(
     request: fa.Request,
     lecture_id: str,
@@ -127,6 +196,65 @@ def admin_root(request: fa.Request):
 @app.get("/lectures", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_lectures")
 def admin_lectures(request: fa.Request):
     return _render_index(request)
+
+
+@app.get("/sessions", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_sessions")
+def admin_session_list(
+    request: fa.Request,
+    student_id: str = "",
+    student_match: str = "contains",
+    lecture_id: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    min_user_turns: str = "",
+    max_user_turns: str = "",
+    min_grade: str = "",
+    max_grade: str = "",
+    page: int = 1,
+    page_size: int = admin_sessions.DEFAULT_PAGE_SIZE,
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    filters = _session_filters_from_params(
+        student_id=student_id,
+        student_match=student_match,
+        lecture_id=lecture_id,
+        start_date=start_date,
+        end_date=end_date,
+        min_user_turns=min_user_turns,
+        max_user_turns=max_user_turns,
+        min_grade=min_grade,
+        max_grade=max_grade,
+        page=page,
+        page_size=page_size,
+    )
+    return _render_sessions(request, db, filters)
+
+
+@app.post("/sessions/export", dependencies=[fa.Depends(require_admin)], name="export_sessions")
+async def export_sessions(
+    request: fa.Request,
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    form = await request.form()
+    selected_session_ids = [str(value) for value in form.getlist("session_id")]
+    settings = config_module.get_settings()
+    try:
+        zip_bytes = admin_sessions.build_sessions_export_zip(
+            db=db,
+            session_ids=selected_session_ids,
+            database_url=settings.database_url,
+            lectures_dir=settings.lectures_dir,
+        )
+    except ValueError as exc:
+        raise fa.HTTPException(status_code=400, detail=str(exc)) from exc
+
+    timestamp = dt_module.datetime.now(dt_module.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    filename = f"lecture_bot_sessions_{timestamp}.zip"
+    return StreamingResponse(
+        iter([zip_bytes]),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post("/lectures", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="create_lecture")

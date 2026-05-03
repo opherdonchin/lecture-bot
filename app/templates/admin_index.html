@@ -25,6 +25,14 @@
       {% endif %}
 
       <section class="card admin-card">
+        <div class="section-header">
+          <h2>Session Review</h2>
+          <a href="{{ url_path('admin_sessions') }}" class="secondary-action">Open Sessions</a>
+        </div>
+        <p class="muted">Review session activity, filter by student or lecture, and export selected sessions for analysis.</p>
+      </section>
+
+      <section class="card admin-card">
         <h2>Create Lecture Folder</h2>
         <form method="post" action="{{ url_path('create_lecture') }}" class="grid-form">
           <label>
