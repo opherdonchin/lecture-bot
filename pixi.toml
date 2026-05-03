@@ -9,6 +9,7 @@ platforms = ["linux-64"]
 [dependencies]
 python = ">=3.12,<3.13"
 pip = ">=24.0"
+quarto = ">=1.9.37,<2"
 
 [pypi-dependencies]
 fastapi = ">=0.115,<1"

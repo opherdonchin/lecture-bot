@@ -1,0 +1,4 @@
+flowchart LR
+    A[LLM<br/>reply + interpretation] --> B[Prompt contract<br/>JSON + sparse update]
+    B --> C[Backend wrapper<br/>state, validation,<br/>logs, grade, exports]
+    C --> D[(Database<br/>messages, state,<br/>audits, grade events)]

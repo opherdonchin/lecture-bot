@@ -1,0 +1,10 @@
+flowchart TD
+    T[transcript] --> MP[minutes prompt]
+    MP --> M[minutes.json]
+
+    S[slides + handout + minutes] --> RP[rubric prompt]
+    RP --> R[rubric.md]
+
+    C[slides + handout + minutes + rubric<br/>+ tutor specification + backend contract]
+    C --> GP[tutor generation prompt]
+    GP --> TP[tutor_prompt.md<br/>+ private artifact schema]

@@ -1,0 +1,7 @@
+flowchart TD
+    A([Start session]) --> B[Lecture package<br/>+ sampled topics]
+    B --> C[Focused tutor dialogue]
+    C --> D[Session state<br/>mastery + evidence notes]
+    D --> E[Current grade<br/>or final report]
+    D -. next turn .-> C
+    C --> F[(Messages + audits<br/>+ private artifacts)]

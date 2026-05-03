@@ -1,0 +1,17 @@
+lecture-bot/
+# Compact public-safe orientation map.
+# Runtime databases, exports, logs, .env, Quarto render output, caches, and private lecture packages are excluded.
+|-- app/             # student/admin FastAPI apps, state, grading, templates, static UI
+|-- docs/            # implementation, grading, tutor specification, runtime contracts
+|-- prompts/         # runtime tutor prompt, generator, analysis and artifact prompts
+|-- scripts/         # lecture-package build, conversion, export, Moodle helpers
+|-- lectures/        # lecture package root; package contents excluded
+|   |-- config.json      # runtime context defaults
+|   |-- lecture_01/      # contents excluded
+|   |-- lecture_02/      # contents excluded
+|   `-- lecture_03/      # contents excluded
+|-- tests/           # pytest coverage for app, build pipeline, grading, routing
+|-- presentations/   # Quarto presentation sources
+|-- deploy/          # systemd deployment examples
+|-- README.md        # operational overview
+`-- pixi.toml        # environment and task commands

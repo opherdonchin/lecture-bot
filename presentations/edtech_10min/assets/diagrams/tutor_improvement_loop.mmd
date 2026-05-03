@@ -1,0 +1,7 @@
+flowchart TD
+    A[Run tutor sessions] --> B[Export conversations<br/>and diagnostics]
+    B --> C[Structured analysis<br/>log_analysis_prompt.md]
+    C --> D[Tutor behavior findings]
+    D --> E[Revise tutor specification]
+    E --> F[Regenerate prompt<br/>and private schema]
+    F --> A
