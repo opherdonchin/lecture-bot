@@ -49,3 +49,43 @@ This archive was built from distinct versions of `docs/tutor_specification.md` i
 - Commit: `53ff74aeb78be89e9bef79ac9e5f5df54b450f17`
 - Subject: `Update tutor specification and regenerate runtime tutor`
 - Best guess: This replaces the prior spec with a contract-conformant adaptive-challenge version. The commit message is explicit: the tutor should not detect or police AI-assisted answers; strong, fluent, unusually complete, or rapid answers should trigger higher-level conceptual work. The diff adds AI-rich learning stance, adaptive challenge modes, repetition control, breadth after strong evidence, canonical topic/runtime compliance, grade/report handoff rules, and clearer private-artifact/runtime ownership.
+
+## 2026-05-03_1.md
+
+- Source: current working tree snapshot before the next tutor specification update
+- Based on: `docs/tutor_specification.md`
+- Note: Content-identical to `2026-05-03.md`; retained as an explicit pre-update archive point before editing the live tutor specification again.
+
+## 2026-05-03_2.md
+
+- Source: current working tree snapshot after the adaptive conceptual review tutor revision
+- Based on: `docs/tutor_specification.md`
+- Best guess: This revision keeps the AI-rich adaptive challenge stance from `2026-05-03.md`, but shifts the tutor away from endless probing. It adds explicit rules for adequate evidence, consolidation, closing pressure, move-on/fatigue signals, and high-performing students so the tutor can recognize when a characterization is defensible enough for the session purpose.
+
+### Revision notes
+
+#### Major changes from original specification
+
+1. Added a stronger distinction between adequate evidence and perfect/maximal evidence.
+2. Added an explicit arbitration rule: further probing after adequacy requires consequential remaining uncertainty, not mere possible confidence improvement.
+3. Added answer-cycle feasibility under closing pressure.
+4. Added explicit treatment of move-on requests, fatigue, and loss of traction as interactional evidence.
+5. Added consolidation as a named interaction mode and successful closure as a success condition.
+6. Strengthened high-performing student guidance so high mastery is not withheld merely because another subtle question is imaginable.
+
+#### Evidence status for major changes
+
+- Adequate-vs-perfect evidence: recurrent within the same prompt and diagnostic-supported.
+- Arbitration after adequate evidence: diagnostic-supported, especially the move-on/integrative-check episode.
+- Answer-cycle feasibility: recurrent behaviorally and partly diagnostic-supported.
+- Move-on/loss-of-traction rule: rare but high-severity enough to revise; diagnostic-supported in the clearest case.
+- Consolidation mode: supported by strong counterexamples and weak closure episodes.
+- Polished-answer guidance: retained mostly from original; not significantly expanded because diagnostic support was limited.
+
+#### Issues intentionally not revised
+
+- No backend timeout implementation changes are specified here.
+- No new classifier or routing architecture is introduced.
+- No detailed private-artifact schema is specified.
+- No major redesign of grading weights or official grade computation is introduced.
+- Polished/AI-assisted answer handling is not substantially redesigned pending a more targeted diagnostic review.

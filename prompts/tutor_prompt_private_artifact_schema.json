@@ -3,25 +3,26 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "latest_message_review",
-    "topic_engagement",
-    "mastery_update_review",
-    "next_move_review",
-    "self_verification"
+    "latest_message_assessment",
+    "topic_evidence",
+    "next_move_decision",
+    "self_verification",
+    "state_delta_check",
+    "student_facing_boundary_check"
   ],
   "properties": {
-    "latest_message_review": {
+    "latest_message_assessment": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "student_intent",
+        "turn_kind",
         "content_evidence_present",
         "evidence_independence",
-        "evidence_summary",
-        "no_content_evidence_reason"
+        "student_signal",
+        "brief_observation"
       ],
       "properties": {
-        "student_intent": {
+        "turn_kind": {
           "type": "string",
           "enum": [
             "content_answer",
@@ -29,8 +30,7 @@
             "procedural_question",
             "interaction_repair_needed",
             "redirection_needed",
-            "ambiguous",
-            "off_task"
+            "ambiguous_or_off_task"
           ]
         },
         "content_evidence_present": {
@@ -40,72 +40,70 @@
           "type": "string",
           "enum": [
             "independent",
-            "assisted",
-            "transformed_after_scaffold",
-            "generic_or_fluent_but_unverified",
+            "assisted_by_small_hint",
+            "assisted_by_substantial_scaffold",
             "copied_or_echoed",
-            "no_content_evidence",
-            "mixed_or_unclear"
+            "procedural_or_none",
+            "ambiguous"
           ]
         },
-        "evidence_summary": {
-          "type": "string"
-        },
-        "no_content_evidence_reason": {
-          "type": [
-            "string",
-            "null"
-          ],
+        "student_signal": {
+          "type": "string",
           "enum": [
-            "procedural_turn",
-            "copied_question_or_tutor_wording",
-            "ambiguous_or_uninterpretable",
-            "off_task_or_meta",
-            "tutor_explanation_only",
-            "not_applicable",
-            null
+            "normal_engagement",
+            "strong_fluent_answer",
+            "stuck_or_confused",
+            "frustrated_or_anxious",
+            "fatigue_or_low_traction",
+            "wants_to_move_on",
+            "asks_for_grade_or_report",
+            "asks_for_hidden_or_forbidden_internals",
+            "unclear"
           ]
+        },
+        "brief_observation": {
+          "type": "string",
+          "maxLength": 280
         }
       }
     },
-    "topic_engagement": {
+    "topic_evidence": {
       "type": "array",
+      "maxItems": 4,
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "topic_id",
-          "engagement_kind",
+          "engagement_basis",
           "evidence_quality",
-          "observed_dimensions",
-          "evidence_note"
+          "demonstrated_dimensions",
+          "mastery_update_decision",
+          "brief_rationale"
         ],
         "properties": {
           "topic_id": {
-            "type": "string"
-          },
-          "engagement_kind": {
             "type": "string",
-            "enum": [
-              "meaningfully_engaged",
-              "weak_or_vague_engagement",
-              "misconception_observed",
-              "procedural_reference_only",
-              "not_confidently_localized"
-            ]
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "engagement_basis": {
+            "type": "string",
+            "maxLength": 220
           },
           "evidence_quality": {
             "type": "string",
             "enum": [
-              "strong",
-              "moderate",
+              "no_content_evidence",
               "weak",
-              "none",
-              "mixed"
+              "emerging",
+              "strong",
+              "high"
             ]
           },
-          "observed_dimensions": {
+          "demonstrated_dimensions": {
             "type": "array",
+            "uniqueItems": true,
             "items": {
               "type": "string",
               "enum": [
@@ -115,76 +113,40 @@
                 "application_transfer",
                 "practical_interpretation",
                 "independent_correction_ownership",
-                "synthesis"
+                "synthesis",
+                "compression",
+                "critique"
               ]
-            },
-            "uniqueItems": true
+            }
           },
-          "evidence_note": {
-            "type": "string"
+          "mastery_update_decision": {
+            "type": "string",
+            "enum": [
+              "no_update",
+              "record_weak_or_limited_evidence",
+              "update_provisional_mastery",
+              "cap_as_assisted_evidence",
+              "record_limitation_or_uncertainty"
+            ]
+          },
+          "brief_rationale": {
+            "type": "string",
+            "maxLength": 280
           }
         }
       }
     },
-    "mastery_update_review": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "updated_state_keys_used",
-        "mastery_updates_are_supported_by_latest_message",
-        "high_mastery_updates_have_independent_basis",
-        "scaffolding_cap_applied",
-        "state_delta_rationale"
-      ],
-      "properties": {
-        "updated_state_keys_used": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "mastery",
-              "evidence_notes",
-              "current_topic_id",
-              "tutor_comment"
-            ]
-          },
-          "uniqueItems": true
-        },
-        "mastery_updates_are_supported_by_latest_message": {
-          "type": "boolean"
-        },
-        "high_mastery_updates_have_independent_basis": {
-          "type": "string",
-          "enum": [
-            "yes",
-            "no",
-            "no_high_mastery_update",
-            "not_applicable"
-          ]
-        },
-        "scaffolding_cap_applied": {
-          "type": "string",
-          "enum": [
-            "yes",
-            "no",
-            "no_recent_scaffold",
-            "not_applicable"
-          ]
-        },
-        "state_delta_rationale": {
-          "type": "string"
-        }
-      }
-    },
-    "next_move_review": {
+    "next_move_decision": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "interaction_mode",
-        "challenge_level",
         "topic_strategy",
-        "probe_type",
-        "material_change_rationale"
+        "challenge_level",
+        "asks_substantive_question",
+        "materiality_of_next_question",
+        "answer_feedback_cycle_feasible",
+        "brief_rationale"
       ],
       "properties": {
         "interaction_mode": {
@@ -198,7 +160,18 @@
             "procedural_support",
             "interaction_repair",
             "redirection",
-            "grade_or_report_handoff"
+            "consolidation"
+          ]
+        },
+        "topic_strategy": {
+          "type": "string",
+          "enum": [
+            "stay_on_current_topic",
+            "change_probe_type",
+            "move_to_new_topic",
+            "consolidate_or_close",
+            "answer_procedural_then_return",
+            "repair_before_assessing"
           ]
         },
         "challenge_level": {
@@ -207,42 +180,32 @@
             "normal",
             "elevated",
             "high",
-            "lowered_for_support",
             "not_applicable"
           ]
         },
-        "topic_strategy": {
+        "asks_substantive_question": {
+          "type": "boolean"
+        },
+        "materiality_of_next_question": {
           "type": "string",
           "enum": [
-            "stay_on_topic",
-            "change_probe_type",
-            "move_to_breadth",
-            "return_to_prior_weak_topic",
-            "repair_before_content",
-            "redirect_to_content"
+            "consequential",
+            "minor_or_polish_only",
+            "not_applicable"
           ]
         },
-        "probe_type": {
+        "answer_feedback_cycle_feasible": {
           "type": "string",
           "enum": [
-            "criterion",
-            "distinction",
-            "explanation_why",
-            "example",
-            "application_transfer",
-            "practical_interpretation",
-            "compression",
-            "boundary_case",
-            "critique",
-            "synthesis",
-            "procedural_answer",
-            "repair_prompt",
-            "redirection_prompt",
-            "none"
+            "yes",
+            "no",
+            "unknown_due_absent_or_unreliable_timing",
+            "not_applicable"
           ]
         },
-        "material_change_rationale": {
-          "type": "string"
+        "brief_rationale": {
+          "type": "string",
+          "maxLength": 320
         }
       }
     },
@@ -250,54 +213,153 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "content_evidence_check",
-        "same_point_probe_value_check",
-        "high_mastery_check",
-        "post_scaffold_check",
-        "topic_exit_check"
+        "actual_content_before_mastery_update",
+        "post_scaffold_not_overcredited",
+        "high_mastery_requires_independent_transformed_evidence",
+        "same_point_question_is_material",
+        "question_after_adequate_evidence_is_consequential",
+        "closing_pressure_checked",
+        "student_agency_signal_respected",
+        "topic_end_condition_checked"
       ],
       "properties": {
-        "content_evidence_check": {
+        "actual_content_before_mastery_update": {
           "type": "string",
           "enum": [
             "passed",
-            "failed_no_mastery_update",
+            "failed",
             "not_applicable"
           ]
         },
-        "same_point_probe_value_check": {
+        "post_scaffold_not_overcredited": {
           "type": "string",
           "enum": [
-            "plausible_answer_would_change_assessment",
-            "redundant_changed_move",
+            "passed",
+            "failed",
             "not_applicable"
           ]
         },
-        "high_mastery_check": {
+        "high_mastery_requires_independent_transformed_evidence": {
           "type": "string",
           "enum": [
-            "independent_or_transformed_basis_present",
-            "not_enough_for_high_mastery",
+            "passed",
+            "failed",
             "not_applicable"
           ]
         },
-        "post_scaffold_check": {
+        "same_point_question_is_material": {
           "type": "string",
           "enum": [
-            "goes_beyond_repetition",
-            "assisted_only_or_repetition",
-            "no_recent_scaffold",
+            "passed",
+            "failed",
             "not_applicable"
           ]
         },
-        "topic_exit_check": {
+        "question_after_adequate_evidence_is_consequential": {
           "type": "string",
           "enum": [
-            "enough_evidence",
-            "further_probing_low_value",
-            "staying_on_topic",
+            "passed",
+            "failed",
             "not_applicable"
           ]
+        },
+        "closing_pressure_checked": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "unknown_due_absent_or_unreliable_timing",
+            "not_applicable"
+          ]
+        },
+        "student_agency_signal_respected": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "not_applicable"
+          ]
+        },
+        "topic_end_condition_checked": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "not_applicable"
+          ]
+        }
+      }
+    },
+    "state_delta_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_updated_state_keys_used",
+        "content_evidence_supports_delta",
+        "backend_owned_updates_avoided",
+        "canonical_topic_ids_only"
+      ],
+      "properties": {
+        "allowed_updated_state_keys_used": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "mastery",
+              "evidence_notes",
+              "current_topic_id",
+              "tutor_comment"
+            ]
+          }
+        },
+        "content_evidence_supports_delta": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no_delta",
+            "no"
+          ]
+        },
+        "backend_owned_updates_avoided": {
+          "type": "boolean",
+          "const": true
+        },
+        "canonical_topic_ids_only": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no_topic_ids_used",
+            "uncertain"
+          ]
+        }
+      }
+    },
+    "student_facing_boundary_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "private_artifact_excluded_from_student_message",
+        "hidden_internals_not_revealed",
+        "no_ai_use_accusation_or_detection",
+        "no_authoritative_grade_or_report_claim"
+      ],
+      "properties": {
+        "private_artifact_excluded_from_student_message": {
+          "type": "boolean",
+          "const": true
+        },
+        "hidden_internals_not_revealed": {
+          "type": "boolean",
+          "const": true
+        },
+        "no_ai_use_accusation_or_detection": {
+          "type": "boolean",
+          "const": true
+        },
+        "no_authoritative_grade_or_report_claim": {
+          "type": "boolean",
+          "const": true
         }
       }
     }
