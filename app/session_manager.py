@@ -1,12 +1,63 @@
 import json as j
+import logging
+import pathlib
 import uuid as uuid_module
 
 import sqlalchemy.orm as sqlalchemy_orm
 
+import app.archive_helpers as archive_helpers
 import app.bot_engine as bot_engine
 import app.config as config_module
 import app.models as models
 import app.prompt_loader as prompt_loader
+
+_log = logging.getLogger(__name__)
+_TUTOR_PROMPT_FILE = pathlib.Path(__file__).parent.parent / "prompts" / "tutor_prompt.md"
+
+
+def _resolve_prompt_document_id(db: sqlalchemy_orm.Session) -> str | None:
+    """
+    Identify which archive document the live prompt file corresponds to.
+
+    SHA-256 of the file content is the primary lookup (it reflects what the
+    model will actually see). The active flag is checked as a consistency
+    guard. A warning is logged whenever they disagree.
+    """
+    try:
+        content = _TUTOR_PROMPT_FILE.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+
+    sha = archive_helpers.sha256_of_text(content)
+
+    sha_doc = (
+        db.query(models.ArchiveDocumentModel)
+        .filter(
+            models.ArchiveDocumentModel.document_type == "tutor_prompt",
+            models.ArchiveDocumentModel.content_sha256 == sha,
+        )
+        .first()
+    )
+    active_doc = (
+        db.query(models.ArchiveDocumentModel)
+        .filter(
+            models.ArchiveDocumentModel.document_type == "tutor_prompt",
+            models.ArchiveDocumentModel.active.is_(True),
+        )
+        .first()
+    )
+
+    sha_id = sha_doc.document_id if sha_doc else None
+    active_id = active_doc.document_id if active_doc else None
+
+    if sha_id != active_id:
+        _log.warning(
+            "tutor_prompt identity mismatch: sha256 match=%r active=%r",
+            sha_id,
+            active_id,
+        )
+
+    return sha_id
 
 
 def build_initial_state(lecture_package: dict, topics_sampled: list) -> dict:
@@ -32,6 +83,7 @@ def create_session(db: sqlalchemy_orm.Session, student_id: str, lecture_id: str,
         lecture_id=lecture_id,
         current_grade=0.0,
         private_artifact_schema_json=prompt_loader.load_private_artifact_schema_json(tutor_prompt_template),
+        prompt_document_id=_resolve_prompt_document_id(db),
     )
     db.add(session)
     db.flush()

@@ -13,6 +13,7 @@ from typing import Iterable
 import sqlalchemy as sa
 import sqlalchemy.orm as sqlalchemy_orm
 
+import app.admin_documents as admin_documents_module
 import app.models as models
 from scripts import export_session_package
 
@@ -242,16 +243,18 @@ def ensure_sessions_exist(db: sqlalchemy_orm.Session, session_ids: list[str]) ->
         raise ValueError(f"Unknown session id: {missing[0]}")
 
 
-def build_multi_export_manifest(session_ids: list[str]) -> dict:
+def build_multi_export_manifest(session_ids: list[str], prompt_document_ids: list[str]) -> dict:
     return {
         "format": "lecture_bot_sessions_multi_export",
         "exported_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "session_count": len(session_ids),
         "session_ids": session_ids,
+        "prompt_document_ids": prompt_document_ids,
         "notes": {
             "prompt_files_source": "current_files_at_export_time",
             "rendered_prompts_source": "dialogue_turn_audits",
             "student_comments_source": "conversation/session_notes.json",
+            "document_archive": "documents/ and assembled_tutors/ present when sessions have prompt_document_id",
         },
     }
 
@@ -267,12 +270,30 @@ def build_sessions_export_zip(
     ensure_sessions_exist(db, normalized_session_ids)
     database_path = sqlite_path_from_database_url(database_url).resolve()
 
+    # Collect prompt_document_ids for all sessions upfront
+    session_rows = {
+        row.session_id: row
+        for row in db.query(models.SessionModel).filter(
+            models.SessionModel.session_id.in_(normalized_session_ids)
+        ).all()
+    }
+    prompt_doc_ids = sorted({
+        row.prompt_document_id
+        for row in session_rows.values()
+        if row.prompt_document_id
+    })
+
+    assembled, export_docs = admin_documents_module.collect_export_documents(db, prompt_doc_ids)
+
     buffer = io.BytesIO()
     conn = sqlite3.connect(database_path)
     conn.row_factory = sqlite3.Row
     try:
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("manifest.json", json.dumps(build_multi_export_manifest(normalized_session_ids), indent=2).encode("utf-8"))
+            zf.writestr(
+                "manifest.json",
+                json.dumps(build_multi_export_manifest(normalized_session_ids, prompt_doc_ids), indent=2).encode("utf-8"),
+            )
             for session_id in normalized_session_ids:
                 export_session_package.write_session_package_to_zip(
                     zf,
@@ -282,6 +303,15 @@ def build_sessions_export_zip(
                     archive_prefix=f"{session_id}/",
                     zip_path=pathlib.Path("admin_session_export.zip"),
                     database_path=database_path,
+                )
+
+            for doc_id, (doc, zip_path) in export_docs.items():
+                zf.writestr(zip_path, doc.content_text.encode("utf-8"))
+
+            for prompt_doc_id, graph in assembled.items():
+                zf.writestr(
+                    f"assembled_tutors/{prompt_doc_id}.json",
+                    json.dumps(graph, indent=2, ensure_ascii=False).encode("utf-8"),
                 )
     finally:
         conn.close()

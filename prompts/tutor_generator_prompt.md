@@ -265,59 +265,6 @@ Unless explicitly established by the tutor specification or backend contract, do
 - prompt version history
 - database mechanics beyond what the runtime contract allows
 
-# Output format
-
-Your output must keep these categories distinct:
-
-1. **Conformance failures**
-2. **Backend incompatibilities**
-3. **Recommended omissions**
-4. **Private artifact schema**
-5. **Runtime tutor prompt**
-
-Use exactly the following behavior:
-
-## If there are one or more conformance failures or backend incompatibilities
-
-Output:
-
-### Conformance failures
-
-- list each blocking defect, or write `None.`
-
-### Backend incompatibilities
-
-- list each blocking incompatibility, or write `None.`
-
-### Recommended omissions
-
-- list each non-blocking recommended omission, or write `None.`
-
-Then **stop**.
-Do **not** generate the private artifact schema.
-Do **not** generate the runtime tutor prompt.
-
-## If both blocking sections are empty
-
-Output:
-
-### Conformance failures
-None.
-
-### Backend incompatibilities
-None.
-
-### Recommended omissions
-- list each non-blocking recommended omission, or write `None.`
-
-### Private artifact schema
-
-Then provide the private artifact JSON Schema in one fenced `json` code block.
-
-### Runtime tutor prompt
-
-Then provide the full runtime tutor prompt in one fenced code block and nothing else after it.
-
 # Standards for defect reporting
 
 For each conformance failure or backend incompatibility:
@@ -344,4 +291,30 @@ The runtime tutor prompt must be production-ready. It must tell the runtime tuto
 - explicitly instruct the tutor not to fabricate absent time information, lifecycle conditions, or student intent
 - remain faithful to the pedagogical specification rather than generic tutoring defaults
 
-Do not output the runtime tutor prompt unless both checks pass.
+# Output format
+
+Respond with a single JSON object and nothing else. Do not add any text, markdown, or code fences before or after the JSON object. The object must have exactly these keys:
+
+- `”status”` — one of `”ok”`, `”repaired”`, or `”failed”`
+- `”conformance_failures”` — array of strings, one per blocking conformance defect; empty array if none
+- `”backend_incompatibilities”` — array of strings, one per blocking backend incompatibility; empty array if none
+- `”recommended_omissions”` — array of strings, one per non-blocking recommended omission; empty array if none
+- `”tutor_spec”` — `null` if status is `”ok”` or `”failed”`; the full corrected spec text as a string if status is `”repaired”`
+- `”tutor_artifact_schema”` — the private artifact JSON Schema as a string containing valid JSON; `null` if status is `”failed”`
+- `”tutor_prompt”` — the full runtime tutor prompt text as a string; `null` if status is `”failed”`
+
+Set `”status”` to:
+- `”failed”` if there are any conformance failures or backend incompatibilities
+- `”repaired”` if there are no blocking failures but the spec required correction before generation
+- `”ok”` if there are no blocking failures and no repair was needed
+
+When `”status”` is `”failed”`:
+- populate `”conformance_failures”` and `”backend_incompatibilities”` with the issues found
+- set `”tutor_spec”`, `”tutor_artifact_schema”`, and `”tutor_prompt”` to `null`
+- `”recommended_omissions”` may still be populated
+
+When `”status”` is `”ok”` or `”repaired”`:
+- `”conformance_failures”` and `”backend_incompatibilities”` must be empty arrays
+- `”tutor_artifact_schema”` must be the full private artifact JSON Schema as a valid JSON string
+- `”tutor_prompt”` must be the full runtime tutor prompt text
+- `”tutor_spec”` is `null` if status is `”ok”`, or the full repaired spec text if status is `”repaired”`
