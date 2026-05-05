@@ -159,21 +159,6 @@ sudo find /srv/lecture-bot/.git -type d -exec chmod g+rx {} \;
 sudo find /srv/lecture-bot/.git -type f -exec chmod g+r {} \;
 ```
 
-## 6a. Configure sparse checkout to protect the lectures directory
-
-The public repo includes `lectures/lecture_01/` as an example, but production servers manage their own private `lectures/` content (copied in via rsync, not git). Configure sparse checkout so that `git pull` never touches `lectures/`:
-
-```bash
-cd /srv/lecture-bot
-git sparse-checkout init --no-cone
-printf '/*\n!/lectures\n' > .git/info/sparse-checkout
-git sparse-checkout reapply
-```
-
-After `reapply`, git removes the example `lectures/lecture_01/` files it just cloned — that is the intended behaviour. The `lectures/` directory will be populated in step 10 via rsync from the private source.
-
-From this point on, all future `git pull origin main` calls will update application code but leave `lectures/` completely untouched.
-
 ## 7. Create runtime directories inside the repo
 
 ```bash
@@ -273,7 +258,11 @@ sudo systemctl restart lecture-bot-admin
 
 ## 10. Copy in private lecture material
 
-The public repo only contains the lecture scaffold. Copy the actual private lecture folders into `/srv/lecture-bot/lectures/`.
+The public repo only contains the lecture scaffold. Copy the actual private lecture folders into `/srv/lecture-bot/lectures/`. The repo includes `example_content/` with a working `config.json` and `lecture_01/`; you can use this as a starting point or reference before copying in real content:
+
+```bash
+cp -r /srv/lecture-bot/example_content/. /srv/lecture-bot/lectures/
+```
 
 For first deployment, `rsync` is the cleanest method.
 
@@ -766,4 +755,4 @@ set +a
 pixi run test
 ```
 
-`git pull` will not touch `lectures/` because sparse checkout (configured in step 6a) excludes that directory. If you need to update lecture packages on this server, sync them separately via rsync from the private source.
+If the code update includes changes to the private lecture packages, sync those too before restarting.
