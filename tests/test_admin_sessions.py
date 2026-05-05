@@ -311,6 +311,8 @@ def test_admin_sessions_export_zip_shape_and_notes(tmp_path, monkeypatch):
             assert f"{session_id}/conversation/dialogue_turn_audits.json" in names
             assert f"{session_id}/conversation/private_artifact_logs.json" in names
             assert f"{session_id}/conversation/session_notes.json" in names
+            assert f"{session_id}/prompts/log_analysis_prompt.md" in names
+            assert f"{session_id}/prompts/comment_analysis_prompt.md" in names
 
         notes = json.loads(zf.read(f"{SESSION_ONE}/conversation/session_notes.json"))
         assert notes[0]["note_text"] == "important student comment 0"

@@ -276,6 +276,8 @@ def collect_prompt_files(template_name: str, prompts_dir: pathlib.Path = PROMPTS
         ("tutor_generator_prompt.md", "prompts/tutor_generator_prompt.md"),
         ("master_rubric_generation_prompt.md", "prompts/master_rubric_generation_prompt.md"),
         ("minutes_generation_prompt.md", "prompts/minutes_generation_prompt.md"),
+        ("log_analysis_prompt.md", "prompts/log_analysis_prompt.md"),
+        ("comment_analysis_prompt.md", "prompts/comment_analysis_prompt.md"),
     ]
     files = [(prompts_dir / name, archive_name) for name, archive_name in wanted]
     schema_path = prompt_loader.private_artifact_schema_path(template_name)
@@ -354,6 +356,8 @@ def build_manifest(
         "prompts/tutor_generator_prompt.md",
         "prompts/master_rubric_generation_prompt.md",
         "prompts/minutes_generation_prompt.md",
+        "prompts/log_analysis_prompt.md",
+        "prompts/comment_analysis_prompt.md",
         "contracts/tutor_specification.md",
         "contracts/tutor_specification_contract.md",
         "contracts/backend_tutor_contract.md",
