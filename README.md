@@ -141,7 +141,7 @@ Do not commit `.env` or secret values.
 
 ## Lecture Packages
 
-`LECTURES_DIR` contains a root `config.json` plus one directory per lecture. The public repository currently tracks only `lectures/config.json` and `lectures/.gitkeep`; actual lecture packages are private runtime material and must be copied in after cloning.
+`LECTURES_DIR` contains a root `config.json` plus one directory per lecture. The public repository tracks `lectures/config.json` and `lectures/lecture_01/` as a working example; other lecture packages are private runtime material and must be copied in after cloning. Production servers should configure sparse checkout to exclude `lectures/` so that `git pull` never overwrites their private lecture content — see [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) step 6a.
 
 The default runtime context in `lectures/config.json` expects:
 
@@ -221,6 +221,7 @@ Safe for the public repo:
 - docs
 - tests
 - `lectures/config.json`
+- `lectures/lecture_01/` (example lecture — processed artifacts only, no raw source files)
 
 Keep private and copy after cloning `main`:
 
@@ -229,8 +230,8 @@ Keep private and copy after cloning `main`:
 - SQLite databases
 - student rosters and Moodle exports
 - runtime logs and investigation/session exports
-- uploaded lecture source files
-- processed lecture packages if they include private course content
+- uploaded lecture source files (`.pptx`, `.qmd`, `.ipynb`, `.vtt`)
+- processed lecture packages for lectures other than the example
 
 ## Path Prefix Status
 

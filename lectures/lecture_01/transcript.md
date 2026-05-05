@@ -1,0 +1,1279 @@
+# Transcript
+
+- [00:16:57.600 - 00:16:59.770] Opher Donchin: Hi. Good morning.
+- [00:17:00.590 - 00:17:06.589] Opher Donchin: Very early morning. It's nice of, Laura showed up to show up. I appreciate it.
+- [00:17:09.040 - 00:17:20.640] Opher Donchin: This is, our third year BME course in statistics. It's like, they used to do on Southwest. If you were planning to fly somewhere else, then this would be a good time to leave the plane.
+- [00:17:20.980 - 00:17:25.880] Opher Donchin: And, we'll just…
+- [00:17:26.359 - 00:17:33.789] Opher Donchin: get started. I will say that, you know, as long as we're on Zoom, of course it's not required to open cameras.
+- [00:17:34.080 - 00:17:40.049] Opher Donchin: Everybody and their privacy, but the more people open cameras, the funner this is for me.
+- [00:17:40.320 - 00:17:44.459] Opher Donchin: So, you can think of it as something you do to help me out.
+- [00:17:45.280 - 00:17:50.060] Opher Donchin: And I'm going to… Share my presentation.
+- [00:17:52.480 - 00:17:56.479] Opher Donchin: Oh, there's this really important question at the beginning of, of,
+- [00:17:58.680 - 00:18:03.869] Opher Donchin: How do you guys want your recordings? Is it, like, is this good? Just like that?
+- [00:18:04.920 - 00:18:07.190] Opher Donchin: Let's get this presentation over there.
+- [00:18:13.950 - 00:18:15.530] Opher Donchin: So that you can,
+- [00:18:20.060 - 00:18:23.200] Opher Donchin: Right now, you can see me and the presentation, right?
+- [00:18:25.410 - 00:18:26.410] Opher Donchin: No worries.
+- [00:18:27.610 - 00:18:28.540] Opher Donchin: What's that?
+- [00:18:28.540 - 00:18:29.489] Adi: Kendall, I am.
+- [00:18:31.260 - 00:18:33.359] Opher Donchin: I'm sorry, I had my volume down.
+- [00:18:33.680 - 00:18:36.999] Opher Donchin: Say one more time? Yes, this is good? Something else?
+- [00:18:37.000 - 00:18:37.810] Adi: Flame.
+- [00:18:38.020 - 00:18:38.530] Ohad Hofman: Here's dog.
+- [00:18:38.530 - 00:18:43.779] Opher Donchin: Okay. Some ground rules?
+- [00:18:43.950 - 00:18:45.680] Opher Donchin: I'm gonna talk in English.
+- [00:18:45.970 - 00:18:48.150] Opher Donchin: You do not have to talk in English.
+- [00:18:48.920 - 00:18:49.890] Opher Donchin: Okay?
+- [00:18:50.100 - 00:18:55.360] Opher Donchin: And, What else?
+- [00:18:55.700 - 00:19:07.050] Opher Donchin: If we ever go back to physical things, then we're not going to have Zoom participation. I'm still in the air about whether we'll have allowed Zoom presence, but
+- [00:19:07.630 - 00:19:15.149] Opher Donchin: At the very least, in class. But now that we are all Zoomy zoomy, please feel free.
+- [00:19:15.280 - 00:19:19.220] Opher Donchin: to raise your hand, or even just jump in while I'm talking.
+- [00:19:19.700 - 00:19:20.580] Opher Donchin: Okay?
+- [00:19:26.730 - 00:19:44.469] Opher Donchin: Oh, one more thing. So, to encourage the grading sheet, I'm going to do it at the end, and, you know, what the whole class… I'm just going to jump into the material, but I want to say ahead of time, and you guys can tell your friends, that there is a component of the grading that involves in-class
+- [00:19:44.860 - 00:19:47.080] Opher Donchin: WooCloud participation.
+- [00:19:47.320 - 00:19:49.700] Opher Donchin: It's not a huge component of the grade.
+- [00:19:50.130 - 00:20:00.969] Opher Donchin: But, attendance is not required, but to get that particular part of the grade, you have to get… you have to be in the class and answer the questions.
+- [00:20:01.080 - 00:20:02.819] Opher Donchin: And do reasonably well on them.
+- [00:20:03.360 - 00:20:12.550] Opher Donchin: So people who want… there's plenty of time till we get there. In the future, they'll be spread out, I think, throughout the presentation a little bit more, instead of being clumped somewhere in the middle.
+- [00:20:13.090 - 00:20:17.069] Opher Donchin: But if you want to tell your friends that if they want to be,
+- [00:20:17.370 - 00:20:28.319] Opher Donchin: they want those first few points, then they should join us. And if anybody feels like they can do without those few points, or they have something more important to do, it's okay. I will not…
+- [00:20:28.560 - 00:20:38.250] Opher Donchin: Barring… There's the sort of list of reasons why you're allowed to miss a final exam.
+- [00:20:38.440 - 00:20:41.000] Opher Donchin: It's very limited and very clear.
+- [00:20:41.480 - 00:20:42.749] Opher Donchin: Do you guys know it?
+- [00:20:42.900 - 00:20:52.070] Opher Donchin: So, if… if the same thing will apply for these questions. If you're in the hospital, or you yourself are getting married, or…
+- [00:20:52.130 - 00:21:08.999] Opher Donchin: Some other, like, there's a very, very small list, or obviously on reserve duty, then you can, get those points in other ways, but, barring something like that, it's just your choice, you know, set of priorities, whether you want to be here or not. It's okay.
+- [00:21:09.560 - 00:21:10.620] Opher Donchin: Okay.
+- [00:21:10.870 - 00:21:13.579] Opher Donchin: We're gonna learn statistics.
+- [00:21:14.590 - 00:21:21.420] Opher Donchin: And, in order to discuss that, with any sort of
+- [00:21:21.650 - 00:21:30.019] Opher Donchin: sense of understanding what we're talking about, I want to talk about what statistic is, why it exists, what it is that we're trying to learn.
+- [00:21:30.410 - 00:21:35.079] Opher Donchin: Emmett, yeah, hold on.
+- [00:21:39.890 - 00:21:51.440] Opher Donchin: Just so you know, for… for me, you guys are here, and the presentation's over there. So if I'm looking over here, I'm looking at you. If I'm looking over here, I'm looking at the presentation.
+- [00:21:52.280 - 00:21:57.820] Opher Donchin: And if I talk too quickly or mumble, tell me, because this is all in English.
+- [00:21:58.540 - 00:22:02.810] Opher Donchin: Yeah, so, so…
+- [00:22:05.460 - 00:22:12.400] Opher Donchin: You know, one of the beautiful things about biomedical engineering is that it's a very broad and varied discipline.
+- [00:22:13.150 - 00:22:18.369] Opher Donchin: It's the kind of thing where when I go to a seminar.
+- [00:22:18.730 - 00:22:26.800] Opher Donchin: it could, you know, there's a 20% chance or so that it'll be deeply, deeply fascinating to me, an 80% chance that I have no idea.
+- [00:22:26.990 - 00:22:28.769] Opher Donchin: What is being discussed?
+- [00:22:29.860 - 00:22:41.059] Opher Donchin: Right? So, each of you is very likely to end up doing things that are very, very different from any other one of you. And if you look at the classes that you've been taking.
+- [00:22:42.060 - 00:22:52.589] Opher Donchin: Throughout your undergrad curriculum, some of you may never have any need for calculus, and others of you may never have any need for programming.
+- [00:22:53.130 - 00:22:55.630] Opher Donchin: Right? Even though those are very, very basic.
+- [00:22:56.900 - 00:23:00.219] Opher Donchin: Right? Some of you may not need to know very much physiology.
+- [00:23:00.380 - 00:23:06.319] Opher Donchin: I can almost guarantee that each and every one of you will need to know statistics.
+- [00:23:07.390 - 00:23:23.579] Opher Donchin: Right? I think this is essentially the only course your entire career that no matter what you do, whether you become a scientist, or an engineer, a data processor, a data analyst, somebody who's doing product,
+- [00:23:25.330 - 00:23:33.289] Opher Donchin: Product support, somebody who's doing research and development. No matter what you do, this course will be relevant to you.
+- [00:23:35.760 - 00:23:41.750] Opher Donchin: And… One other thing I want to say, and this may come up a lot.
+- [00:23:42.430 - 00:23:54.489] Opher Donchin: But it's one of my, like… I don't know if you have this, but do you know this feeling, like, you have a thought, and then that thought, you, like, you like it, you fall in love with it, and then you have it again regularly over the course of your life?
+- [00:23:54.780 - 00:24:04.129] Opher Donchin: So… so one of the thoughts that I've really fallen in love with is this thought I had many years ago about the difference between scientists and engineers.
+- [00:24:04.880 - 00:24:11.249] Opher Donchin: Right? Scientists… are people who… I'll do it the other way around. Engineers…
+- [00:24:11.370 - 00:24:17.669] Opher Donchin: are people who like to know the answer. They like to have answers, right? They like to solve problems.
+- [00:24:18.340 - 00:24:20.180] Opher Donchin: Right? And get answers.
+- [00:24:20.640 - 00:24:25.689] Opher Donchin: And it's great to have engineers in the world, because problems need solving.
+- [00:24:25.950 - 00:24:37.409] Opher Donchin: Right? And scientists are almost the opposite, in the sense that what scientists like to do, instead of liking to know things or have the answer, they like to not know things. They like to have the question.
+- [00:24:38.910 - 00:24:41.280] Opher Donchin: Right? And,
+- [00:24:42.290 - 00:24:54.520] Opher Donchin: And biomedical engineering, another thing that's wonderful about it, is that it really sort of spans, both in terms of the material that you learn and in terms of the kind of people that it develops.
+- [00:24:55.200 - 00:24:57.669] Opher Donchin: It spans that sort of range.
+- [00:24:58.460 - 00:25:03.390] Opher Donchin: Like, having a real place for people who are deep in their hearts, they are engineers.
+- [00:25:03.730 - 00:25:10.819] Opher Donchin: They want somebody to give them a problem, they want to have the tool that will solve the problem, and they want to solve the problem that they've been given.
+- [00:25:11.450 - 00:25:16.059] Opher Donchin: But it has just as much of a place for people who are deep in their hearts scientists.
+- [00:25:16.320 - 00:25:18.670] Opher Donchin: That is, they want to wonder about stuff.
+- [00:25:19.170 - 00:25:26.480] Opher Donchin: They want to not know. They'll, you know, as soon as it's too obvious how to solve the problem, it stops being interesting to them.
+- [00:25:27.500 - 00:25:28.380] Opher Donchin: Right?
+- [00:25:29.490 - 00:25:43.609] Opher Donchin: But whether or not… and each of you, you will… I tell you this because I think it's good to know whether you are deep in your heart a scientist or an engineer, and use that to help you choose your career path.
+- [00:25:44.400 - 00:25:48.440] Opher Donchin: But whether or not you are deep in your heart a scientist or an engineer.
+- [00:25:48.690 - 00:25:52.780] Opher Donchin: As a biomedical engineer, it's good to know how science works.
+- [00:25:53.710 - 00:26:00.659] Opher Donchin: and statistics… Is one of the best windows for understanding what science really is.
+- [00:26:01.700 - 00:26:02.510] Opher Donchin: Okay.
+- [00:26:02.740 - 00:26:05.279] Opher Donchin: So, in science.
+- [00:26:05.980 - 00:26:15.419] Opher Donchin: Right? The essential situation is we want to know about reality. Here's some reality, and it's here as a… well, it's not a black box, I should have made it black, but it's a white box.
+- [00:26:16.130 - 00:26:19.300] Opher Donchin: Right? And the reason it's a white box is we can't see inside it.
+- [00:26:20.210 - 00:26:24.199] Opher Donchin: Right? We can't see the reality, it's hidden here, behind this box.
+- [00:26:25.840 - 00:26:31.880] Opher Donchin: But what we can do is we can do experiments, Right.
+- [00:26:32.160 - 00:26:34.690] Opher Donchin: And we can collect data, we can do measurements.
+- [00:26:38.040 - 00:26:39.310] Opher Donchin: And…
+- [00:26:41.060 - 00:26:47.549] Opher Donchin: The… even though we can do experiments and we can see the measurements, we still can't see the reality.
+- [00:26:48.100 - 00:26:50.119] Opher Donchin: It's still there behind the box.
+- [00:26:51.400 - 00:26:52.120] Opher Donchin: Right.
+- [00:26:52.810 - 00:27:01.499] Opher Donchin: And… we think… Right? We think that we should be able to find out something about this.
+- [00:27:02.680 - 00:27:05.189] Opher Donchin: You know, from the fact that we've done this thing.
+- [00:27:07.860 - 00:27:16.209] Opher Donchin: Right? And the way that statistics plays in is that we will have some sort of model, some sort of idea.
+- [00:27:17.320 - 00:27:20.080] Opher Donchin: About what it is that's behind that box.
+- [00:27:21.370 - 00:27:23.950] Opher Donchin: Right? And we're gonna use math
+- [00:27:24.290 - 00:27:30.999] Opher Donchin: To let our measurements tell us something about what would be behind the box if the model was right.
+- [00:27:36.100 - 00:27:37.370] Opher Donchin: Does that make sense?
+- [00:27:39.200 - 00:27:39.910] Opher Donchin: Huh?
+- [00:27:40.170 - 00:27:45.390] Opher Donchin: So… We never get to see inside, that's very important.
+- [00:27:45.720 - 00:27:53.210] Opher Donchin: But we have ideas about what's inside, and what we can get is we can get information about our ideas from our data.
+- [00:27:55.350 - 00:27:57.680] Opher Donchin: So…
+- [00:27:57.870 - 00:28:07.000] Opher Donchin: you know, that importantly, I keep emphasizing this, that means the statistics is never going to tell you what's real.
+- [00:28:10.920 - 00:28:24.900] Opher Donchin: the… the measurements are always incomplete, the world is complex, and our models are limited and wrong. So this same measurements, you know, depending on your model, I don't know if you can see that clearly enough, but, you know, different models
+- [00:28:25.770 - 00:28:28.400] Opher Donchin: May be consistent with the same measurements.
+- [00:28:30.610 - 00:28:41.369] Opher Donchin: And choosing between the models is something we'll learn a little bit about, but ultimately has to do with, you know, the way that scientists operate. Talking about which model is better, arguing about it.
+- [00:28:42.980 - 00:28:52.359] Opher Donchin: And we're not going to get into that deeply here. What we're busy with is, given the kind of model you're interested in, what can you learn about it from the data?
+- [00:28:57.040 - 00:29:02.450] Opher Donchin: Right? And so, that… that…
+- [00:29:03.060 - 00:29:09.779] Opher Donchin: gives me the opportunity to do something I'm going to do a few times throughout the course, which is give you a little bit of historical perspective.
+- [00:29:10.100 - 00:29:16.829] Opher Donchin: And I know history is boring, you did not go into biomedical engineering to become historians, but
+- [00:29:17.170 - 00:29:21.510] Opher Donchin: In this course, it's going to serve us
+- [00:29:22.080 - 00:29:29.599] Opher Donchin: Because it's going to help us understand different ways that people have thought about the kinds of things we're worried about here.
+- [00:29:29.730 - 00:29:32.330] Opher Donchin: And help us focus on the way that we're choosing.
+- [00:29:33.250 - 00:29:42.510] Opher Donchin: Right? So, this notion that you can use observations, measurements, to learn about the world, it goes back a long way.
+- [00:29:42.740 - 00:29:47.489] Opher Donchin: Right? As an idea. I'm sure people have been doing it, you know, for… for…
+- [00:29:47.850 - 00:29:50.250] Opher Donchin: Tens of thousands of years, but…
+- [00:29:50.490 - 00:29:55.970] Opher Donchin: As something that somebody wrote down and said, hey, we should do this, it goes back, you know, a few hundred years.
+- [00:29:56.960 - 00:30:06.820] Opher Donchin: But… the… Up to that point, and including that point, The essential notion
+- [00:30:07.500 - 00:30:13.209] Opher Donchin: contradicting what I said earlier, is that what you see is telling you what the world is.
+- [00:30:13.650 - 00:30:17.350] Opher Donchin: Right? It's what you'd call our folk idea.
+- [00:30:17.990 - 00:30:27.480] Opher Donchin: or our naive idea about how, observation works. You look at the world, you see the world. There it is, the world you're looking at.
+- [00:30:29.720 - 00:30:30.580] Opher Donchin: Right?
+- [00:30:30.920 - 00:30:36.150] Opher Donchin: But, in fact, you know.
+- [00:30:36.500 - 00:30:42.400] Opher Donchin: It took people a while to understand this, but what you look at, what you see, the data you get.
+- [00:30:42.840 - 00:30:44.919] Opher Donchin: It's not the whole story.
+- [00:30:47.870 - 00:30:48.740] Opher Donchin: Right?
+- [00:30:50.180 - 00:30:54.730] Opher Donchin: It's uncertain, it's noisy, it's…
+- [00:30:55.830 - 00:31:00.810] Opher Donchin: Hard to be… you know, if you measure things twice, you get two different answers.
+- [00:31:03.130 - 00:31:10.380] Opher Donchin: Right? And so, you're gonna have to do something with that data in order to get more certainty.
+- [00:31:14.370 - 00:31:25.090] Opher Donchin: And… that idea… Right? That… What we're seeing, the givens and data
+- [00:31:25.310 - 00:31:28.869] Opher Donchin: Just in case anybody doesn't see it, obviously.
+- [00:31:28.970 - 00:31:32.630] Opher Donchin: Data is Latin for what is given.
+- [00:31:33.160 - 00:31:40.100] Opher Donchin: Right? So the givens, the things we see, what the world gives us, It's not enough.
+- [00:31:40.460 - 00:31:46.630] Opher Donchin: For us to know the world, we have to actually think about it, process it, ask it, look twice.
+- [00:31:47.490 - 00:31:49.510] Opher Donchin: Collect more data.
+- [00:31:50.620 - 00:31:53.490] Opher Donchin: And that led to the idea
+- [00:31:53.680 - 00:31:59.669] Opher Donchin: You know, almost simultaneously, then we're gonna have to process the data to get estimates.
+- [00:32:01.240 - 00:32:02.970] Opher Donchin: Alright, we're gonna do some math.
+- [00:32:04.900 - 00:32:16.489] Opher Donchin: And so, already we have this notion that there's what we saw, but it's not the world. We're gonna have to do something to get guesses about the world from what we saw.
+- [00:32:21.310 - 00:32:27.219] Opher Donchin: And… From there to statistics is a hop, skip, and a jump.
+- [00:32:28.020 - 00:32:40.049] Opher Donchin: Right? This notion, starting in the 19th century, a bunch of people who were, we'll talk about this, interested in proving that white people are better than, people who are not white.
+- [00:32:40.320 - 00:32:44.620] Opher Donchin: They were… or men are better than women, or whatever.
+- [00:32:45.140 - 00:32:50.829] Opher Donchin: They were really interested in trying to figure out what the average person was like.
+- [00:32:51.000 - 00:32:57.649] Opher Donchin: Because that way, we would know what people should be like, and then we could try to develop people who would be like that average person.
+- [00:32:57.790 - 00:33:06.149] Opher Donchin: And so it was very important to them, this notion that I can collect data on a bunch of different people, and then I can get, like, the true person, the person in the middle.
+- [00:33:07.580 - 00:33:08.410] Opher Donchin: Right?
+- [00:33:08.560 - 00:33:09.460] Opher Donchin: And…
+- [00:33:10.760 - 00:33:29.439] Opher Donchin: from there, this notion that measuring one thing isn't really gonna help me. I'm gonna have to measure a bunch of stuff, and those things are gonna have, you know, co-vary, they're gonna change together, and so I have to figure out what you really need to measure to get, like, the essential issue of what it is to be a person, or what it is to have intelligence, or…
+- [00:33:29.610 - 00:33:35.150] Opher Donchin: All these different aspects that they were interested in, Right?
+- [00:33:35.600 - 00:33:40.139] Opher Donchin: That led to a whole, burgeoning
+- [00:33:40.350 - 00:33:50.190] Opher Donchin: Methodology of measurement and processing, averaging and finding variances and things that we'll learn about.
+- [00:33:50.970 - 00:33:51.870] Opher Donchin: and…
+- [00:33:52.060 - 00:34:05.260] Opher Donchin: to methods for trying to use this data that we collect, now that we understand that we have data and we understand we have a process, to try to say, okay, given the data, how can we establish truth?
+- [00:34:06.050 - 00:34:10.810] Opher Donchin: How can we know when, like, we have enough data to say that something is real or not?
+- [00:34:14.820 - 00:34:18.600] Opher Donchin: And… and so…
+- [00:34:18.719 - 00:34:31.479] Opher Donchin: That, throughout the, you know, late 19th, early 20th century, led to methodologies that we're going to learn about how you get the, you know, what you do once you've gotten the data to figure out what you know.
+- [00:34:34.400 - 00:34:35.219] Opher Donchin: Okay?
+- [00:34:35.440 - 00:34:37.929] Opher Donchin: So…
+- [00:34:40.010 - 00:34:47.840] Opher Donchin: the message you've gotten so far is statistics is about data. It's about collecting data, organizing data, analyzing data, interpreting data.
+- [00:34:48.080 - 00:34:50.339] Opher Donchin: Right? It has two main goals.
+- [00:34:51.530 - 00:34:52.340] Opher Donchin: Right?
+- [00:34:52.460 - 00:34:53.710] Opher Donchin: One…
+- [00:34:54.969 - 00:35:11.549] Opher Donchin: Using data to get some basic notion of what's going on, what's called exploratory data analysis, getting an idea about the world from our data. And two, inference that is reaching conclusions that we can then make decisions from.
+- [00:35:12.220 - 00:35:17.769] Opher Donchin: Deciding what we want to do based on our… on our data and the processing we did.
+- [00:35:18.950 - 00:35:27.269] Opher Donchin: Okay, and we're gonna… we're gonna focus on what's called exploratory data analysis, trying to figure out what our models tell us, but we will also look
+- [00:35:27.590 - 00:35:30.009] Opher Donchin: A fair amount of inference.
+- [00:35:30.800 - 00:35:33.370] Opher Donchin: What we can then decide on that basis.
+- [00:35:35.690 - 00:35:45.649] Opher Donchin: Of course, in biomedical engineering, you guys are all biomedical engineers, there's many kinds of data, genomic data, biological data, blah blah blah blah blah.
+- [00:35:45.660 - 00:35:56.080] Opher Donchin: Right? That we collect with experiments, or generate in models, right? It's still data if your model… if you… if you built a model inside the computer.
+- [00:35:56.220 - 00:36:01.969] Opher Donchin: And nowadays, we have these sort of large data sets, wearable technology, all kinds of…
+- [00:36:02.310 - 00:36:08.840] Opher Donchin: Ways in which what we think of when we think about data is changing, because it's becoming bigger and more multivariate.
+- [00:36:09.620 - 00:36:19.189] Opher Donchin: Right? More strongly correlated. This notion of dealing with high-dimensional data and super complex data is becoming more and more part of day-to-day work.
+- [00:36:20.030 - 00:36:21.370] Opher Donchin: For engineers.
+- [00:36:23.640 - 00:36:37.699] Opher Donchin: And of course, like I said, as biomedical engineers, you may end up doing many, many different things with data, whether it's basic science, trying to find out how the world works, clinical testing.
+- [00:36:37.740 - 00:36:45.780] Opher Donchin: Calibrating models, product development, all of those involve processing data to try to figure out what you want to do, or how you want to think.
+- [00:36:46.700 - 00:36:49.599] Opher Donchin: Right? And so this goes back to what I said at the beginning.
+- [00:36:50.050 - 00:36:54.450] Opher Donchin: Almost each of… almost every one of you will be doing one of those things.
+- [00:36:54.730 - 00:36:58.170] Opher Donchin: And in doing those things, you will end up doing statistics.
+- [00:36:59.910 - 00:37:14.049] Opher Donchin: Right? As an example, some data that I dealt with had to do with the volume of the cerebellum. You guys, don't know what the cerebellum is yet, because you haven't taken the course, and you don't know anything that you haven't studied in your courses, of course.
+- [00:37:14.310 - 00:37:16.940] Opher Donchin: But, this semester, you will learn about it.
+- [00:37:19.650 - 00:37:34.599] Opher Donchin: And it's a… it's a part of the brain, here. I can tell you that, when I was a PhD student, I was studying the motor cortex, which is right here, and the next door, there was,
+- [00:37:37.460 - 00:37:56.779] Opher Donchin: scientists studying the cerebellum over here. Nowadays, I study the cerebellum for a while, I sort of moved on from that, doesn't matter. Studied the cerebellum over here, and the sort of argument was between the people studying this part of the brain, who said the only thing this is really good for is holding up this part of the brain. It's a physical support, that's why it's there.
+- [00:37:57.550 - 00:38:13.829] Opher Donchin: And the people who said, no, no, actually, this is just, there to sort of provide a cushion for this, right? So, different people who study the brain argue that their part of the brain is most important. This part is important in control of movement.
+- [00:38:14.110 - 00:38:17.199] Opher Donchin: So, keeping your movement smooth and calibrated.
+- [00:38:17.360 - 00:38:26.660] Opher Donchin: And keeping your thoughts connected and your language connected. A really good, Metaphor…
+- [00:38:26.830 - 00:38:33.740] Opher Donchin: Right? It's not actually true, but it's sort of true, is that not having a cerebellum is like being really drunk.
+- [00:38:34.280 - 00:38:42.500] Opher Donchin: It's hard to walk straight, it's hard to balance, it's hard to talk in a coordinated fashion. Your eye, your vision gets blurry.
+- [00:38:42.920 - 00:38:45.110] Opher Donchin: And your thoughts become disconnected.
+- [00:38:45.550 - 00:38:47.399] Opher Donchin: So it's an important part of the brain.
+- [00:38:49.010 - 00:38:57.859] Opher Donchin: And, and so you could be interested in how big the cerebellum is. We were particularly interested in it because it degenerates with age.
+- [00:38:58.060 - 00:39:03.940] Opher Donchin: So as you get older, you lose your cerebellum more quickly than other parts of the brain.
+- [00:39:04.170 - 00:39:15.189] Opher Donchin: And there are diseases, fairly common diseases, that involve cerebellar degeneration. By the way, another cool thing about the cerebellum, most… more than half of the neurons in your brain are in the cerebellum.
+- [00:39:17.880 - 00:39:27.440] Opher Donchin: And… So, we could collect… data.
+- [00:39:29.830 - 00:39:40.289] Opher Donchin: on cerebellar volume, we'll talk about that in a second, and use it, and we're gonna see this, diagram a lot. Use it to feed our models.
+- [00:39:41.010 - 00:39:48.219] Opher Donchin: About how the cerebellum works. And that might… and that… the reason this is a wavy arrow is that this is…
+- [00:39:48.330 - 00:39:51.780] Opher Donchin: Only a maybe. That might tell us something about reality.
+- [00:39:53.690 - 00:40:09.409] Opher Donchin: Right? But in any case, whether or not it's really telling us about reality, we can use it to fuel further experiments, ask more questions, which will cause us to go and get more data in a loop that goes around and around.
+- [00:40:10.020 - 00:40:16.650] Opher Donchin: So, an iterative process, Where as we generate data, we feel like we understand our models better.
+- [00:40:17.060 - 00:40:21.820] Opher Donchin: As we understand our models better, they generate more questions that we'd like to ask.
+- [00:40:22.620 - 00:40:29.959] Opher Donchin: They'll lead to more data, and I don't know if an improvement, but at least a continuing change in our models and how we understand them.
+- [00:40:34.010 - 00:40:34.820] Opher Donchin: Right?
+- [00:40:35.360 - 00:40:40.640] Opher Donchin: And… This iterative process is the heart of science, of course.
+- [00:40:41.060 - 00:40:46.870] Opher Donchin: Right? But it's also the heart of any sort of… Data-intensive work.
+- [00:40:47.590 - 00:40:55.849] Opher Donchin: Right? Whether it's clinical testing, which isn't exactly science, it's medicine, or product development, You're always in this loop.
+- [00:41:00.510 - 00:41:01.230] Opher Donchin: Right?
+- [00:41:04.000 - 00:41:13.630] Opher Donchin: And so… To give it a definition, data is going to be an ordered set of observations or measurements.
+- [00:41:14.160 - 00:41:16.549] Opher Donchin: Right? Each of which could be vector value.
+- [00:41:16.930 - 00:41:21.099] Opher Donchin: So, here's X. X is a datum.
+- [00:41:21.280 - 00:41:23.410] Opher Donchin: A particular piece of data.
+- [00:41:23.890 - 00:41:28.439] Opher Donchin: 1, 2, 3, 4, 5, up to n pieces of data.
+- [00:41:29.210 - 00:41:33.279] Opher Donchin: But each of them, Might be multiple measurements.
+- [00:41:35.340 - 00:41:39.960] Opher Donchin: Right? So it's not just a vector of data, and if you like, it's a matrix of data.
+- [00:41:42.470 - 00:41:43.180] Opher Donchin: Huh?
+- [00:41:43.670 - 00:41:47.660] Opher Donchin: Very importantly, Data is always finite.
+- [00:41:48.840 - 00:41:49.910] Opher Donchin: What's up?
+- [00:41:50.410 - 00:41:54.739] Opher Donchin: It's a consequence of it being measured from the real world.
+- [00:41:56.660 - 00:41:57.590] Opher Donchin: Right?
+- [00:41:57.950 - 00:42:03.259] Opher Donchin: I say this, and you're gonna find this is true over the course of the course.
+- [00:42:03.900 - 00:42:07.200] Opher Donchin: I tell you things that seem obvious.
+- [00:42:07.430 - 00:42:11.359] Opher Donchin: Right? Data is finite. That seems obvious. There's no question about it.
+- [00:42:11.690 - 00:42:14.809] Opher Donchin: But I'm not telling it to you for no reason.
+- [00:42:15.060 - 00:42:19.290] Opher Donchin: I'm telling it to you because you're going to be confused about it over the coming weeks.
+- [00:42:20.320 - 00:42:25.829] Opher Donchin: And so when I tell you these things that are obvious, what I want you to do is not say, oh yeah.
+- [00:42:25.970 - 00:42:33.660] Opher Donchin: I want you to stop and note it. Ofer said something really obvious, probably he needs me to remember that.
+- [00:42:35.110 - 00:42:44.909] Opher Donchin: Okay? Because you're gonna find yourself suddenly wanting more data, or pretending that there might be more data, or thinking what would happen if there was more data.
+- [00:42:45.780 - 00:42:54.830] Opher Donchin: Because that's a natural thing to have to do as we go through the course. And it's really important to remember that any particular dataset is finite.
+- [00:42:55.230 - 00:42:58.180] Opher Donchin: And what we're gonna do, going back here.
+- [00:42:58.710 - 00:43:04.769] Opher Donchin: is use it to learn about models. That doesn't mean we can't go around and get more data.
+- [00:43:05.380 - 00:43:13.280] Opher Donchin: But right now, we have some data, and we want to use it, and it's going to be finite. It's going to have a particular size.
+- [00:43:13.390 - 00:43:15.819] Opher Donchin: And that size is almost always going to be N.
+- [00:43:17.610 - 00:43:18.520] Opher Donchin: Okay?
+- [00:43:19.700 - 00:43:21.999] Opher Donchin: So, for instance, we might have…
+- [00:43:22.370 - 00:43:28.849] Opher Donchin: Five brain scans, here we go. Five people who have, you know, different sized cerebellum.
+- [00:43:29.650 - 00:43:34.780] Opher Donchin: that we measured by putting them in the MRI and You know, scanning…
+- [00:43:35.100 - 00:43:40.049] Opher Donchin: The thing, and then… and then doing data processing, you know, image processing.
+- [00:43:40.230 - 00:43:42.670] Opher Donchin: To count the number of pixels in the cerebellum.
+- [00:43:43.320 - 00:43:44.480] Opher Donchin: voxels.
+- [00:43:45.110 - 00:43:50.770] Opher Donchin: Yeah, so this number, it came from somewhere, but you want to notice that it didn't…
+- [00:43:51.020 - 00:43:53.230] Opher Donchin: It didn't come from somewhere trivially.
+- [00:43:53.900 - 00:44:07.129] Opher Donchin: Right? In order to get there, I had to, like, there was… there was this complicated… this complicated piece of machinery that, honestly, I don't understand fully all the way, that does something with physics, of which I'm only barely aware.
+- [00:44:07.720 - 00:44:17.720] Opher Donchin: Right? Which gives you the actual data recorded by the machine. It's in the frequency domain, and then it turns it back into the spatial domain to give you
+- [00:44:17.910 - 00:44:34.259] Opher Donchin: Colors at different locations, intensity of, like, the signal, and then you do image processing on that to separate the signal into the parts that are the cerebellum and the parts that aren't, and then you count up how much of the parts are the cerebellum, and that gives me this number.
+- [00:44:34.740 - 00:44:37.109] Opher Donchin: And that's a very important point, because…
+- [00:44:37.710 - 00:44:41.780] Opher Donchin: data is not necessarily, when I say it's a measurement.
+- [00:44:42.030 - 00:44:46.320] Opher Donchin: There may be a fair amount of preprocessing and calculation.
+- [00:44:46.840 - 00:44:50.379] Opher Donchin: That are very important, that go into generating that measurement.
+- [00:44:53.540 - 00:44:57.280] Opher Donchin: Right? And that doesn't make it not data. It's still data.
+- [00:44:58.930 - 00:45:02.180] Opher Donchin: But it is very important to be aware that
+- [00:45:02.400 - 00:45:05.539] Opher Donchin: Data can be the result of a complex process.
+- [00:45:07.100 - 00:45:13.819] Opher Donchin: Right? And in fact, I can even do calculations to data to get better data.
+- [00:45:14.880 - 00:45:27.909] Opher Donchin: And it'll still be data. So, for instance, raw cerebellar volume, it turns out, is primarily a measure not of how well your cerebellum works, but of how big your brain is.
+- [00:45:28.190 - 00:45:34.639] Opher Donchin: And how big your brain is, is not primarily a measure of how smart you are, it's a measure of how big your body is.
+- [00:45:35.370 - 00:45:38.089] Opher Donchin: So the bigger you are, the bigger your brain.
+- [00:45:39.010 - 00:45:46.019] Opher Donchin: And that, at least as far as we can tell, tells you very little about how well the brain works, or whether or not it does its job.
+- [00:45:46.970 - 00:45:57.140] Opher Donchin: So, raw cerebellar volume is not so interesting a measure. What you want to do is you want to normalize it by getting the total intracerebral
+- [00:45:57.660 - 00:46:00.309] Opher Donchin: space.
+- [00:46:00.500 - 00:46:04.420] Opher Donchin: Right? Like, how big is the… is the skull, in a sense?
+- [00:46:05.630 - 00:46:10.119] Opher Donchin: And then seeing the cerebellum as a percentage of the brain.
+- [00:46:10.390 - 00:46:12.590] Opher Donchin: Of the inside the skull space.
+- [00:46:14.650 - 00:46:21.069] Opher Donchin: Right? And so now, where there was a lot of variance, all of a sudden, everybody's more similar.
+- [00:46:22.740 - 00:46:27.250] Opher Donchin: Which is useful, because if we want to compare how this changes as you get older.
+- [00:46:27.490 - 00:46:33.209] Opher Donchin: It's gonna be better if we're using something where there's a more consistent measure. We're gonna talk about that in just a sec.
+- [00:46:35.870 - 00:46:45.240] Opher Donchin: So, importantly, data… right? Data is finite, it's… Possibly vector-valued?
+- [00:46:45.980 - 00:46:50.329] Opher Donchin: It's the result of a complex process of data collection.
+- [00:46:50.460 - 00:47:01.549] Opher Donchin: And it can be further massaged if you think that that's going to give you better data. In the end, what you have are numbers in a matrix.
+- [00:47:01.990 - 00:47:06.310] Opher Donchin: of what I'm measuring, and how many times I've measured it.
+- [00:47:07.300 - 00:47:08.010] Opher Donchin: Right?
+- [00:47:09.340 - 00:47:19.950] Opher Donchin: Here's, so here I only have… so that… I said matrix for the… so here I only have 5 people. Here, the same kind of data, but collected over 60 people.
+- [00:47:21.800 - 00:47:31.980] Opher Donchin: They're both okay. This is a dataset of 5 people, this is a dataset of 60 people, but like I said before, if that's my data set, then, at least from the perspective of this course.
+- [00:47:32.270 - 00:47:34.069] Opher Donchin: That's what I have to work with.
+- [00:47:35.510 - 00:47:44.179] Opher Donchin: If as a result of whatever processing I do, I decide, whatever statistics I do, I decide that I need more data, I can go get it.
+- [00:47:45.130 - 00:47:47.730] Opher Donchin: But that's going back to this loop.
+- [00:47:49.500 - 00:47:55.740] Opher Donchin: Right? Oh, okay, I need to do more experiments, get more of this particular kind of data, not new data, but just this data.
+- [00:47:56.280 - 00:47:57.930] Opher Donchin: And then I'll be back here.
+- [00:48:00.830 - 00:48:02.050] Opher Donchin: Does that make sense?
+- [00:48:14.170 - 00:48:20.380] Opher Donchin: Yeah, I think we're gonna… yeah, I think we're… we're gonna… just so you guys know, because, you know, as we come…
+- [00:48:21.180 - 00:48:28.669] Opher Donchin: I don't know when this happens, but by the time people get to third year, they have an internal clock that is exactly 50 minutes long.
+- [00:48:29.250 - 00:48:32.480] Opher Donchin: Right? And after 50 minutes, like, boom, they're gone.
+- [00:48:32.840 - 00:48:38.570] Opher Donchin: Right? And I, I, I,
+- [00:48:38.810 - 00:48:41.569] Opher Donchin: I had to sit in on one of Hadar's classes.
+- [00:48:42.270 - 00:48:54.100] Opher Donchin: And he, you know, I watched… I only saw 3 hours, but it was… it was beautiful, because his courses are built, so at the end of 50 minutes, he's reached some key point
+- [00:48:54.450 - 00:48:57.750] Opher Donchin: Where it makes perfect sense to take a break.
+- [00:48:58.970 - 00:49:04.250] Opher Donchin: Right? It's just such lovely structure. And I don't know how he does it. I am not able to do it.
+- [00:49:04.670 - 00:49:08.810] Opher Donchin: And so, we're gonna have to compromise a bit.
+- [00:49:09.120 - 00:49:13.639] Opher Donchin: Sometimes we'll go on a little bit more, and sometimes we'll stop a little bit early.
+- [00:49:14.580 - 00:49:17.660] Opher Donchin: Okay? But you will get your two breaks.
+- [00:49:18.030 - 00:49:20.190] Opher Donchin: Okay? And I am aware of the time.
+- [00:49:20.830 - 00:49:26.049] Opher Donchin: So, if I'm pulling, you know, I'll try to tell you what we're pulling, but know that I haven't forgotten.
+- [00:49:26.830 - 00:49:34.169] Opher Donchin: There is an advantage of it right now, not, but in the real world, when we come back to school, if this war ever ends.
+- [00:49:34.650 - 00:49:40.340] Opher Donchin: Then there's an advantage, which means that the coffee line is shorter.
+- [00:49:40.490 - 00:49:44.999] Opher Donchin: If the breaks happen either a little bit earlier or a little bit later.
+- [00:49:45.470 - 00:49:52.830] Opher Donchin: Relative to the round hour. So I'm… I'm doing it for myself, but just know that it has some advantages for you.
+- [00:49:53.340 - 00:49:59.180] Opher Donchin: And just so you know, we're gonna get through data, which is, like, another…
+- [00:50:00.780 - 00:50:05.460] Opher Donchin: Something like 10 slides, but they'll go pretty quick, because you see there's no real equations there.
+- [00:50:06.190 - 00:50:07.660] Opher Donchin: And then we're gonna take a break.
+- [00:50:08.120 - 00:50:09.260] Opher Donchin: Okay?
+- [00:50:09.450 - 00:50:16.739] Opher Donchin: So… We know what data is.
+- [00:50:17.230 - 00:50:27.549] Opher Donchin: Right? In the sense that it's numbers that we collected, and we did some processing, and we got this matrix where different observations in each one different possible values.
+- [00:50:28.900 - 00:50:37.640] Opher Donchin: But, we want to have at least some basic idea of how we want to think about the data before we start processing it.
+- [00:50:37.890 - 00:50:41.029] Opher Donchin: And while this is… super important.
+- [00:50:41.590 - 00:50:47.080] Opher Donchin: As scientists or engineers to really think about your data, and so these terms
+- [00:50:47.540 - 00:50:51.470] Opher Donchin: Will come up when you are evaluated.
+- [00:50:51.930 - 00:51:03.040] Opher Donchin: there's gonna be… I have to apologize, because we're not gonna spend a lot of time on them. In the course, we're gonna mostly be interested in the methodology of data processing.
+- [00:51:03.680 - 00:51:08.959] Opher Donchin: And not in how you evaluate whether the data is actually worth anything.
+- [00:51:09.790 - 00:51:13.120] Opher Donchin: Right? So there's this interesting thing about statistics.
+- [00:51:13.520 - 00:51:17.279] Opher Donchin: Where it assumes that your data is actually good.
+- [00:51:18.660 - 00:51:22.940] Opher Donchin: Worthwhile, interesting to look at, telling you something about the world.
+- [00:51:23.240 - 00:51:26.240] Opher Donchin: And that's not a very reasonable assumption a lot of the time.
+- [00:51:26.790 - 00:51:29.689] Opher Donchin: Right? As a working scientist, I can tell you that
+- [00:51:29.880 - 00:51:37.050] Opher Donchin: you know, I don't know half, but somewhere near half, 30 to 70% of the data scientists look at
+- [00:51:37.170 - 00:51:41.160] Opher Donchin: isn't any good. They can do whatever statistics they want on it.
+- [00:51:41.520 - 00:51:46.380] Opher Donchin: It's not telling them anything about the world, because they're not measuring anything useful.
+- [00:51:52.170 - 00:51:59.170] Opher Donchin: That's what we're gonna… that's exactly… I'm gonna talk away about ways in which we evaluate whether the data is any good.
+- [00:51:59.910 - 00:52:02.879] Opher Donchin: It's exactly what I'm going to talk about over the next few slides.
+- [00:52:03.670 - 00:52:05.950] Opher Donchin: what I want… and I'm… I'm…
+- [00:52:06.420 - 00:52:12.929] Opher Donchin: both selling it and apologizing at the same time. Selling it in the sense of telling you how important it is
+- [00:52:13.650 - 00:52:20.409] Opher Donchin: As working scientists and engineers, to be aware that data needs to be good before you do any statistics on it.
+- [00:52:20.740 - 00:52:25.660] Opher Donchin: But also apologizing that for most of the course, we will not be paying attention to this.
+- [00:52:26.550 - 00:52:29.759] Opher Donchin: Right? We'll be interested in, given data, what do you do?
+- [00:52:32.170 - 00:52:35.359] Opher Donchin: And we will assume that whoever brought us this data
+- [00:52:35.740 - 00:52:37.550] Opher Donchin: Did a good job of getting it.
+- [00:52:39.760 - 00:52:40.760] Opher Donchin: Okay?
+- [00:52:41.820 - 00:52:48.520] Opher Donchin: So… One issue about data is its precision.
+- [00:52:48.920 - 00:52:55.950] Opher Donchin: Okay? When… if there's, you know, some true value at 1.0,
+- [00:52:57.310 - 00:53:09.579] Opher Donchin: I might have two different measures, one which is high precision, that is, if I measure again and again, I'll end up pretty close to 1.0, and one which is low precision. If I measure again and again.
+- [00:53:09.930 - 00:53:13.729] Opher Donchin: I'll be scattered around 1.0 kind of broadly.
+- [00:53:14.680 - 00:53:15.390] Opher Donchin: Right?
+- [00:53:15.640 - 00:53:22.400] Opher Donchin: It's important to be aware of the precision of your data collection process, Right?
+- [00:53:22.870 - 00:53:29.820] Opher Donchin: And it's important to understand that some things are imprecise by nature.
+- [00:53:31.070 - 00:53:34.260] Opher Donchin: So, if I'm trying to measure height.
+- [00:53:35.930 - 00:53:39.750] Opher Donchin: It's reasonable to think that a person's height really exists.
+- [00:53:40.010 - 00:53:44.519] Opher Donchin: Not to the nearest nanometer, but certainly to the nearest tenth of a millimeter.
+- [00:53:46.540 - 00:53:47.360] Opher Donchin: Right?
+- [00:53:47.930 - 00:53:51.240] Opher Donchin: But if I'm measuring somebody's fitness.
+- [00:53:53.430 - 00:54:01.409] Opher Donchin: It's really not clear that there is any underlying Reality that's terribly precise.
+- [00:54:02.390 - 00:54:05.900] Opher Donchin: It's an… it's a somewhat amorphous quality to start with.
+- [00:54:08.010 - 00:54:11.430] Opher Donchin: Right? And so there… there needs to be some…
+- [00:54:11.570 - 00:54:17.870] Opher Donchin: Hatama. Some, appropriate relationship.
+- [00:54:19.380 - 00:54:22.850] Opher Donchin: Between how precisely you try to measure something.
+- [00:54:23.020 - 00:54:26.240] Opher Donchin: And how precisely it makes sense to want to know it.
+- [00:54:29.710 - 00:54:30.540] Opher Donchin: Right?
+- [00:54:32.880 - 00:54:36.189] Opher Donchin: Another issue is validity.
+- [00:54:37.060 - 00:54:37.900] Opher Donchin: Okay.
+- [00:54:38.660 - 00:54:44.989] Opher Donchin: there's this thing I want to know, how tall somebody is, and then there's this thing that I measure, their height.
+- [00:54:46.060 - 00:54:48.279] Opher Donchin: If you like, two different ideas.
+- [00:54:48.840 - 00:54:56.220] Opher Donchin: One is… The reality underlying it, and the other is the measure. And it's kind of important
+- [00:54:56.510 - 00:55:02.129] Opher Donchin: That as the thing we care about gets bigger, the measure gets bigger also.
+- [00:55:04.360 - 00:55:07.540] Opher Donchin: Right? There can be a relationship between the two.
+- [00:55:08.230 - 00:55:10.969] Opher Donchin: But if that relationship isn't monotonic.
+- [00:55:11.590 - 00:55:14.179] Opher Donchin: It's not clear that this is a valid measure.
+- [00:55:17.380 - 00:55:21.879] Opher Donchin: Okay, so it's pretty important That what we're measuring.
+- [00:55:22.300 - 00:55:25.980] Opher Donchin: Increase monotonically with the thing we care about.
+- [00:55:31.210 - 00:55:34.269] Opher Donchin: Another issue is reliability.
+- [00:55:35.220 - 00:55:37.119] Opher Donchin: Okay, if we…
+- [00:55:37.540 - 00:55:47.100] Opher Donchin: In my field, that's very important. We want to, for instance, classify movements. We're looking at a video of a person moving.
+- [00:55:47.210 - 00:55:51.009] Opher Donchin: And we want to say what they were doing at any particular point.
+- [00:55:52.690 - 00:56:02.029] Opher Donchin: Okay, and so we get somebody to sit down and watch the video, and mark the points where they're doing, you know, this, and then the points where they're doing that, and then the points where they're doing the other thing.
+- [00:56:03.490 - 00:56:10.739] Opher Donchin: If I now take somebody else and ask them to mark the video, and I get really different answers.
+- [00:56:11.160 - 00:56:13.230] Opher Donchin: My measure is not reliable.
+- [00:56:16.730 - 00:56:22.759] Opher Donchin: Okay? If I want to know whether somebody's depressed, and so I give them a questionnaire.
+- [00:56:23.840 - 00:56:30.069] Opher Donchin: And they answer, and then according to, you know, how many answers they gave that were, you know, above 3,
+- [00:56:30.340 - 00:56:37.869] Opher Donchin: I count them as depressed or not, and I give them the same questionnaire the next day, and I get a wildly different answer.
+- [00:56:38.390 - 00:56:40.540] Opher Donchin: Then my measure is not reliable.
+- [00:56:41.870 - 00:56:47.970] Opher Donchin: Okay, it's not just that it's imprecise, It could be very precise.
+- [00:56:48.430 - 00:56:51.779] Opher Donchin: But it gives different answers at different times.
+- [00:56:52.640 - 00:56:57.549] Opher Donchin: Okay, or it gives different answers based on measurements being done by different people.
+- [00:56:59.150 - 00:57:07.740] Opher Donchin: Right? So, the ability to produce the same measurement over and over is the reliability of the measurement.
+- [00:57:09.300 - 00:57:12.130] Opher Donchin: Right? So we want data to be…
+- [00:57:12.340 - 00:57:17.510] Opher Donchin: Precise, as much as possible, valid, certainly, and reliable.
+- [00:57:19.560 - 00:57:24.550] Opher Donchin: Okay, when we collect data, we want to ask ourselves whether it has those aspects.
+- [00:57:26.300 - 00:57:31.640] Opher Donchin: And, in fact, Generally speaking, data isn't perfect.
+- [00:57:33.040 - 00:57:40.319] Opher Donchin: Right? Not only that it's… Got those issues at hand, but there's other issues we want to consider.
+- [00:57:40.690 - 00:57:43.630] Opher Donchin: One of them is called sampling bias.
+- [00:57:43.860 - 00:57:47.740] Opher Donchin: Right? And I'm gonna preview each of these as a story.
+- [00:57:50.190 - 00:57:56.440] Opher Donchin: So, when they developed the original… do you guys know what a pulse oximeter is? Everybody know the idea?
+- [00:57:56.940 - 00:58:00.100] Opher Donchin: I shine… I shine, light.
+- [00:58:00.650 - 00:58:06.060] Opher Donchin: Through a… through the finger. Like, it's a little clamp that you put on your finger.
+- [00:58:06.630 - 00:58:09.499] Opher Donchin: And according to the scattering of the light.
+- [00:58:09.650 - 00:58:14.250] Opher Donchin: I can measure how much oxygen is in your blood.
+- [00:58:15.280 - 00:58:26.249] Opher Donchin: Okay, I measure one light to see, like, how much the light gets through, and another one that gets absorbed by oxygen, and by the relationship between the two, I know how much oxygen is in the blood.
+- [00:58:27.290 - 00:58:30.190] Opher Donchin: When they originally developed pulse oximeters.
+- [00:58:30.300 - 00:58:34.739] Opher Donchin: it happened that they tested it mostly on white people. I'm sure that they didn't do that
+- [00:58:35.360 - 00:58:45.529] Opher Donchin: Because they like white people better, it's just that wherever the hospital was, where they did a lot of the experiments, the population that came in to do the testing happened to be white.
+- [00:58:47.570 - 00:58:48.530] Opher Donchin: Okay.
+- [00:58:49.980 - 00:58:54.229] Opher Donchin: And that meant that the calibration was poor for darker skin.
+- [00:58:57.770 - 00:58:59.290] Opher Donchin: And they didn't realize it.
+- [00:58:59.940 - 00:59:05.810] Opher Donchin: And it… Paul's oximeters have been around for, oh, I don't know, probably 40 years?
+- [00:59:07.590 - 00:59:11.679] Opher Donchin: with this problem, But this problem became acute.
+- [00:59:12.460 - 00:59:14.359] Opher Donchin: Because during COVID,
+- [00:59:16.590 - 00:59:28.300] Opher Donchin: the Black patients had much lower detection. That is, the pulse oximeters didn't measure the drop in their oxygenation.
+- [00:59:29.510 - 00:59:33.799] Opher Donchin: Right? Causing a delay in treatment, causing much, much
+- [00:59:34.080 - 00:59:40.219] Opher Donchin: larger percentage of deaths, much more broadly, how do you say it? Much more con… oh, what's the word?
+- [00:59:40.510 - 00:59:42.199] Opher Donchin: Many more fatalities.
+- [00:59:44.980 - 00:59:48.549] Opher Donchin: Among the American Blacks, then, and in Africa.
+- [00:59:50.340 - 00:59:52.990] Opher Donchin: than in Europe, and among American whites.
+- [00:59:54.990 - 00:59:55.880] Opher Donchin: Right?
+- [00:59:56.180 - 00:59:59.670] Opher Donchin: So that is… you can think… I'm not gonna get into it, but you… but…
+- [00:59:59.880 - 01:00:06.159] Opher Donchin: I invite you to think about whether this is an issue of precision, Validity or reliability?
+- [01:00:10.030 - 01:00:13.049] Opher Donchin: Another problem is measurement error.
+- [01:00:13.410 - 01:00:14.260] Opher Donchin: Right?
+- [01:00:14.520 - 01:00:21.820] Opher Donchin: So, when… glucose monitors.
+- [01:00:22.410 - 01:00:25.689] Opher Donchin: Hit the market. They were not very accurate.
+- [01:00:26.830 - 01:00:29.370] Opher Donchin: Right? And people… people actually knew that.
+- [01:00:29.600 - 01:00:40.140] Opher Donchin: There was never any question about it. But the idea was that that's okay, because, you know, it's better to know your glucose to a certain extent
+- [01:00:40.600 - 01:00:43.930] Opher Donchin: Even if you don't know it, 100% accurately.
+- [01:00:45.010 - 01:00:49.990] Opher Donchin: But what happened was that people were getting their insulin.
+- [01:00:50.500 - 01:00:55.200] Opher Donchin: Right? Diabetics were getting their insulin on the basis of these glucose monitor measurements.
+- [01:00:55.780 - 01:00:58.749] Opher Donchin: Because it was so convenient to use the monitors.
+- [01:00:59.670 - 01:01:06.370] Opher Donchin: And they would, over and under Medicaid.
+- [01:01:06.900 - 01:01:13.910] Opher Donchin: In response to the glucose monitors, sending them into these incredible, physiological stress.
+- [01:01:17.770 - 01:01:25.860] Opher Donchin: Right? They would have been better off ignoring the monitor and following something that was sort of strictly according to the clock.
+- [01:01:29.020 - 01:01:32.899] Opher Donchin: Than responding to a signal that was too noisy.
+- [01:01:37.110 - 01:01:44.849] Opher Donchin: Okay, so these issues of… What's wrong with your data? They have real-world consequences.
+- [01:01:46.750 - 01:01:56.110] Opher Donchin: And importantly, our statistics may help us understand that to a certain extent, but they can't solve it for us. These are issues of data collection.
+- [01:02:00.820 - 01:02:07.609] Opher Donchin: And another problem that we actually can do something about with statistics is missing data.
+- [01:02:08.710 - 01:02:10.899] Opher Donchin: Right? It happens all the time.
+- [01:02:11.230 - 01:02:14.660] Opher Donchin: People, either…
+- [01:02:14.790 - 01:02:23.289] Opher Donchin: Don't pay attention and write down the wrong number, or they forget to turn on or off the machine, or they copy a number over inaccurately.
+- [01:02:25.140 - 01:02:27.669] Opher Donchin: Right? There's this,
+- [01:02:30.920 - 01:02:37.609] Opher Donchin: Very, very cool result that… I mean, result, very cool, discover… I don't know what to call it.
+- [01:02:39.660 - 01:02:48.200] Opher Donchin: economists recently became aware That the central finding
+- [01:02:48.990 - 01:02:58.600] Opher Donchin: that austerity produces growth during inflation. So, if you've got a lot of inflation, what you want to do is you want to cut back government spending.
+- [01:02:59.000 - 01:03:12.499] Opher Donchin: So that there's more, you know, so you cut down on the amount of money around, and then you cut down on inflation, and that will mean that people will spend more of their own real money, and that'll lead to growth.
+- [01:03:12.790 - 01:03:27.489] Opher Donchin: That's a central finding in economics, and it drove policy all over the world during, you know, recent economic crises that I remember. I don't know if you guys remember the crisis in Europe.
+- [01:03:27.740 - 01:03:32.280] Opher Donchin: with the Euro crisis, it's a… it's a common thing that economists say.
+- [01:03:32.570 - 01:03:40.100] Opher Donchin: really important, result in a paper that came out about, I don't know, 30 years ago?
+- [01:03:41.720 - 01:03:48.320] Opher Donchin: And it's the result of, somebody's Excel
+- [01:03:49.140 - 01:03:54.420] Opher Donchin: Having done a calculation, missing, some of the rows.
+- [01:03:54.630 - 01:04:02.040] Opher Donchin: Like, when they… when they mark the rows, because they were doing it with a… with a graphical user interface in Excel, I'm going to sum up these guys.
+- [01:04:02.240 - 01:04:06.750] Opher Donchin: They actually didn't notice that there was more rows down below the bottom of the page.
+- [01:04:08.690 - 01:04:12.899] Opher Donchin: And it's the opposite of what you get if you actually look at all the data.
+- [01:04:13.340 - 01:04:19.959] Opher Donchin: It just happened that, you know, because they were sorted geographically, they did it for one region, they didn't do it for another region.
+- [01:04:20.990 - 01:04:27.769] Opher Donchin: And so, policy over the last 30 years has been driven by this result, even though it's the opposite of being true.
+- [01:04:28.730 - 01:04:31.669] Opher Donchin: Because some data just got missed.
+- [01:04:35.470 - 01:04:36.280] Opher Donchin: Okay?
+- [01:04:37.190 - 01:04:42.959] Opher Donchin: So, missing data, it doesn't only make things noisier, it can actually, if you're not careful.
+- [01:04:43.280 - 01:04:45.980] Opher Donchin: Mislead you actively.
+- [01:04:49.420 - 01:04:55.509] Opher Donchin: So… All this to say that… well, one more I'll do.
+- [01:04:56.050 - 01:04:59.759] Opher Donchin: Is that, you know, we never measure exactly what we want.
+- [01:05:00.720 - 01:05:10.539] Opher Donchin: And quite often, the thing we measure is what we can call a proxy. A proxy, probably not a word that all of you are familiar with.
+- [01:05:10.740 - 01:05:22.589] Opher Donchin: A proxy comes originally from the idea of voting, so if I can't go to a meeting, and I ask somebody else to vote for me, what they're doing is submitting a proxy vote.
+- [01:05:24.130 - 01:05:24.950] Opher Donchin: Okay?
+- [01:05:25.360 - 01:05:36.740] Opher Donchin: But it's, become part of, scientific vocabulary, because if there's something I want to measure, and I can't measure it, and I measure something else, it's called a proxy measure.
+- [01:05:36.950 - 01:05:41.679] Opher Donchin: It's like, whatever it is I measured is voting instead of the thing that should be there.
+- [01:05:43.670 - 01:05:49.080] Opher Donchin: Okay? So, for instance, neural activity
+- [01:05:49.580 - 01:05:59.699] Opher Donchin: As you guys know, because you took last semester's physiology course, neural activity requires you to measure the voltage drop across the cell membrane.
+- [01:06:00.590 - 01:06:09.210] Opher Donchin: Right? If you want to know what… if there was an action potential, you actually have to know the cell membrane voltage, the neural membrane voltage.
+- [01:06:09.540 - 01:06:12.740] Opher Donchin: And for that, you need an electrode inside the cell.
+- [01:06:13.960 - 01:06:17.640] Opher Donchin: Right? But having electrodes inside the cell is really, really hard.
+- [01:06:18.550 - 01:06:22.210] Opher Donchin: So, there's all kinds of proxy measures people use.
+- [01:06:22.670 - 01:06:32.150] Opher Donchin: Right? For instance, I did a lot of recording of neural activity by putting electrodes outside the cell, and then what you get is not neural activity, you get electric field.
+- [01:06:32.760 - 01:06:35.749] Opher Donchin: And then you use it to try to guess about neural activity.
+- [01:06:37.180 - 01:06:46.609] Opher Donchin: Or, what's very common today is, that we have dyes that you can put in that make the intracellular calcium show up in color.
+- [01:06:47.600 - 01:06:54.619] Opher Donchin: And neural activity causes fluctuations in intracellular calcium, and then you measure the intracellular calcium.
+- [01:06:55.670 - 01:06:58.339] Opher Donchin: And you use that as a measure of neural activity.
+- [01:06:58.960 - 01:07:01.760] Opher Donchin: And, you know, here's the interstellar calcium.
+- [01:07:02.130 - 01:07:06.270] Opher Donchin: And people have bothered to…
+- [01:07:06.420 - 01:07:10.299] Opher Donchin: Compare it, because it's so widely used, to what's actually going on.
+- [01:07:10.590 - 01:07:15.640] Opher Donchin: And you can see that it's not a perfect measure, and even if you try to use this to predict.
+- [01:07:16.920 - 01:07:21.500] Opher Donchin: to the best of your ability, what is going on inside the cell? You get, you know.
+- [01:07:22.610 - 01:07:25.229] Opher Donchin: Something that's better than nothing, certainly.
+- [01:07:27.190 - 01:07:28.939] Opher Donchin: But something that's not perfect.
+- [01:07:31.640 - 01:07:37.490] Opher Donchin: So… Whenever you're using a proxy measure, which is most of the time.
+- [01:07:38.700 - 01:07:46.610] Opher Donchin: You want to be aware of the difference between what you're actually measuring and what you really care about, and the way that that's going to affect your conclusions.
+- [01:07:48.840 - 01:07:50.639] Opher Donchin: Final slide on this.
+- [01:07:51.180 - 01:07:53.100] Opher Donchin: Final two slides.
+- [01:07:53.920 - 01:07:58.809] Opher Donchin: Is the data collection is an…
+- [01:07:59.060 - 01:08:02.150] Opher Donchin: ethically, from people. I mean, from animals, too.
+- [01:08:03.130 - 01:08:07.039] Opher Donchin: Right? Unless you're measuring… and even when you think about it.
+- [01:08:07.680 - 01:08:11.300] Opher Donchin: When you're measuring geological stuff as well.
+- [01:08:11.490 - 01:08:20.240] Opher Donchin: Data collection is an ethically laden process, but particularly for us as biomedical engineers, collecting data from humans.
+- [01:08:20.779 - 01:08:27.820] Opher Donchin: Means that you are, in some sense, in a moral interaction with those people.
+- [01:08:28.399 - 01:08:34.679] Opher Donchin: Right? It's your job As engineers who are likely to collect data from people.
+- [01:08:35.149 - 01:08:40.560] Opher Donchin: To pay attention to issues of privacy of the data, security of the data.
+- [01:08:41.300 - 01:08:44.430] Opher Donchin: And the use that the data will be put to
+- [01:08:46.439 - 01:08:48.729] Opher Donchin: And whether it itself is ethical.
+- [01:08:49.500 - 01:08:52.359] Opher Donchin: Right? If you're developing a wearable device.
+- [01:08:52.670 - 01:08:59.969] Opher Donchin: To what extent are you exposing people… to privacy violations.
+- [01:09:02.550 - 01:09:03.630] Opher Donchin: I think…
+- [01:09:04.040 - 01:09:12.660] Opher Donchin: This came up a year ago, but we haven't done anything about it yet. I think it's a travesty. I apologize on behalf of the department.
+- [01:09:12.770 - 01:09:18.070] Opher Donchin: That you can take an entire degree in biomedical engineering without having had a course on ethics.
+- [01:09:20.020 - 01:09:21.979] Opher Donchin: Right? That's ridiculous.
+- [01:09:24.120 - 01:09:29.370] Opher Donchin: And we will come back to ethics a little bit over the course of this course.
+- [01:09:30.220 - 01:09:34.779] Opher Donchin: But, almost, these are the only two slides you're gonna get on them, your entire course.
+- [01:09:35.290 - 01:09:37.250] Opher Donchin: Your entire degree.
+- [01:09:38.160 - 01:09:45.849] Opher Donchin: But in fact, interacting with people is, you know, creates ethical responsibilities.
+- [01:09:46.800 - 01:09:50.329] Opher Donchin: And you are responsible for them, whether or not we've taught you about them.
+- [01:09:53.330 - 01:09:55.859] Opher Donchin: Right? So whenever you think about data.
+- [01:09:57.120 - 01:10:03.700] Opher Donchin: Right? Whenever you think about data, you want to be asking yourself, was the data collected ethically?
+- [01:10:05.300 - 01:10:07.350] Opher Donchin: And is it going to be used ethically?
+- [01:10:12.460 - 01:10:13.280] Opher Donchin: Right?
+- [01:10:13.410 - 01:10:20.439] Opher Donchin: There are some basic issues. One is collecting data from humans requires informed consent.
+- [01:10:20.850 - 01:10:26.709] Opher Donchin: That is, people have the right to know how and why it's being collected, and they have the right
+- [01:10:26.940 - 01:10:35.390] Opher Donchin: To not have data collected from them, It requires transparency, Right?
+- [01:10:35.840 - 01:10:42.959] Opher Donchin: You have to be clear and public about who has access to the data you're collecting and how it will be used.
+- [01:10:45.500 - 01:10:53.400] Opher Donchin: and… You have a fundamental responsibility to protect vulnerable populations, That is…
+- [01:10:53.780 - 01:11:01.129] Opher Donchin: People who may have difficulty giving consent, children, patients.
+- [01:11:01.840 - 01:11:13.699] Opher Donchin: People who may be exposed to power relationships, doctors who collect from their own patients when the patient may or may not feel comfortable refusing, even if they've been given the option.
+- [01:11:14.030 - 01:11:22.989] Opher Donchin: Department heads, Who asked the employees in their department to participate in a survey.
+- [01:11:23.340 - 01:11:24.790] Opher Donchin: These sorts of things?
+- [01:11:26.120 - 01:11:37.769] Opher Donchin: Right? And also, it's important to tell… to pay attention to whether the data you're collecting could lead to discrimination, or some sort of secondary harm to the population you're collecting from.
+- [01:11:39.410 - 01:11:43.540] Opher Donchin: Alright, I appreciate your patience. We'll take a break now.
+- [01:11:43.890 - 01:11:50.010] Opher Donchin: And go on to… More mathy sort of stuff.
+- [01:11:51.490 - 01:12:00.960] Opher Donchin: Wait, okay, so it's 9-11, according to me. Because I dragged you on, I think we can take a longer break. We can come back at 9.25.
+- [01:12:02.090 - 01:12:12.089] Opher Donchin: You will find not only that I'm not terribly precise about precision, I'm not terribly precise about when I take my breaks, but I'm very precise about when they end.
+- [01:12:12.860 - 01:12:16.840] Opher Donchin: So at 9.25 exactly, I'm gonna open the camera and start talking.
+- [01:12:16.980 - 01:12:21.880] Opher Donchin: And when we're in the classroom, I will also… I will give a time. I will not go and call you.
+- [01:12:22.240 - 01:12:28.060] Opher Donchin: Right? I will just start talking at the time that I say, and it's up to you to be sitting in the chair.
+- [01:12:28.620 - 01:12:31.749] Opher Donchin: Before that time. So 925. See you then.
+- [01:12:53.360 - 01:12:54.340] Opher Donchin: Thank you.
+- [01:12:56.380 - 01:13:11.770] Opher Donchin: There's not a lot of advantages, but if the numbers are small, right, if it's 5 different options, or 3 different options, or 8 different options, it can matter that they're not… that they're neither categorical nor continuous.
+- [01:13:12.240 - 01:13:18.890] Opher Donchin: But, it's important here, and we'll see it in other places.
+- [01:13:18.910 - 01:13:23.029] Opher Donchin: It really is our choice as the people doing the analysis.
+- [01:13:23.030 - 01:13:39.580] Opher Donchin: Right? There's no… while there is a moral and ethical requirement not to violate the privacy of participants in your experiment, there's no moral or ethical requirement to treat continuous data as continuous or ordinal data as ordinal.
+- [01:13:39.940 - 01:13:45.459] Opher Donchin: If it's convenient to treat, the approval rating.
+- [01:13:45.920 - 01:13:52.420] Opher Donchin: As something that's continuous, even though it's actually just the numbers 0 through 5, It's okay.
+- [01:13:53.380 - 01:13:54.050] Opher Donchin: Huh.
+- [01:13:54.230 - 01:14:03.660] Opher Donchin: You just have to be aware that, you know, that you're doing something with the data that is not necessarily trivial. If you like, it's just another kind of processing.
+- [01:14:05.290 - 01:14:18.659] Opher Donchin: But anyway, those three types of data are the three key ones, continuous, ordinal, and categorical. And like I said before, we could have different, you know, multivariate data, and it can combine different types.
+- [01:14:18.730 - 01:14:25.520] Opher Donchin: So, in my cerebellar experiment, I had gender, you know, it might be a male brain or a female brain.
+- [01:14:25.700 - 01:14:35.869] Opher Donchin: handedness, age… Education level, total intracranus volume, and normalized brain volume.
+- [01:14:36.490 - 01:14:43.949] Opher Donchin: All as different measures, some being ordinal, some continuous, some categorical.
+- [01:14:45.540 - 01:14:46.330] Opher Donchin: Okay?
+- [01:14:47.290 - 01:14:53.610] Opher Donchin: These are categorical, that's ordinal, but could be treated as continuous, that's definitely ordinal, and these are continuous.
+- [01:14:54.340 - 01:15:02.709] Opher Donchin: Right? I put here ordinal because this is actually a pixel count, so it's a certain number of pixels, but, you know, it's in the thousands.
+- [01:15:06.050 - 01:15:08.980] Opher Donchin: And so, that's data.
+- [01:15:09.390 - 01:15:14.420] Opher Donchin: Right? And like we said, we're going… because data is complex and imperfect.
+- [01:15:14.650 - 01:15:17.270] Opher Donchin: We need some way to think about it.
+- [01:15:18.600 - 01:15:19.430] Opher Donchin: Right?
+- [01:15:20.750 - 01:15:22.349] Opher Donchin: And those are gonna be models.
+- [01:15:22.490 - 01:15:28.179] Opher Donchin: And the key is gonna be That we're gonna use probability
+- [01:15:28.890 - 01:15:31.600] Opher Donchin: As a way of expressing our uncertainty.
+- [01:15:33.030 - 01:15:41.690] Opher Donchin: Right? So when we think about this data, we're going to think about it as having been generated by… do you guys know the word stochastic?
+- [01:15:44.130 - 01:15:49.029] Opher Donchin: A stochastic process, that is, some sort of probabilistic process.
+- [01:15:50.660 - 01:15:51.360] Opher Donchin: Huh?
+- [01:15:52.070 - 01:15:56.739] Opher Donchin: And that's gonna get us into a little bit of a discussion about probability.
+- [01:15:57.470 - 01:16:03.109] Opher Donchin: Now, I want to say two things about this. One, Three things. One.
+- [01:16:03.730 - 01:16:09.169] Opher Donchin: You guys have all taken a course in probability.
+- [01:16:09.390 - 01:16:11.469] Opher Donchin: And so I have the right…
+- [01:16:11.650 - 01:16:15.750] Opher Donchin: To imagine that you guys all know everything there is to know about probability.
+- [01:16:16.810 - 01:16:22.450] Opher Donchin: 2… From what I know about this course, people often come out of it
+- [01:16:23.480 - 01:16:27.930] Opher Donchin: With only, somewhat loose grass.
+- [01:16:28.340 - 01:16:30.609] Opher Donchin: On some of the deeper concepts.
+- [01:16:30.960 - 01:16:34.400] Opher Donchin: Right? Maybe even some of those shallower technical concepts.
+- [01:16:35.550 - 01:16:48.619] Opher Donchin: we're not going to need to be mathematical about our understanding of probability, but it will not, you know, I will be aware of the fact that you guys might not remember everything, but you guys would…
+- [01:16:49.060 - 01:16:50.390] Opher Donchin: do well.
+- [01:16:50.860 - 01:16:57.510] Opher Donchin: To go back to your probability course, and just, you know, make sure you've got the basic terms.
+- [01:16:59.430 - 01:17:01.090] Opher Donchin: Okay? Because we're gonna need them.
+- [01:17:03.050 - 01:17:10.060] Opher Donchin: And three, I'm gonna tell you something that they didn't talk about in the course.
+- [01:17:10.620 - 01:17:11.450] Opher Donchin: Right?
+- [01:17:11.850 - 01:17:25.560] Opher Donchin: And that's what we're going to talk about now, right? So we're going to make a model of the data. Our basic discovery is that we're going to have data, we're going to make a model of the data, and that model is going to be probabilistic. It's going to involve probability distributions.
+- [01:17:25.780 - 01:17:29.149] Opher Donchin: We're going to combine the data with the model to reach conclusions.
+- [01:17:29.540 - 01:17:34.060] Opher Donchin: evaluate the model and update. So, we'll be going, you know, data, model.
+- [01:17:34.250 - 01:17:37.390] Opher Donchin: And then think some more, a new model, blah blah blah.
+- [01:17:38.280 - 01:17:41.849] Opher Donchin: And in this process, like I said, uncertainty is inevitable.
+- [01:17:43.970 - 01:17:50.479] Opher Donchin: And… Uncertainty, it turns out, and I'm pretty sure they didn't talk a bit, talk to you about this.
+- [01:17:50.620 - 01:17:53.609] Opher Donchin: In the course, there are actually two kinds.
+- [01:17:55.000 - 01:18:00.490] Opher Donchin: Okay? Allatory uncertainty Is where the world is essentially random.
+- [01:18:01.650 - 01:18:08.909] Opher Donchin: Epistemic uncertainty is where the world may or may not be random, but the problem is that we don't know what's going on.
+- [01:18:11.150 - 01:18:12.880] Opher Donchin: Okay, what do I mean?
+- [01:18:14.220 - 01:18:17.690] Opher Donchin: If you're rolling a dice, or let's say you go into a casino.
+- [01:18:17.870 - 01:18:20.130] Opher Donchin: And you walk up to the roulette table.
+- [01:18:21.190 - 01:18:26.440] Opher Donchin: And you place your bets, You don't know whether you're gonna win or not.
+- [01:18:26.620 - 01:18:29.230] Opher Donchin: Not because of anything you don't know.
+- [01:18:29.490 - 01:18:32.370] Opher Donchin: It's just because the game is random.
+- [01:18:32.950 - 01:18:39.229] Opher Donchin: There's nothing I could tell you that I know, or that anybody could know, before they spin the wheel.
+- [01:18:41.080 - 01:18:43.559] Opher Donchin: That would let you know whether you're gonna win or not.
+- [01:18:44.600 - 01:18:47.000] Opher Donchin: Okay, that's allietory uncertainty.
+- [01:18:48.480 - 01:18:54.660] Opher Donchin: You can know everything that there is to know about the world, and you still won't know what the outcome's gonna be.
+- [01:18:56.250 - 01:18:57.190] Opher Donchin: Yes?
+- [01:19:00.650 - 01:19:05.450] Opher Donchin: And that… that's the kind of probability that you usually learn about in a probability course.
+- [01:19:05.940 - 01:19:12.830] Opher Donchin: Right? It's the kind of probability where the thing that makes sense is to do the experiment over and over and over again.
+- [01:19:14.190 - 01:19:23.980] Opher Donchin: and recognize that over time, the answer will converge to what you call the probability. So if I have a coin.
+- [01:19:24.270 - 01:19:29.969] Opher Donchin: and I flip it over and over again, then, you know, I might have a head, and I might have another head.
+- [01:19:30.130 - 01:19:34.310] Opher Donchin: and then a tail, and if I take sort of the cumulative average.
+- [01:19:35.310 - 01:19:37.350] Opher Donchin: Of the number of heads I had.
+- [01:19:37.490 - 01:19:42.180] Opher Donchin: Over the total number of flips, It will converge to 50%.
+- [01:19:43.760 - 01:19:47.940] Opher Donchin: Right? And in a sense, that's the idea of probability that you guys have.
+- [01:19:49.260 - 01:19:55.080] Opher Donchin: Right? How many times is something going to happen? Out of an infinite times that I repeat the…
+- [01:19:55.470 - 01:19:57.910] Opher Donchin: experiment. I repeat the process.
+- [01:19:58.720 - 01:19:59.670] Opher Donchin: Clear?
+- [01:20:03.510 - 01:20:09.850] Opher Donchin: Epistemic uncertainty, I could walk into the same casino, and I could go to a poker table.
+- [01:20:10.880 - 01:20:15.810] Opher Donchin: Right? And I'm not gonna assume that everybody knows the rules of poker.
+- [01:20:16.010 - 01:20:25.739] Opher Donchin: But, the thing that you need to know is that poker hands are combinations of 5 cards, and some combinations are better than others.
+- [01:20:26.720 - 01:20:35.230] Opher Donchin: Right? If you have cards that are the same, that's better. If you have cards that are in sequence, that's better. And higher numbers are better. There's all kinds of ways that you rank.
+- [01:20:35.330 - 01:20:37.059] Opher Donchin: Sets of 5 cards.
+- [01:20:37.550 - 01:20:42.519] Opher Donchin: There are many, many variants of poker. I want to talk about one of them, which is called Texas Hold'em.
+- [01:20:42.930 - 01:20:44.320] Opher Donchin: I've never played it.
+- [01:20:44.760 - 01:20:53.220] Opher Donchin: But, in Texas Hold'em, The dealer in the casino deals 5 cards out on the table, face up.
+- [01:20:53.960 - 01:20:57.269] Opher Donchin: And 2 cards to each player, face down.
+- [01:20:58.500 - 01:21:01.029] Opher Donchin: Each player looks at their own cards.
+- [01:21:01.300 - 01:21:04.730] Opher Donchin: And they figure out the best hand that they can make.
+- [01:21:05.550 - 01:21:11.720] Opher Donchin: The best 5-card hand that they can make out of the 2 cards they have, and any 3 cards that the dealer put on the table.
+- [01:21:14.730 - 01:21:15.660] Opher Donchin: Yes?
+- [01:21:18.670 - 01:21:28.679] Opher Donchin: So, it's important here that there's shared information, we all see the five cards, and there's private information.
+- [01:21:28.860 - 01:21:31.899] Opher Donchin: Each of us has a different two cards that they're looking at.
+- [01:21:33.750 - 01:21:39.830] Opher Donchin: So… each of us Has a different sense.
+- [01:21:40.060 - 01:21:43.159] Opher Donchin: Of the probability that they have the best hand.
+- [01:21:47.030 - 01:21:47.770] Opher Donchin: Right?
+- [01:21:50.490 - 01:21:53.999] Opher Donchin: And that's legit. If I… if I want to assess
+- [01:21:55.020 - 01:22:03.059] Opher Donchin: the probability that… let's… let's imagine I have here some names. Let's imagine that me, Ohad, and David are all playing, the first two names on my screen.
+- [01:22:03.630 - 01:22:04.480] Opher Donchin: Right?
+- [01:22:04.600 - 01:22:09.609] Opher Donchin: Neither of us see David's two cards. Neither me nor Ohat sees David's two cards.
+- [01:22:10.650 - 01:22:14.570] Opher Donchin: We can both assess the probability that David has the best hand.
+- [01:22:15.000 - 01:22:17.940] Opher Donchin: And we would legitimately have different guesses.
+- [01:22:19.600 - 01:22:25.290] Opher Donchin: Right? Ohad might have a very good hand, and think the chances that David has the best hand.
+- [01:22:25.970 - 01:22:27.200] Opher Donchin: My name's okay.
+- [01:22:27.200 - 01:22:27.860] Ohad Hofman: We're zooging.
+- [01:22:28.390 - 01:22:29.510] Opher Donchin: What's that?
+- [01:22:29.960 - 01:22:31.549] Ohad Hofman: Nagiche Aliju King.
+- [01:22:32.030 - 01:22:37.780] Opher Donchin: Yeah, he has two kings. He thinks the chance that David's hand has the best hand is very low.
+- [01:22:39.220 - 01:22:41.639] Opher Donchin: I have two twos.
+- [01:22:43.200 - 01:22:48.030] Opher Donchin: And so I don't know if he has the best hand, but I'm gonna rate his chances higher.
+- [01:22:51.640 - 01:22:56.379] Opher Donchin: Right? And then, of course, the… fun in,
+- [01:22:57.460 - 01:23:04.139] Opher Donchin: in poker is that I get information about Ahad's hand by looking at his bets.
+- [01:23:06.660 - 01:23:18.140] Opher Donchin: Right? And about David's hand. So we're… so we're updating our probabilities all the time based on what the other people are telling us about what's in their hand by the bets that they're making.
+- [01:23:20.020 - 01:23:20.830] Opher Donchin: Okay?
+- [01:23:22.350 - 01:23:23.480] Opher Donchin: And…
+- [01:23:23.620 - 01:23:31.750] Opher Donchin: So more data will reduce my uncertainty, but it'll never eliminate it. I'll never know who has the best hand until we all show our hands.
+- [01:23:34.560 - 01:23:35.490] Opher Donchin: Right?
+- [01:23:36.480 - 01:23:43.309] Opher Donchin: I'm gonna take an example. I always, I always use an example from, prediction markets.
+- [01:23:43.450 - 01:23:45.030] Opher Donchin: At this point in the course.
+- [01:23:45.270 - 01:23:51.750] Opher Donchin: And this… this one, it seemed obvious to take, betting on the end of the war.
+- [01:23:52.410 - 01:23:58.059] Opher Donchin: I was kind of… Do you guys know how these prediction markets work?
+- [01:23:59.070 - 01:24:03.670] Opher Donchin: Yes, no? So there's a site called Polymarket. It's been in the news a lot lately.
+- [01:24:03.980 - 01:24:06.490] Opher Donchin: Where you can essentially bet on anything.
+- [01:24:07.590 - 01:24:08.310] Opher Donchin: Okay.
+- [01:24:09.150 - 01:24:12.959] Opher Donchin: Anything that hasn't happened. You can bet on things that have happened, but that's less interesting.
+- [01:24:13.820 - 01:24:22.570] Opher Donchin: So for instance, I can bet on whether there will be a U.S.-Iran ceasefire by April 30th.
+- [01:24:24.000 - 01:24:24.680] Opher Donchin: Okay.
+- [01:24:25.190 - 01:24:28.269] Opher Donchin: And I… and the way I bet is that I buy…
+- [01:24:28.780 - 01:24:32.879] Opher Donchin: Stalk in yeses, or nos, or both.
+- [01:24:35.710 - 01:24:41.960] Opher Donchin: The stock will have a certain price, Like, on March 13th.
+- [01:24:42.420 - 01:24:46.060] Opher Donchin: Buying a yes would cost me 40…
+- [01:24:46.180 - 01:24:50.570] Opher Donchin: like, let's say 40 cents. Let's work in dollars.
+- [01:24:50.740 - 01:24:58.020] Opher Donchin: Buying a yes would cost me 40 cents, I can buy 400 yeses, for $4.
+- [01:24:58.420 - 01:25:00.169] Opher Donchin: No, for $40.
+- [01:25:01.260 - 01:25:02.150] Opher Donchin: Right?
+- [01:25:03.560 - 01:25:08.749] Opher Donchin: on… on or a little bit after April 30th, the market will close.
+- [01:25:10.110 - 01:25:13.789] Opher Donchin: I mean, a little before. The market will close, and it will pay out.
+- [01:25:15.360 - 01:25:22.219] Opher Donchin: If there's a ceasefire on April 30th, and I put in my $40, I will get back $100.
+- [01:25:23.110 - 01:25:24.740] Opher Donchin: And I'll make 60 bucks.
+- [01:25:26.790 - 01:25:31.560] Opher Donchin: Right? If there's no ceasefire by April 30th, I won't get anything.
+- [01:25:34.580 - 01:25:39.840] Opher Donchin: Okay? Now, if I was willing to bet yes,
+- [01:25:40.030 - 01:25:46.420] Opher Donchin: Sorry, if I had decided to bet yes, on March 3rd.
+- [01:25:47.780 - 01:25:50.120] Opher Donchin: the price of a yes would have been much higher.
+- [01:25:52.090 - 01:25:54.980] Opher Donchin: It would have cost me $70.
+- [01:25:55.360 - 01:25:57.120] Opher Donchin: To buy 100 yeses.
+- [01:25:57.250 - 01:26:00.460] Opher Donchin: And I would only have made $30 if there's a ceasefire.
+- [01:26:03.510 - 01:26:07.810] Opher Donchin: The price is being constantly adjusted by complicated algorithms.
+- [01:26:08.220 - 01:26:11.470] Opher Donchin: Based on how many people want to buy yeses and nos.
+- [01:26:12.100 - 01:26:16.579] Opher Donchin: So the more people want to buy no's, the higher the price of the no.
+- [01:26:17.690 - 01:26:21.389] Opher Donchin: The more people want to buy yeses, the lower the price of the no.
+- [01:26:24.370 - 01:26:25.240] Opher Donchin: Yeah?
+- [01:26:27.180 - 01:26:38.340] Opher Donchin: And of course, PolyMarket makes its money by there being… by the sum name being a little bit above, or a little bit below, I don't remember which way it works out, one.
+- [01:26:38.660 - 01:26:44.450] Opher Donchin: So that even though they're linked, if I buy yeses and nos.
+- [01:26:44.610 - 01:26:47.220] Opher Donchin: Equally, I will end up losing money.
+- [01:26:50.730 - 01:26:58.269] Opher Donchin: So… As you can see.
+- [01:27:00.530 - 01:27:07.080] Opher Donchin: More people think that the war will still be going on on April 30th, Than think that it won't.
+- [01:27:10.660 - 01:27:12.129] Opher Donchin: But nobody knows.
+- [01:27:14.860 - 01:27:20.520] Opher Donchin: Right? Every day, A re… what counts as a reasonable guess will change.
+- [01:27:23.330 - 01:27:31.549] Opher Donchin: It's very important to me that you realize that this is not something that is well described by the probability that you guys learned in your probability class.
+- [01:27:32.230 - 01:27:38.000] Opher Donchin: Because there's no meaning to the idea of running this experiment over and over again.
+- [01:27:38.930 - 01:27:43.919] Opher Donchin: Right? I mean, like, in Marvel movies, you could have infinite worlds where we…
+- [01:27:44.130 - 01:27:49.590] Opher Donchin: You know, have the same war over and over again, but in each of those worlds, it's actually a different world.
+- [01:27:50.630 - 01:27:52.680] Opher Donchin: It's not really the same world.
+- [01:27:53.620 - 01:28:04.239] Opher Donchin: And we only have the one world that we're in, and the war either will end or it won't end, and the probability that we're talking about here, when I say that Polymarket is saying.
+- [01:28:04.530 - 01:28:11.890] Opher Donchin: That there's a 60% probability that the war will still be going on on April 30th.
+- [01:28:12.400 - 01:28:17.080] Opher Donchin: I do not mean anything about repeated wars.
+- [01:28:17.790 - 01:28:24.159] Opher Donchin: and the average that you would take over those repeated things. I mean something about what they know about
+- [01:28:24.880 - 01:28:29.070] Opher Donchin: Wars, and the way that wars develop, and this war, and…
+- [01:28:29.570 - 01:28:32.479] Opher Donchin: Again, we might have very different ideas.
+- [01:28:33.080 - 01:28:38.789] Opher Donchin: Right? You may decide to buy yes, and I may decide to buy no, and it's based on different information.
+- [01:28:38.960 - 01:28:40.539] Opher Donchin: We could both be right.
+- [01:28:43.240 - 01:28:52.440] Opher Donchin: And… And this turns probability from an objective description of a process in reality
+- [01:28:52.810 - 01:28:57.039] Opher Donchin: to a subjective description of what I know about reality.
+- [01:29:00.310 - 01:29:01.560] Opher Donchin: Does that make sense?
+- [01:29:07.280 - 01:29:15.060] Opher Donchin: There… epistemic uncertainty, there can be different kinds, like, my subjective…
+- [01:29:15.690 - 01:29:25.250] Opher Donchin: epistemic uncertainty, right? Like, what I… what probability I associate with something. Market implied probability, like we see here with polymarket.
+- [01:29:25.790 - 01:29:35.529] Opher Donchin: or what's called risk-neutral probability, that is the best, the optimal guess, given the information that I have in a particular game or situation.
+- [01:29:36.650 - 01:29:41.819] Opher Donchin: Right? Those are both… those are all epistemic uncertainties. Some of them are more objective than others.
+- [01:29:44.390 - 01:29:50.039] Opher Donchin: Right? But they all reflect, in some sense, The use of knowledge?
+- [01:29:50.160 - 01:29:53.989] Opher Donchin: To make a guess about what will and will not happen.
+- [01:29:57.210 - 01:29:58.090] Opher Donchin: Yeah?
+- [01:29:59.900 - 01:30:06.569] Opher Donchin: And so that's it. I just want to drive this home. Two distinct ideas about probability, alliatory and epistemic.
+- [01:30:07.820 - 01:30:11.499] Opher Donchin: Right? And we want to keep them… the distinction clear in our mind.
+- [01:30:13.880 - 01:30:20.460] Opher Donchin: We're gonna talk a lot in this course about two different kinds of statistics.
+- [01:30:21.680 - 01:30:27.379] Opher Donchin: That we're gonna call Frequentist and Bayesian. Tadirutani verbasiani.
+- [01:30:28.840 - 01:30:32.260] Opher Donchin: The course is essentially a course in Bayesian statistics.
+- [01:30:33.340 - 01:30:51.399] Opher Donchin: And I'm gonna tell you up front, Bayesian statistics represents a very, very, very small percentage of the amount of the kind of statistics that's done in the world. Almost everybody, all of your advisors for your projects, unless you come and do a project with me.
+- [01:30:51.630 - 01:30:54.030] Opher Donchin: Generally use frequent statistics.
+- [01:30:55.060 - 01:30:58.450] Opher Donchin: But we're going to learn Bayesian statistics in this course, because it's better.
+- [01:31:00.010 - 01:31:02.000] Opher Donchin: Okay? And we'll talk about that.
+- [01:31:04.330 - 01:31:05.480] Opher Donchin: Yeah, please.
+- [01:31:06.120 - 01:31:07.789] Ohad Hofman: Like, a big kilo of…
+- [01:31:08.140 - 01:31:12.200] Ohad Hofman: epistemic.
+- [01:31:12.930 - 01:31:15.410] Ohad Hofman: benz.
+- [01:31:15.410 - 01:31:16.060] Opher Donchin: What?
+- [01:31:16.140 - 01:31:22.570] Ohad Hofman: de cola medal.
+- [01:31:22.570 - 01:31:23.239] Opher Donchin: What are you up?
+- [01:31:30.570 - 01:31:41.559] Opher Donchin: if… Having all of the information about a process Makes the process deterministic, Then there's no alliatory uncertainty.
+- [01:31:43.010 - 01:31:48.000] Opher Donchin: Okay, some processes are essentially deterministic. If you like throwing a die.
+- [01:31:49.130 - 01:32:00.380] Opher Donchin: You could argue about whether it's truly stochastic or not, but let's say to reasonable approximation, there's no way to know what will come out before you throw the die.
+- [01:32:01.820 - 01:32:08.750] Opher Donchin: Right? Radioactive decay is sort of the classic example of a process that's inherently stochastic.
+- [01:32:10.620 - 01:32:18.470] Opher Donchin: Okay? So, allutory uncertainty is uncertainty because the process itself is stochastic.
+- [01:32:20.080 - 01:32:24.830] Opher Donchin: Epistemic uncertainty is uncertainty because I don't know everything there is to know.
+- [01:32:26.190 - 01:32:29.300] Opher Donchin: So, generally speaking, I have both.
+- [01:32:30.430 - 01:32:39.729] Opher Donchin: Right? There's things… there's uncertainty that arises from my lack of knowledge, and there's uncertainty that arises from the essential stochasticity of the process.
+- [01:32:42.470 - 01:32:46.120] Opher Donchin: Right? If you think… if we want to think about data, Right?
+- [01:32:46.390 - 01:32:51.550] Opher Donchin: Some of the uncertainty in my data comes from the fact that people are just different from each other.
+- [01:32:53.220 - 01:32:55.300] Opher Donchin: Some of it becomes from…
+- [01:32:55.700 - 01:33:04.520] Opher Donchin: problems with my measurement, or issues with how I'm measuring things, uncertainty in what I need to be measuring, these sorts of things.
+- [01:33:05.390 - 01:33:07.350] Opher Donchin: the number of people I've measured.
+- [01:33:10.180 - 01:33:11.180] Opher Donchin: Yeah?
+- [01:33:15.480 - 01:33:24.919] Opher Donchin: So I do want to say at this point, there's going to be, I think it's two lectures from now. We're going to have quite an extensive discussion on frequentism and Bayesianism.
+- [01:33:25.370 - 01:33:29.799] Opher Donchin: And then we'll get into it in more depth, but for now.
+- [01:33:30.040 - 01:33:37.140] Opher Donchin: the thing that I want you to keep in mind is that frequentist statistics is…
+- [01:33:37.740 - 01:33:43.150] Opher Donchin: Treats alliatory uncertainty as the central uncertainty we need to be concerned about.
+- [01:33:43.740 - 01:33:51.959] Opher Donchin: And Bayesian statistics… Is more balanced, but has a much greater focus on issues of epistemic uncertainty.
+- [01:33:55.300 - 01:34:03.510] Opher Donchin: Right? The world has both kinds. The world is both aleatorically uncertain, That is, things are stochastic.
+- [01:34:03.630 - 01:34:08.410] Opher Donchin: And for each of us, epistemically uncertain, that is, we don't know everything about it.
+- [01:34:13.510 - 01:34:16.639] Opher Donchin: Okay, so having talked about
+- [01:34:17.050 - 01:34:23.500] Opher Donchin: Two different kinds of probability, they converge on the notion of probability distributions.
+- [01:34:23.660 - 01:34:27.410] Opher Donchin: Which brings us back into relationship with your course.
+- [01:34:27.930 - 01:34:28.750] Opher Donchin: Right?
+- [01:34:28.850 - 01:34:32.620] Opher Donchin: Probability distributions, and here's a drawing of a very pretty one.
+- [01:34:32.760 - 01:34:38.880] Opher Donchin: Are a way of describing our uncertainty about what's going on.
+- [01:34:40.920 - 01:34:45.660] Opher Donchin: And as a result, our models will be expressed in terms of probability distributions.
+- [01:34:47.860 - 01:34:59.380] Opher Donchin: Right? And we're gonna go from, you know, having data to trying to say something about what that data tells us about the probability distribution that generated it.
+- [01:35:02.030 - 01:35:02.830] Opher Donchin: Okay?
+- [01:35:04.550 - 01:35:09.250] Opher Donchin: The key thing about a probability distribution is that more likely values get more probability.
+- [01:35:10.860 - 01:35:14.070] Opher Donchin: Alright, is this… is this right? I wanna see? Hold on.
+- [01:35:14.950 - 01:35:15.770] Opher Donchin: Yep.
+- [01:35:16.360 - 01:35:19.790] Opher Donchin: So, at this point in the course, we're gonna do our WooClap.
+- [01:35:20.850 - 01:35:26.120] Opher Donchin: You can… you can register here.
+- [01:35:26.700 - 01:35:31.650] Opher Donchin: I don't know how WooCloud… this is my first time using WooCloud, so… Good luck!
+- [01:35:32.100 - 01:35:42.559] Opher Donchin: Please, please, at this point, I can't really control it. I don't know what I'm gonna do about it. Do not send the code to people who are not in the class. That would be cheating.
+- [01:35:43.010 - 01:35:43.750] Adi: Au faire.
+- [01:35:43.750 - 01:35:44.920] Opher Donchin: What's up? Yeah.
+- [01:35:50.650 - 01:35:53.770] Opher Donchin: yeah. Yes.
+- [01:35:54.870 - 01:35:55.750] Opher Donchin: Hold on.
+- [01:36:07.720 - 01:36:11.529] Opher Donchin: I don't want to do this here. I don't know how this works. Hold on.
+- [01:36:13.070 - 01:36:17.989] Opher Donchin: We've got all this… No, I know, but I'm scared.
+- [01:36:18.420 - 01:36:23.819] Opher Donchin: So, we're gonna go over here, we're gonna go over here, that'll be fine.
+- [01:36:24.630 - 01:36:25.929] Opher Donchin: It's the same code.
+- [01:36:28.480 - 01:36:29.780] Opher Donchin: So it,
+- [01:36:30.120 - 01:36:33.749] Opher Donchin: You know, when we're in the classroom, I'll have to find a different way of dealing with it, but…
+- [01:36:39.290 - 01:36:40.550] Adi: Jenna, not back.
+- [01:36:40.550 - 01:36:41.096] Opher Donchin: I mean.
+- [01:36:41.630 - 01:36:45.809] Opher Donchin: You have to be… you have to be signed up, like, you have to do it from your…
+- [01:36:46.440 - 01:36:48.730] Opher Donchin: Like, it's restricted to people in the class.
+- [01:36:50.740 - 01:36:51.469] Opher Donchin: You have to use.
+- [01:36:51.470 - 01:36:52.200] Ohad Hofman: Okay.
+- [01:36:53.000 - 01:36:53.710] Opher Donchin: Email.
+- [01:36:59.950 - 01:37:03.479] Opher Donchin: Oh, hold on, I got an idea.
+- [01:37:03.730 - 01:37:04.820] Opher Donchin: Wait…
+- [01:37:11.010 - 01:37:12.890] Opher Donchin: Where am I?
+- [01:37:16.580 - 01:37:17.780] Opher Donchin: Try now?
+- [01:37:20.620 - 01:37:24.560] Avital Barkan: Pushut.
+- [01:37:24.930 - 01:37:26.840] Avital Barkan: qui parsem.
+- [01:37:27.500 - 01:37:32.300] Opher Donchin: I've… There we go.
+- [01:37:32.830 - 01:37:34.260] Opher Donchin: Alright, I learned something.
+- [01:37:53.050 - 01:37:58.979] Opher Donchin: No, when I start, I have to start the thing. First, you have to, register.
+- [01:37:59.800 - 01:38:04.930] Opher Donchin: Like, when we get to 20, Then we'll all be registered.
+- [01:38:05.210 - 01:38:09.560] Opher Donchin: Anybody here who's just got their screen, like, a dark screen, and they went back to sleep?
+- [01:38:21.540 - 01:38:25.769] Opher Donchin: there was a viral thing in COVID where, like, you see a Zoom meeting, and then
+- [01:38:26.190 - 01:38:33.370] Opher Donchin: The picture of the person, like, he's there nodding, and falls back, and you see that, like, he's back there playing with his kid in the back of the…
+- [01:38:34.510 - 01:38:36.929] Shay Karni & Hadar Belo: Offer aux globilization?
+- [01:38:37.860 - 01:38:38.700] Opher Donchin: What's that?
+- [01:38:39.040 - 01:38:41.000] Shay Karni & Hadar Belo: I will clap in my inseyun.
+- [01:38:43.590 - 01:38:45.720] Shay Karni & Hadar Belo: Pim?
+- [01:38:46.070 - 01:38:46.890] Opher Donchin: Yes.
+- [01:38:47.400 - 01:38:51.199] Opher Donchin: Yes, and you're not… you're only allowed to do it if you're in class.
+- [01:38:51.830 - 01:38:55.559] Opher Donchin: You're not allowed to share the WooClap code with people outside of class.
+- [01:39:02.270 - 01:39:09.510] Opher Donchin: actually get graded for the WooClap itself, so you actually have to pay attention to class. I will try to make the questions reasonably easy.
+- [01:39:12.940 - 01:39:15.529] Opher Donchin: Is that everybody? I'm tired of waiting.
+- [01:39:16.150 - 01:39:20.040] Opher Donchin: There's 20 of you, but only 16 here, but one of them is me. Alright, I'm going.
+- [01:39:25.960 - 01:39:31.140] Opher Donchin: Right? Now, and I think this is timed, I think you get 90 seconds.
+- [01:39:35.880 - 01:39:42.389] maya admoni: Secretively share voting is closed.
+- [01:39:42.390 - 01:39:43.300] Opher Donchin: Oh, no.
+- [01:39:43.300 - 01:39:44.280] Ohad Hofman: Genome.
+- [01:39:46.240 - 01:39:47.980] Opher Donchin: Alright, hold on.
+- [01:39:49.410 - 01:39:51.410] Opher Donchin: Oh, I know what I need to know.
+- [01:39:52.640 - 01:39:55.489] Opher Donchin: This… this wool clap may not work. Wait a second.
+- [01:39:59.300 - 01:40:01.489] Opher Donchin: I know what I did wrong.
+- [01:40:02.510 - 01:40:03.480] Opher Donchin: Try again.
+- [01:41:01.470 - 01:41:02.210] Opher Donchin: Right?
+- [01:41:02.470 - 01:41:03.720] Opher Donchin: That's not what I want.
+- [01:41:28.650 - 01:41:30.170] Opher Donchin: Alright, try this.
+- [01:41:44.780 - 01:41:48.290] Adi: ais.
+- [01:41:49.960 - 01:41:50.570] Opher Donchin: Yeah.
+- [01:41:51.360 - 01:41:52.370] Opher Donchin: I hope.
+- [01:41:54.260 - 01:41:55.200] Opher Donchin: Yes?
+- [01:41:56.680 - 01:41:58.340] Ohad Hofman: Leishakin Klaseka.
+- [01:41:59.200 - 01:42:00.589] Adi: That's a refreshing.
+- [01:42:04.960 - 01:42:05.560] Ohad Hofman: I ain't.
+- [01:42:05.560 - 01:42:09.639] Opher Donchin: I mean, why don't you guys… I mean, you're gonna just take it from here, yes or no?
+- [01:42:12.220 - 01:42:15.289] Opher Donchin: I mean, cause… Looks like people can do it.
+- [01:42:20.320 - 01:42:26.149] Ohad Hofman: Emm… There's no vote in progress at the moment. You will be notified when a vote is started.
+- [01:42:26.760 - 01:42:30.770] Opher Donchin: Are you at FPOOEE? Because I've got 20 participants.
+- [01:42:31.380 - 01:42:32.800] Ohad Hofman: nicht mudel.
+- [01:42:33.510 - 01:42:36.680] Opher Donchin: Yeah, I think it's okay. There's 24 people here now.
+- [01:42:37.220 - 01:42:39.450] Opher Donchin: The sudden surge in people.
+- [01:42:41.180 - 01:42:42.889] Opher Donchin: It's okay, alright.
+- [01:42:43.720 - 01:42:44.910] Opher Donchin: I'm going on.
+- [01:42:45.190 - 01:42:46.479] Opher Donchin: Let's see how it works.
+- [01:42:48.090 - 01:42:55.019] Opher Donchin: Now you guys can try to do it. Oh, and now you've got 90 seconds. That's scary. I think I'm gonna have to give you guys 2 minutes.
+- [01:42:56.490 - 01:42:57.719] Opher Donchin: In the future.
+- [01:43:07.120 - 01:43:10.770] Ohad Hofman: chef.
+- [01:43:10.770 - 01:43:12.449] Opher Donchin: Yeah, you're supposed to match them.
+- [01:43:20.740 - 01:43:23.990] Opher Donchin: You can just go to WooClap and use the code, I think.
+- [01:43:25.630 - 01:43:28.010] Opher Donchin: And it'll jump you to the Moodle, and then you can log in.
+- [01:43:45.120 - 01:43:49.750] Opher Donchin: Well, I added time, so try to… if anybody knows how to make it work.
+- [01:43:49.900 - 01:43:54.699] Opher Donchin: One person's given an answer, so whoever figured it out, tell us what to do.
+- [01:43:59.620 - 01:44:05.490] Opher Donchin: I'll make one of these in practice before next time on myself, and my… and my… and Norm.
+- [01:44:17.180 - 01:44:22.340] Opher Donchin: Alright, I'll… for this one, I'll keep extending the time until everybody figures it out, just so we know what we're doing.
+- [01:45:12.810 - 01:45:20.250] Opher Donchin: Alright, when we get down to 30 seconds, I'll reset it again, and then it'll be another minute and a half, so you have essentially 2 minutes to finish.
+- [01:46:44.670 - 01:46:45.340] Opher Donchin: Nope.
+- [01:47:11.670 - 01:47:12.760] Opher Donchin: Alright.
+- [01:47:16.530 - 01:47:18.449] Opher Donchin: I don't know whether that tells us anything.
+- [01:47:19.240 - 01:47:22.430] Opher Donchin: There's the right answers. People did pretty well.
+- [01:47:23.020 - 01:47:23.950] Opher Donchin: Excellent.
+- [01:47:26.110 - 01:47:27.969] Opher Donchin: Going on.
+- [01:47:33.680 - 01:47:35.079] Opher Donchin: I mean, have you guys…
+- [01:47:36.690 - 01:47:42.529] Opher Donchin: 2 minutes, so… 2 and a half. After 1 minute, I'll reset it, and then…
+- [01:47:49.120 - 01:47:50.360] Opher Donchin: Wait, huh.
+- [01:47:50.560 - 01:47:51.500] Opher Donchin: No.
+- [01:47:53.890 - 01:47:55.220] Opher Donchin: Don't touch anything.
+- [01:48:21.280 - 01:48:23.119] Opher Donchin: This is less fun than Kahoot.
+- [01:48:23.240 - 01:48:25.199] Opher Donchin: Dude, this is more like a test.
+- [01:48:26.880 - 01:48:28.240] Opher Donchin: Less like a game.
+- [01:48:36.370 - 01:48:37.249] Opher Donchin: Say you go?
+- [01:48:39.870 - 01:48:46.330] Opher Donchin: So, the advantage of the WooClap is that it integrates with the Moodle that BGU paid for
+- [01:48:46.950 - 01:48:49.020] Opher Donchin: For WooClab.
+- [01:48:50.060 - 01:48:55.410] Opher Donchin: And then… and so then you get to sign in through the Moodle, and I know who's there, and stuff like that.
+- [01:48:56.910 - 01:49:03.809] Opher Donchin: I'll see what we can do to make it more fun, because the goal is not just to test you, but to actually do something that
+- [01:49:05.020 - 01:49:06.779] Opher Donchin: makes things funner.
+- [01:49:21.150 - 01:49:22.380] Opher Donchin: Oops.
+- [01:49:23.260 - 01:49:24.320] Opher Donchin: Alright.
+- [01:49:27.810 - 01:49:29.420] Opher Donchin: There's the correct answer.
+- [01:49:30.460 - 01:49:32.590] Opher Donchin: Which is everybody. Excellent.
+- [01:49:33.070 - 01:49:34.050] Opher Donchin: Alright.
+- [01:49:40.450 - 01:49:44.530] Opher Donchin: Oh, that's… okay, I see. So… Whatever.
+- [01:49:49.430 - 01:49:52.839] Opher Donchin: Well, this is showing how many people answer the different things. We don't want that.
+- [01:49:53.500 - 01:49:54.370] Opher Donchin: There we go.
+- [01:50:34.710 - 01:50:37.360] Opher Donchin: I'm gonna close it after this minute and a half.
+- [01:52:04.770 - 01:52:05.820] Opher Donchin: Right.
+- [01:52:13.040 - 01:52:14.350] Opher Donchin: Interesting.
+- [01:52:14.590 - 01:52:15.600] Opher Donchin: Okay?
+- [01:52:21.640 - 01:52:39.199] Opher Donchin: What is true of allatory uncertainty? I'm gonna read these. I did that with Coat in the past. It arises from limited knowledge, like in poker. It reflects true randomness, like in poker. It arises from limited knowledge, like in roulette, or it reflects true randomness, like in roulette.
+- [01:52:39.640 - 01:52:42.969] Opher Donchin: Which of those is the case for allatory uncertainty?
+- [01:52:53.170 - 01:52:55.129] Opher Donchin: Now I'm gonna turn that off every time.
+- [01:53:51.450 - 01:53:52.410] Opher Donchin: Bye.
+- [01:53:53.890 - 01:53:59.920] Opher Donchin: Match the data types. Gender, education level, reaction time, categorical, ordinal, and continuous.
+- [01:54:03.560 - 01:54:09.310] Opher Donchin: Oh, last one, I didn't show you what the… what… Well, the popular answer was.
+- [01:55:22.740 - 01:55:25.400] Opher Donchin: Alright, let's see what people said…
+- [01:55:25.650 - 01:55:33.080] Opher Donchin: So, most often, people said that gender was categorical, education was ordinal, and reaction time was continuous.
+- [01:55:33.520 - 01:55:35.119] Opher Donchin: Which makes some sense to me.
+- [01:55:37.710 - 01:55:39.090] Opher Donchin: And last question.
+- [01:55:39.300 - 01:55:40.539] Opher Donchin: Let's turn this off.
+- [01:55:46.390 - 01:55:51.669] Opher Donchin: So, pairs of terms… Only one pair.
+- [01:55:52.300 - 01:56:06.329] Opher Donchin: Both terms are associated with data ethics, informed consent and transparency, sampling bias and missing data, proxy measures and informed consent, or measurement error and protection of vulnerable populations.
+- [01:57:12.010 - 01:57:14.069] Opher Donchin: Alright, everybody got it.
+- [01:57:17.180 - 01:57:19.269] Opher Donchin: That's it. We're done.
+- [01:57:19.640 - 01:57:21.710] Opher Donchin: We don't get a grandstand at the end?
+- [01:57:21.970 - 01:57:22.899] Opher Donchin: I don't know.
+- [01:57:23.660 - 01:57:26.820] Opher Donchin: Excellent.
+- [01:57:27.120 - 01:57:29.140] Opher Donchin: So, I think we should take a break.
+- [01:57:29.730 - 01:57:31.690] Opher Donchin: It's 1013.
+- [01:57:32.070 - 01:57:36.680] Opher Donchin: So, it's gonna be a short break. We're gonna come back in 7 minutes at 1020.
+- [01:57:37.350 - 01:57:38.230] Opher Donchin: Okay?
+- [01:57:39.980 - 01:57:43.410] Opher Donchin: Then push through the 40 minutes. Enjoy, enjoy!
+- [01:59:11.800 - 01:59:12.590] Opher Donchin: Oops.
+- [01:59:47.680 - 01:59:48.770] Opher Donchin: Okay.
+- [01:59:54.040 - 02:00:01.000] Opher Donchin: probability distributions. So, we understand about probability, we understand that we're going to use probability to
+- [02:00:01.250 - 02:00:03.410] Opher Donchin: Express our models.
+- [02:00:03.670 - 02:00:08.040] Opher Donchin: We want to remind ourselves a little bit about what probability distributions are.
+- [02:00:08.230 - 02:00:10.520] Opher Donchin: Perhaps, if I can get it going. Yes.
+- [02:00:11.210 - 02:00:13.630] Opher Donchin: Random variables can be discrete.
+- [02:00:14.250 - 02:00:22.280] Opher Donchin: or continuous. If they're discrete, each value gets a probability. If they're continuous, each value gets a density.
+- [02:00:23.700 - 02:00:24.670] Opher Donchin: Right?
+- [02:00:24.900 - 02:00:31.050] Opher Donchin: And then, if it's continuous, and each value gets a density, probability is in the integral.
+- [02:00:31.790 - 02:00:33.630] Opher Donchin: Over a range of values.
+- [02:00:34.520 - 02:00:39.769] Opher Donchin: That's all this you should know, and if you do not know, you should go and read about it again.
+- [02:00:39.930 - 02:00:47.779] Opher Donchin: We can, express discrete probability distributions with parameters, like, let's say.
+- [02:00:48.020 - 02:00:58.050] Opher Donchin: the binomial distribution, which has the parameter p, or theta, the probability, probability of getting ahead.
+- [02:00:58.220 - 02:01:07.859] Opher Donchin: and N, the number of times you've tossed it, and we can draw our probability distribution like this for P equals 0.5, N equals 5.
+- [02:01:08.070 - 02:01:19.699] Opher Donchin: Or like this, for P equals 0.7, n equals 10. This is from the Preliz package in Python that, Noam's going to talk about… talk with you about.
+- [02:01:20.370 - 02:01:21.750] Opher Donchin: Next week?
+- [02:01:22.230 - 02:01:25.659] Opher Donchin: But you can see it in the lecture notebook as well.
+- [02:01:27.170 - 02:01:41.249] Opher Donchin: The PreLiz package also allows you to explore a distribution, so it'll give you this interface where you can play with… this is the beta distribution, or beta binomial distribution, which we'll talk about at length.
+- [02:01:41.570 - 02:01:44.630] Opher Donchin: Tomorrow, next week, and the week after.
+- [02:01:44.740 - 02:01:50.330] Opher Donchin: And it has, if you like, 3 parameters, alpha, beta, and N.
+- [02:01:50.880 - 02:01:55.489] Opher Donchin: And then you can play with alpha, beta, and N, and watch this thing change.
+- [02:01:57.840 - 02:02:07.390] Opher Donchin: We can also use Preliz to generate samples from a distribution, so we create the distribution with Praliz.
+- [02:02:07.920 - 02:02:11.080] Opher Donchin: And create a random variable out of it.
+- [02:02:11.570 - 02:02:15.190] Opher Donchin: And then we can sample, and bin, and create a histogram.
+- [02:02:17.010 - 02:02:21.329] Opher Donchin: Okay, and here you see the distribution, and here you see data.
+- [02:02:21.520 - 02:02:23.940] Opher Donchin: How much data? A thousand data points?
+- [02:02:24.050 - 02:02:26.099] Opher Donchin: Sampled from that distribution.
+- [02:02:28.830 - 02:02:37.840] Opher Donchin: Okay, I'm running through this because, in my head, this stuff is really, really obvious to you guys, but if it's not, then you're definitely going to want to slow me down.
+- [02:02:41.440 - 02:02:48.860] Opher Donchin: And of course, we have continuous probability distributions. They also have equations, they also have parameters.
+- [02:02:49.280 - 02:02:52.009] Opher Donchin: This is going to be very important, the parameterization.
+- [02:02:52.660 - 02:02:56.299] Opher Donchin: And so here, also, Prelez can draw it for us. Here's,
+- [02:02:56.450 - 02:03:01.799] Opher Donchin: A normal distribution with a mean of 0 and a sigma of 1 in blue.
+- [02:03:02.040 - 02:03:05.720] Opher Donchin: And a sigma of 0.5 here in orange.
+- [02:03:05.980 - 02:03:11.829] Opher Donchin: And a different mean, a mean of minus 2 and a sigma of 1 here in green.
+- [02:03:12.600 - 02:03:14.330] Opher Donchin: This is the equation.
+- [02:03:14.760 - 02:03:18.630] Opher Donchin: And we can also, Draw…
+- [02:03:19.050 - 02:03:27.240] Opher Donchin: Probability, like, the cumulative probability here, like, it's shading in the area between negative 2 and 0.
+- [02:03:27.490 - 02:03:28.489] Opher Donchin: In the graph.
+- [02:03:30.670 - 02:03:33.750] Opher Donchin: This is the graph that did it.
+- [02:03:33.850 - 02:03:41.539] Opher Donchin: I… I generated, using Pral as a normal distribution, I plotted its probability density function.
+- [02:03:42.080 - 02:03:47.649] Opher Donchin: Right? And then I filled in the area that I wanted to integrate, and I can even then take
+- [02:03:48.880 - 02:03:57.370] Opher Donchin: The cumulative distribution function at 0, that's the integral all the way to 0. Subtract the cumulative distribution function minus 2,
+- [02:03:58.000 - 02:03:59.990] Opher Donchin: And I will get this area.
+- [02:04:02.050 - 02:04:02.980] Opher Donchin: Yes?
+- [02:04:05.100 - 02:04:09.510] Opher Donchin: I'm stopping a second so that you guys can read the code and make sure that…
+- [02:04:09.950 - 02:04:13.250] Opher Donchin: While you obviously couldn't write code that way.
+- [02:04:13.550 - 02:04:18.210] Opher Donchin: Because you don't know the commands. Seeing it, it's not hard to understand.
+- [02:04:20.050 - 02:04:21.349] Adi: A code with Python?
+- [02:04:22.090 - 02:04:23.520] Opher Donchin: everything is in Python.
+- [02:04:29.530 - 02:04:39.559] Opher Donchin: Yes? Everybody who's read the code and understand it, give me a thumbs up in the thing. Do you guys know that if I do this, I don't know if you guys got that. Is it gonna work? No? Yes? No? Yes.
+- [02:04:40.140 - 02:04:41.000] Opher Donchin: No.
+- [02:04:41.880 - 02:04:43.360] Opher Donchin: Wait, does that work?
+- [02:04:44.180 - 02:04:47.940] Opher Donchin: Yeah, look, I hold up my hand, and… it raises my hand.
+- [02:04:55.130 - 02:05:01.000] Opher Donchin: I'm gonna wait another second while you guys read the code, make sure that you understand it. If you understand it, give me a thumbs up.
+- [02:05:10.700 - 02:05:13.190] Opher Donchin: If you don't understand it, please ask a question.
+- [02:05:18.970 - 02:05:20.750] Opher Donchin: Sorry, Marlison?
+- [02:05:23.910 - 02:05:25.270] Opher Donchin: Just explain this?
+- [02:05:26.560 - 02:05:30.160] Opher Donchin: Yeah, so, PDF,
+- [02:05:30.450 - 02:05:43.150] Opher Donchin: And you'll often see it as three letters. That's the probability density function. That is, you know, given the possible value, what is the probability density? That's the thing that's drawn in blue.
+- [02:05:44.130 - 02:05:44.930] Opher Donchin: Okay.
+- [02:05:45.240 - 02:05:50.799] Opher Donchin: CDF… Stand for cumulative distribution function.
+- [02:05:51.740 - 02:05:58.099] Opher Donchin: Okay? And it is the integral of the PDF from minus infinity to whatever point you say.
+- [02:06:00.250 - 02:06:06.800] Opher Donchin: Okay, so the CDF of infinity will always be 1, because that's the integral over the whole thing.
+- [02:06:08.120 - 02:06:13.079] Opher Donchin: For the normal distribution, the CDF of 0 is what? Joel, do you know?
+- [02:06:16.210 - 02:06:17.770] Ohad Hofman: Why don't say a lot more?
+- [02:06:17.880 - 02:06:18.890] Opher Donchin: What's that?
+- [02:06:19.100 - 02:06:20.240] Ohad Hofman: By Tasha Outpo?
+- [02:06:21.270 - 02:06:24.650] Opher Donchin: What is the CDF of 0 gonna be for the normal distribution?
+- [02:06:26.290 - 02:06:26.890] David Sinagof: Good.
+- [02:06:27.770 - 02:06:28.470] Opher Donchin: Half.
+- [02:06:29.210 - 02:06:34.590] Opher Donchin: Right? Because if I integrate from minus infinity to here, I'll get half of the probability.
+- [02:06:35.590 - 02:06:36.540] Opher Donchin: Right?
+- [02:06:38.800 - 02:06:41.660] Opher Donchin: And the CDF of minus 2 is the integral up to here.
+- [02:06:43.610 - 02:06:48.110] Opher Donchin: So if I subtract the integral from up to here, from the integral up to here.
+- [02:06:48.240 - 02:06:50.759] Opher Donchin: I'll get the green area in between.
+- [02:06:50.930 - 02:06:53.829] Opher Donchin: The amount of probability between minus 2 and 0.
+- [02:06:57.830 - 02:06:58.540] Opher Donchin: Okay?
+- [02:06:59.850 - 02:07:01.730] Opher Donchin: Any more questions on this?
+- [02:07:05.140 - 02:07:06.440] Opher Donchin: Alright, I'm moving on.
+- [02:07:14.990 - 02:07:17.520] Opher Donchin: the… I…
+- [02:07:17.680 - 02:07:24.790] Opher Donchin: Yeah, the blue line is generated by the second thing. So, the dist here is a preliz object.
+- [02:07:25.400 - 02:07:27.249] Opher Donchin: Praley's is a package?
+- [02:07:27.350 - 02:07:33.789] Opher Donchin: And it has, among the things it defines, are distribution objects.
+- [02:07:34.140 - 02:07:37.079] Opher Donchin: And then, given a distribution object, you can plot it.
+- [02:07:37.230 - 02:07:45.160] Opher Donchin: Or you can take its, you can take its probability distribution function at any point, you can take its cumulative distribution function.
+- [02:07:45.450 - 02:07:51.789] Opher Donchin: And we saw earlier, That you can, generate random values from it.
+- [02:07:52.940 - 02:07:58.990] Opher Donchin: Right? This generated a binomial distribution, and then this took random values from that binomial distribution.
+- [02:08:02.080 - 02:08:04.510] Opher Donchin: Yeah? Wow. Okay.
+- [02:08:06.670 - 02:08:12.379] Opher Donchin: All right, and here's, you know, the idea of cumulative distribution functions.
+- [02:08:12.560 - 02:08:16.420] Opher Donchin: I, I make my four subplots.
+- [02:08:17.890 - 02:08:22.689] Opher Donchin: and then I plot the PDF of the binomial distribution.
+- [02:08:23.270 - 02:08:27.969] Opher Donchin: Right? With a P of 0.3, so this is the probability of each of these points.
+- [02:08:28.920 - 02:08:32.420] Opher Donchin: And then I plot the CDF of that, and I get…
+- [02:08:32.660 - 02:08:35.289] Opher Donchin: The integral up to each of these points.
+- [02:08:35.450 - 02:08:36.919] Opher Donchin: or the sum.
+- [02:08:37.180 - 02:08:40.070] Opher Donchin: If it's a discrete probability distribution.
+- [02:08:40.180 - 02:08:43.919] Opher Donchin: And I do the same thing with the normal. There's the normal distribution.
+- [02:08:44.180 - 02:08:46.529] Opher Donchin: And then there's the cumulative normal distribution.
+- [02:08:50.150 - 02:08:50.980] Opher Donchin: Yeah.
+- [02:08:51.450 - 02:08:53.600] Opher Donchin: Cone is clear, graphs are clear.
+- [02:08:54.080 - 02:08:54.990] Opher Donchin: Yes?
+- [02:08:56.000 - 02:08:57.389] Opher Donchin: Thumbs up, please.
+- [02:09:01.740 - 02:09:03.760] Opher Donchin: So,
+- [02:09:05.290 - 02:09:12.169] Opher Donchin: I don't know, you'd have to look at the notebook, but I think that I removed some of the code here.
+- [02:09:13.150 - 02:09:16.559] Opher Donchin: And, this is this.
+- [02:09:18.240 - 02:09:20.150] Opher Donchin: And this is this.
+- [02:09:24.010 - 02:09:32.529] Opher Donchin: Okay? This is this, and this is this. So the top row is probability density functions, discrete.
+- [02:09:33.610 - 02:09:38.670] Opher Donchin: So, probability distribution function, probability density function, discrete and continuous.
+- [02:09:38.990 - 02:09:44.010] Opher Donchin: And continuous functions… cumulative functions, discrete and continuous.
+- [02:09:47.440 - 02:09:48.470] Opher Donchin: Okay.
+- [02:09:50.030 - 02:09:59.669] Opher Donchin: So one of the things that you may have noticed is that all of these have parameters, right? Like, parameters for continuous distributions, the mu and the sigma here.
+- [02:10:00.300 - 02:10:03.890] Opher Donchin: And for discrete distributions, the P and the N.
+- [02:10:06.000 - 02:10:15.700] Opher Donchin: Right? And in general, if we have a distribution, It's inconvenient for us
+- [02:10:15.920 - 02:10:23.100] Opher Donchin: To need to specify every single point in the distribution, and it's convenient for us to describe it with parameters.
+- [02:10:25.010 - 02:10:25.690] Opher Donchin: Right.
+- [02:10:26.080 - 02:10:31.229] Opher Donchin: So, if we're interested in describing a distribution, and we're only going to give one number.
+- [02:10:31.660 - 02:10:35.910] Opher Donchin: Sort of independent of how it's actually parameterized, which letters I use.
+- [02:10:37.710 - 02:10:41.309] Opher Donchin: If we only use a single number to describe the distribution.
+- [02:10:42.650 - 02:10:45.220] Opher Donchin: We could choose it to be the middle of the data.
+- [02:10:46.610 - 02:10:50.980] Opher Donchin: Right? If there's some chance of getting different values.
+- [02:10:51.170 - 02:10:58.720] Opher Donchin: And I'm gonna tell you something about where the values end up. Telling you where the middle is, is often a good choice.
+- [02:10:59.610 - 02:11:03.989] Opher Donchin: Right? It could be the median of the distribution, its mode, or its mean.
+- [02:11:05.800 - 02:11:08.219] Opher Donchin: Right? But there are other choices as well.
+- [02:11:09.690 - 02:11:12.899] Opher Donchin: Everybody know… remember median mode and mean? I'm gonna tell you, but…
+- [02:11:17.520 - 02:11:24.980] Opher Donchin: So… It's Grazion… Shakir and Mamutzah.
+- [02:11:27.980 - 02:11:28.830] Opher Donchin: Okay?
+- [02:11:29.410 - 02:11:35.170] Opher Donchin: Regarding the mode, we might have multiple modes, like, distributions can be bimodal.
+- [02:11:38.420 - 02:11:40.350] Opher Donchin: Right? Or multimodal.
+- [02:11:41.560 - 02:11:46.750] Opher Donchin: But in general, the mode is the point with the largest probability, wherever the peak is.
+- [02:11:47.570 - 02:11:54.100] Opher Donchin: And throughout the course, we're going to spend most of our time, or I'd say almost all of our time, on unimodal distributions.
+- [02:11:54.380 - 02:11:58.329] Opher Donchin: So the mode will mean something. It'll be where the top is.
+- [02:12:05.280 - 02:12:12.390] Opher Donchin: And if the distribution is asymmetric, we'll talk about it in a sec, the mean, the median, and the mode will be in different places.
+- [02:12:12.500 - 02:12:14.559] Opher Donchin: Right? The mode will be at the top.
+- [02:12:15.460 - 02:12:24.180] Opher Donchin: The median is where half of the probability is on one side, and half is on the other. If you like, where the CDF is 0.5,
+- [02:12:25.710 - 02:12:27.210] Opher Donchin: Like we talked about?
+- [02:12:27.970 - 02:12:33.420] Opher Donchin: And the mean is strongly affected by the tail, so it'll be pulled
+- [02:12:33.810 - 02:12:37.660] Opher Donchin: Towards the long tail if the distribution is asymmetric.
+- [02:12:44.570 - 02:12:49.229] Opher Donchin: Which is better is a hard question. There's lots of reasons to prefer one or the other.
+- [02:12:49.950 - 02:12:50.740] Opher Donchin: Right?
+- [02:12:51.410 - 02:12:57.020] Opher Donchin: But, moving on, if I want two numbers, The first number's the middle.
+- [02:12:57.280 - 02:13:01.970] Opher Donchin: The second would be, how close to the middle are the numbers on average?
+- [02:13:03.130 - 02:13:05.610] Opher Donchin: Is this distribution tightly?
+- [02:13:05.770 - 02:13:09.709] Opher Donchin: Distributed around the middle, or is it broadly distributed around the middle?
+- [02:13:11.910 - 02:13:14.920] Opher Donchin: Right? So we can call the first one the center.
+- [02:13:15.130 - 02:13:18.330] Opher Donchin: And the second one, the spread, or the dispersion.
+- [02:13:20.020 - 02:13:28.490] Opher Donchin: Right? And again, for spread and dispersion, we have different measures. The standard deviation is one that you guys know, steadyken.
+- [02:13:30.030 - 02:13:30.790] Opher Donchin: Right?
+- [02:13:32.040 - 02:13:36.270] Opher Donchin: You can use the variance, which is the square of the standard deviation.
+- [02:13:39.490 - 02:13:44.459] Opher Donchin: You can use the absolute value deviation, so instead of taking
+- [02:13:45.060 - 02:13:52.670] Opher Donchin: the average of the square, right, instead of taking the square, you can take the absolute value, you'll get a different number.
+- [02:13:56.640 - 02:14:04.950] Opher Donchin: And one that's often used is the interquartile interval. So that's sort of like, instead of the median, which is where the CDF is 50%,
+- [02:14:05.490 - 02:14:10.860] Opher Donchin: Take the difference between where the CDF is .75 and where it's .25.
+- [02:14:11.410 - 02:14:14.570] Opher Donchin: So, the difference between the two quartiles.
+- [02:14:15.260 - 02:14:17.520] Opher Donchin: Those are all measures of spread.
+- [02:14:18.340 - 02:14:20.900] Opher Donchin: Right? They're all legitimate measures of spread.
+- [02:14:23.320 - 02:14:26.129] Opher Donchin: Now, I'll tell you how far
+- [02:14:26.760 - 02:14:35.189] Opher Donchin: Is the… is data generated by this distribution going to be from the center of it?
+- [02:14:37.160 - 02:14:38.150] Opher Donchin: Right?
+- [02:14:41.450 - 02:14:44.729] Opher Donchin: If we want more numbers, so those were the first two.
+- [02:14:45.420 - 02:14:47.390] Opher Donchin: Right? Center and spread.
+- [02:14:47.760 - 02:14:54.430] Opher Donchin: We can use skewness, which is how symmetric the data is, and kurtosis.
+- [02:14:54.550 - 02:14:57.700] Opher Donchin: Which is how big the tails are relative to the peak.
+- [02:14:58.660 - 02:15:00.200] Opher Donchin: So, skewness…
+- [02:15:00.410 - 02:15:05.609] Opher Donchin: You could have a long tail on one side and a short one on the other. That's negative skewness.
+- [02:15:07.060 - 02:15:12.839] Opher Donchin: Symmetric. There's no skewness. Positive skewness is when the long tail is on the other side.
+- [02:15:14.810 - 02:15:28.749] Opher Donchin: And I'm not going to look at other measures of skewness, but the sort of the equivalent of the variance in the world of skewness, so the equivalent of the square of the standard deviation, is if you take the expectation of
+- [02:15:28.980 - 02:15:31.729] Opher Donchin: X minus mu cubed instead of squared.
+- [02:15:36.700 - 02:15:37.650] Opher Donchin: Clear?
+- [02:15:42.280 - 02:15:43.080] Opher Donchin: Alright.
+- [02:15:44.990 - 02:15:47.330] Opher Donchin: You can also look at kurtosis.
+- [02:15:47.840 - 02:15:51.210] Opher Donchin: I like that word. I don't know why I like that word, but I like that word.
+- [02:15:51.950 - 02:15:57.470] Opher Donchin: Kurtosis is how big are the tails relative to the peak.
+- [02:15:59.910 - 02:16:05.930] Opher Donchin: Okay? So all of these distributions have a standard deviation of 1.
+- [02:16:06.750 - 02:16:13.230] Opher Donchin: on average, Data generated by each of them will be about one away from the center.
+- [02:16:14.790 - 02:16:22.949] Opher Donchin: But… For this distribution, that's because there's an even balance
+- [02:16:23.100 - 02:16:26.739] Opher Donchin: Between data that's very close and data that's far away.
+- [02:16:28.330 - 02:16:35.980] Opher Donchin: For this distribution, That one works out to be… An average of…
+- [02:16:36.260 - 02:16:42.189] Opher Donchin: A fair amount of data being close, and less data being far away.
+- [02:16:43.850 - 02:16:44.450] Opher Donchin: What's shut up.
+- [02:16:44.459 - 02:16:45.499] Ohad Hofman: Great to have us.
+- [02:16:45.500 - 02:16:47.220] Opher Donchin: Same answer. What's that?
+- [02:16:47.670 - 02:16:50.019] Ohad Hofman: et le cos institution.
+- [02:16:50.020 - 02:16:55.420] Opher Donchin: Yeah, so it may be easiest to understand if you just look at the equation for it.
+- [02:16:56.180 - 02:17:00.140] Opher Donchin: Standard… the variance is X minus mu squared, right?
+- [02:17:01.940 - 02:17:04.449] Opher Donchin: The kurtosis is X minus mu to the fourth.
+- [02:17:05.650 - 02:17:07.869] Opher Donchin: So what does that do if you… if you…
+- [02:17:08.260 - 02:17:14.839] Opher Donchin: put it to the fourth incident squared. It means that data that's further out will be more heavily weighted.
+- [02:17:15.430 - 02:17:18.609] Opher Donchin: Than data that's only a little bit further out.
+- [02:17:20.500 - 02:17:21.389] Opher Donchin: Right?
+- [02:17:21.530 - 02:17:25.779] Opher Donchin: The farther something is from the center, the bigger its weight becomes.
+- [02:17:26.990 - 02:17:29.259] Opher Donchin: Like the square, but even more so.
+- [02:17:33.480 - 02:17:34.400] Opher Donchin: Okay.
+- [02:17:34.750 - 02:17:35.270] Opher Donchin: So, when
+- [02:17:40.650 - 02:17:44.910] Opher Donchin: I… I'll say it in English, and you stop me when you're having trouble.
+- [02:17:45.360 - 02:17:46.120] Opher Donchin: Okay?
+- [02:17:52.559 - 02:17:55.569] Opher Donchin: I mean, I'm… I'm…
+- [02:17:56.189 - 02:18:02.139] Opher Donchin: I need to understand what you don't understand, so I don't want to repeat myself in Hebrew, I want to figure out what the problem is.
+- [02:18:02.289 - 02:18:06.069] Opher Donchin: Let me start by saying that kurtosis in Hebrew is called kultosis.
+- [02:18:07.239 - 02:18:10.219] Opher Donchin: Okay, so that… that's not gonna go anywhere.
+- [02:18:10.689 - 02:18:17.419] Opher Donchin: And… the tail, I mean the part of the distribution that is far away from the center.
+- [02:18:18.619 - 02:18:24.399] Opher Donchin: If the distribution is unimodal, then most of the stuff… Stuff is in the middle.
+- [02:18:25.309 - 02:18:29.049] Opher Donchin: And out, far away from the middle, everything goes down to zero.
+- [02:18:29.559 - 02:18:30.509] Opher Donchin: Right?
+- [02:18:31.689 - 02:18:33.039] Opher Donchin: Good so far?
+- [02:18:33.540 - 02:18:35.029] Ohad Hofman: Good. Safar.
+- [02:18:35.740 - 02:18:36.400] Opher Donchin: Alright.
+- [02:18:37.059 - 02:18:41.609] Opher Donchin: But it could go down to zero faster or slower.
+- [02:18:44.299 - 02:18:44.879] Opher Donchin: Right?
+- [02:18:46.730 - 02:18:47.440] Opher Donchin: So…
+- [02:18:47.440 - 02:18:48.090] Ohad Hofman: fun.
+- [02:18:48.730 - 02:18:52.010] Opher Donchin: If it goes down to zero faster.
+- [02:18:53.389 - 02:19:03.699] Opher Donchin: Right? I guess over here. If it goes down to zero faster, you can see that it gets to zero more quickly here than it does over here. Do you see that?
+- [02:19:09.370 - 02:19:16.520] Opher Donchin: Yeah. Down here, it flattens out, you know, by about 2 point… 7.
+- [02:19:16.680 - 02:19:20.789] Opher Donchin: And over here, it's not really flat until somewhere around 3.8.
+- [02:19:22.580 - 02:19:23.600] Opher Donchin: You see that? Okay.
+- [02:19:24.219 - 02:19:25.030] Ohad Hofman: Ben?
+- [02:19:25.459 - 02:19:29.949] Opher Donchin: So if it gets to zero faster, that's called a negative kurtosis.
+- [02:19:33.639 - 02:19:44.229] Opher Donchin: So… The zero kurtosis, we set zero, is actually arranged So, that's…
+- [02:19:44.599 - 02:19:47.419] Opher Donchin: True for the normal distribution.
+- [02:19:48.469 - 02:19:53.359] Opher Donchin: Right? If we'd just taken this without a minus 3 here.
+- [02:19:54.179 - 02:19:59.699] Opher Donchin: then there'd be no standard. Everything, you know, everything would be positive, like we do with variants.
+- [02:20:03.900 - 02:20:09.800] Opher Donchin: So what we do is, it turns out that if you calculate the kurtosis of a normal distribution.
+- [02:20:11.180 - 02:20:18.509] Opher Donchin: If you just calculate this, Integrated over a normal distribution, you'll get exactly 3.
+- [02:20:19.900 - 02:20:23.259] Opher Donchin: And so in the definition of kurtosis, we subtract 3,
+- [02:20:24.410 - 02:20:27.509] Opher Donchin: So that for a normal distribution, we get exactly zero.
+- [02:20:29.650 - 02:20:33.390] Ohad Hofman: Okay.
+- [02:20:33.660 - 02:20:37.370] Ohad Hofman: Yeah?
+- [02:20:37.760 - 02:20:42.749] Opher Donchin: No, not… no, every normal distribution will have a kurtosis of zero.
+- [02:20:43.080 - 02:20:52.610] Ohad Hofman: quilo.
+- [02:20:53.690 - 02:20:54.490] Opher Donchin: No.
+- [02:20:54.820 - 02:20:56.400] Opher Donchin: Every normal distribution.
+- [02:20:57.050 - 02:21:00.249] Opher Donchin: Whether its mean is 0 or 1, or 10, or 100,
+- [02:21:01.760 - 02:21:05.900] Opher Donchin: And whether its standard deviation is 0, or 10, or 100, or 1,000.
+- [02:21:06.410 - 02:21:09.470] Opher Donchin: Every normal distribution will have a kurtosis is zero.
+- [02:21:10.890 - 02:21:11.690] Ohad Hofman: Okay.
+- [02:21:12.630 - 02:21:18.919] Opher Donchin: A distribution that… whose tails are thicker than the normal distribution?
+- [02:21:22.740 - 02:21:26.570] Opher Donchin: Even though it has the same standard deviation, the same width.
+- [02:21:27.210 - 02:21:30.800] Opher Donchin: It manages to have that width with wider tails.
+- [02:21:34.010 - 02:21:36.440] Opher Donchin: It will have a positive cortosis.
+- [02:21:40.270 - 02:21:40.820] Ohad Hofman: Okay.
+- [02:21:40.820 - 02:21:48.480] Opher Donchin: And I want to be clear, Ohat, that it makes sense that this is a little bit tricky.
+- [02:21:49.240 - 02:21:51.989] Opher Donchin: Okay, it's not weird that you're having trouble with this.
+- [02:21:52.710 - 02:21:54.710] Ohad Hofman: No, it's not obvious.
+- [02:21:54.870 - 02:21:57.109] Opher Donchin: What's that? I know.
+- [02:21:57.110 - 02:21:58.200] Ohad Hofman: listable.
+- [02:21:58.490 - 02:22:13.800] Opher Donchin: The… the… so even people who do understand probability, it's a tricky concept, because… why? Because the size of the tails seems to us like it should… it should affect the standard deviation. It should affect the width.
+- [02:22:15.440 - 02:22:21.139] Opher Donchin: Right? The wider the tails, the bigger… Where is it?
+- [02:22:21.410 - 02:22:22.910] Opher Donchin: The bigger this'll be.
+- [02:22:25.700 - 02:22:26.680] Opher Donchin: Right?
+- [02:22:28.910 - 02:22:31.980] Opher Donchin: And so bigger tails should mean bigger variants.
+- [02:22:35.560 - 02:22:36.450] Opher Donchin: Right?
+- [02:22:37.870 - 02:22:38.640] Ohad Hofman: Okay.
+- [02:22:38.820 - 02:22:47.240] Opher Donchin: But… Because of the minus 3, Right?
+- [02:22:47.600 - 02:22:56.610] Opher Donchin: Then, what happens is, that… It's a question of the size of the tails relative to the normal distribution.
+- [02:22:59.410 - 02:23:00.150] Ohad Hofman: Okay.
+- [02:23:00.150 - 02:23:07.620] Opher Donchin: Right? So that, for a specific standard deviation, if I fix the standard deviation, if I say.
+- [02:23:07.800 - 02:23:10.779] Opher Donchin: Oh, this is gonna be one.
+- [02:23:15.260 - 02:23:16.210] Opher Donchin: Right?
+- [02:23:16.980 - 02:23:20.420] Opher Donchin: I'm gonna pick my distribution so that this is 1.
+- [02:23:21.440 - 02:23:27.670] Opher Donchin: Okay. You can still create situations where this… is big.
+- [02:23:28.700 - 02:23:35.079] Opher Donchin: By having a lot… of… Big numbers.
+- [02:23:35.470 - 02:23:37.779] Opher Donchin: And fewer small numbers.
+- [02:23:37.920 - 02:23:44.950] Opher Donchin: Even though they still end up here being 1, Right? Or small.
+- [02:23:48.180 - 02:23:52.810] Opher Donchin: Okay, you can sort of see that here. If I put these guys on top of each other.
+- [02:23:53.750 - 02:23:56.989] Opher Donchin: This is the… the negative kurtosis one.
+- [02:23:57.130 - 02:23:59.439] Opher Donchin: And this is the positive kurtosis one.
+- [02:24:01.240 - 02:24:07.260] Opher Donchin: Okay, you see the blue is negative cortosis? It's this picture, just covered…
+- [02:24:07.680 - 02:24:12.209] Opher Donchin: Over here in blue. And the red is this picture.
+- [02:24:12.470 - 02:24:14.199] Opher Donchin: Just over here in red.
+- [02:24:14.790 - 02:24:16.850] Opher Donchin: yeah?
+- [02:24:18.050 - 02:24:26.910] Opher Donchin: Then what you can see is not only does the red go down slower, But over here, near 1,
+- [02:24:27.030 - 02:24:29.350] Opher Donchin: There's less red and more blue.
+- [02:24:32.070 - 02:24:39.349] Opher Donchin: So that there's… for the… for when there's a lot of cortosis, you have a sharper peak and wider tails.
+- [02:24:40.870 - 02:24:43.320] Opher Donchin: Lots of numbers near zero.
+- [02:24:43.460 - 02:24:46.009] Opher Donchin: And lots of numbers very far away from it.
+- [02:24:46.320 - 02:24:51.089] Opher Donchin: So that they average out, in the end, to give you a standard deviation of 1.
+- [02:24:54.340 - 02:24:57.250] Opher Donchin: You can get the same standard deviation of 1,
+- [02:24:57.400 - 02:25:04.070] Opher Donchin: With fewer numbers near zero, and fewer numbers far away from it, and more numbers near 1.
+- [02:25:06.770 - 02:25:08.490] Adi: Manchavuter.
+- [02:25:09.360 - 02:25:10.770] Adi: No, those are true.
+- [02:25:10.770 - 02:25:13.030] Opher Donchin: So, Toveta is a… is a…
+- [02:25:14.810 - 02:25:16.860] Opher Donchin: You know, it's just a distribution.
+- [02:25:17.320 - 02:25:28.800] Opher Donchin: Right? There's advantages to dealing with the normal distribution, because we're used to it, because it's the result of the central limit theorem, because there's lots of math around it, and it's easy to play with.
+- [02:25:29.900 - 02:25:30.780] Opher Donchin: Right?
+- [02:25:31.620 - 02:25:36.490] Opher Donchin: There are disadvantages to having a distribution with positive cortosis.
+- [02:25:36.630 - 02:25:43.210] Opher Donchin: Because what that means is that there's lots of outliers, there's lots of people who are really different than the average.
+- [02:25:44.660 - 02:25:47.810] Opher Donchin: And so it's harder to make a good guess about the average.
+- [02:25:49.580 - 02:25:53.749] Opher Donchin: But if… remember, we're thinking about these things as models.
+- [02:25:54.760 - 02:26:00.559] Opher Donchin: What we really want is we want the one that's going to be the best model for our data, given our needs.
+- [02:26:01.280 - 02:26:05.739] Opher Donchin: If our data really has a lot of outliers, then we probably want to model it
+- [02:26:06.090 - 02:26:09.899] Opher Donchin: With a distribution that allows for positive kurtosis.
+- [02:26:11.750 - 02:26:15.690] Opher Donchin: If our distribution is probably more like normal.
+- [02:26:16.060 - 02:26:19.659] Opher Donchin: Then it may be okay to just use the normal distribution as a model.
+- [02:26:21.790 - 02:26:23.239] Opher Donchin: Does that make sense, Adid?
+- [02:26:25.550 - 02:26:30.040] Opher Donchin: And, ad, are you… are you with me now on the… what it actually means?
+- [02:26:31.940 - 02:26:37.930] Ohad Hofman: kilomolitu.
+- [02:26:38.300 - 02:26:41.050] Opher Donchin: That's the… if you're gonna remember one thing.
+- [02:26:41.190 - 02:26:43.840] Opher Donchin: Kurtosis is the width of the tails.
+- [02:26:44.060 - 02:26:52.170] Opher Donchin: Relative to the standard… to the normal distribution, Right? If you're gonna remember… two things…
+- [02:26:52.500 - 02:27:01.520] Opher Donchin: then it's possible that the kurtosis is separate from the standard deviation. It's not the width, it's just the size of the tails.
+- [02:27:02.990 - 02:27:04.699] Ohad Hofman: Okay, sabo. Ta-da.
+- [02:27:05.210 - 02:27:05.840] Opher Donchin: Okay.
+- [02:27:08.390 - 02:27:17.150] Opher Donchin: So here's, like, distributions with different… this is the normal distribution, this distribution
+- [02:27:17.260 - 02:27:20.799] Opher Donchin: As, you tell me, a positive or a negative kurtosis?
+- [02:27:22.960 - 02:27:23.960] Adi: clearly.
+- [02:27:24.350 - 02:27:25.420] Opher Donchin: That's right.
+- [02:27:25.890 - 02:27:29.259] Opher Donchin: This distribution has a positive or a negative skew.
+- [02:27:31.030 - 02:27:31.950] Ohad Hofman: QV.
+- [02:27:32.320 - 02:27:33.370] Opher Donchin: That's right.
+- [02:27:33.530 - 02:27:37.740] Opher Donchin: And the student D-distribution, which we'll use a lot, is a classic
+- [02:27:38.260 - 02:27:42.730] Opher Donchin: Example of a distribution which allows for positive kurtosis.
+- [02:27:43.640 - 02:27:50.880] Opher Donchin: in one limit, it becomes like the normal distribution. When new is very large, it becomes just like the normal distribution.
+- [02:27:51.030 - 02:27:59.810] Opher Donchin: But, when nu is small, this is a distribution that we use a lot that has a positive kurtosis, but it's also symmetrical.
+- [02:28:01.430 - 02:28:02.520] Opher Donchin: Okay?
+- [02:28:05.660 - 02:28:08.729] Opher Donchin: Alright, that's it for material for today.
+- [02:28:08.970 - 02:28:15.209] Opher Donchin: Look at that timing. Look at that timing! Alright, I just want to tell you a little bit about the course.
+- [02:28:18.150 - 02:28:33.990] Opher Donchin: As you see already, our course goals are understanding what data is, creating models that can explain data, drawing conclusions about the models from the data, and then testing hypotheses. We talked about inference at the very, very beginning of the lecture, by comparing models.
+- [02:28:34.800 - 02:28:38.789] Opher Donchin: Right? When you're done with the course, you should be able to do these four things.
+- [02:28:39.910 - 02:28:44.120] Opher Donchin: Today, at the end of the day today, you should have some idea of what they mean.
+- [02:28:47.090 - 02:28:52.930] Opher Donchin: If you are the kind of person who likes reading more than they like listening to me.
+- [02:28:53.070 - 02:29:02.629] Opher Donchin: Then, there's this book called Bayesian Analysis for Python, and most of what we do in the course, except for the frequentist stuff, is all in here.
+- [02:29:03.240 - 02:29:14.559] Opher Donchin: It was the basis, many of the examples are taken from here. I… it… we're not exactly following the book anymore, but I still use… I still bring it because it's crazy easy to read.
+- [02:29:15.800 - 02:29:20.430] Opher Donchin: Okay, it's very, very, very simple, straightforward presentation of the material.
+- [02:29:22.400 - 02:29:33.529] Opher Donchin: You can… you… the full text is available in the library, and so you can read it, you know, in the… in the privacy of your home, on your… on your laptop, or on your iPad.
+- [02:29:36.170 - 02:29:43.750] Opher Donchin: Grading, we have the in-class activities, they're 5% of the grade.
+- [02:29:44.490 - 02:29:49.869] Opher Donchin: So, like I say, a small percent of the grade, if you want to skip class, you can.
+- [02:29:50.110 - 02:29:54.910] Opher Donchin: If you want the grade, you can. I'm going to distribute them, you know, given what we learned today.
+- [02:29:55.080 - 02:30:01.450] Opher Donchin: Throughout the lecture in the future, so, you know, if you want to show up for half a lecture and get half the points, that's also okay.
+- [02:30:01.870 - 02:30:06.800] Opher Donchin: Exercises, homework, if you like, 15% of the grade.
+- [02:30:07.280 - 02:30:10.390] Opher Donchin: 3 exercises, each worth 5%.
+- [02:30:10.560 - 02:30:20.649] Opher Donchin: as, Noam probably told you, we are aware that people use AI. I'm going to put it in the syllabus. It is okay to use AI as much as you want.
+- [02:30:20.760 - 02:30:22.340] Opher Donchin: Anytime you want.
+- [02:30:22.550 - 02:30:26.320] Opher Donchin: Right? Accept…
+- [02:30:27.070 - 02:30:32.480] Opher Donchin: on the WooClapse during class, obviously, and on the exam when you will not have access to it.
+- [02:30:33.070 - 02:30:45.129] Opher Donchin: But in order to make sure that you use the AI cleverly, and to further your own knowledge, there will be a woo clap on each exercise in the tutorial following submission.
+- [02:30:46.430 - 02:30:52.220] Opher Donchin: And it will test whether you understood the material in the exercise.
+- [02:30:52.760 - 02:30:58.039] Opher Donchin: It's not graded, but if you fail the WooClap, you cannot get full credit for the submission.
+- [02:31:00.480 - 02:31:09.189] Opher Donchin: Okay? There's a midterm quiz, it's not a lot of the grade, and we're using it only as a, again.
+- [02:31:10.200 - 02:31:16.420] Opher Donchin: Its primary goal is to make sure that you, are keeping up with the material.
+- [02:31:16.670 - 02:31:22.499] Opher Donchin: At least to some extent, by the set, by the middle of the course, that we're not running ahead, leaving you behind.
+- [02:31:22.610 - 02:31:25.939] Opher Donchin: And as a sort of practice for the way that the exam's gonna be.
+- [02:31:30.110 - 02:31:34.400] Opher Donchin: And then there's the exam. It works out to be 70% of the course.
+- [02:31:34.570 - 02:31:43.979] Opher Donchin: It's gonna be on computers, but it will be closed book. We will prepare a formula sheet, starting with this lecture. We will, publish
+- [02:31:44.190 - 02:31:48.180] Opher Donchin: The formula sheet, as it accumulates over the course of the semester.
+- [02:31:48.680 - 02:31:50.849] Opher Donchin: If there's stuff you want put in it.
+- [02:31:51.080 - 02:31:57.699] Opher Donchin: that you don't see, let us know. I'm not guaranteeing we'll put it in, but, you know, we'll certainly consider it.
+- [02:31:57.980 - 02:32:05.949] Opher Donchin: There's a discussion forum on the Moodle where you can suggest stuff or ask questions. There are many resources.
+- [02:32:06.210 - 02:32:13.540] Opher Donchin: So for every slide, there's a… there's the slides themselves, Right? There's a notebook.
+- [02:32:13.960 - 02:32:30.270] Opher Donchin: that it generates all the figures, so you can see the Python that went into doing any of the figures or any of the analysis that I did. There's also a handout, again, for people who like to read or miss the lecture or don't feel like listening, which summarizes the lecture, sort of.
+- [02:32:30.670 - 02:32:32.519] Opher Donchin: Section by section.
+- [02:32:33.940 - 02:32:34.670] Opher Donchin: Okay?
+- [02:32:35.090 - 02:32:43.940] Opher Donchin: And there are the WooClaps, which I will make available, so you can see what the question was and what was the answer. Similarly, for the tutorials, there's the slides in the notebooks.
+- [02:32:44.380 - 02:32:49.729] Opher Donchin: The homeworks, you're gonna have the questions, and then once it's submitted, the solution and the WooClapse.
+- [02:32:50.890 - 02:32:53.739] Opher Donchin: The exam will have a formula sheet and practice questions.
+- [02:32:53.870 - 02:33:01.070] Opher Donchin: And, it's all available on a public GitHub, which is linked from the Moodle. That's where we'll be putting materials.
+- [02:33:02.080 - 02:33:04.879] Opher Donchin: And you can see all the…
+- [02:33:05.050 - 02:33:11.290] Opher Donchin: course material and the data, and I will say, I think this is the last slide, I will say also, on that public GitHub.
+- [02:33:11.830 - 02:33:19.600] Opher Donchin: Is a… Pixie file, P-I-X-I, and instructions.
+- [02:33:20.060 - 02:33:27.379] Opher Donchin: On how to generate an environment so that you can run your notebooks Locally, instead of on Colab.
+- [02:33:28.260 - 02:33:32.770] Opher Donchin: As the, you know, collab is fine, it works really well.
+- [02:33:33.040 - 02:33:42.889] Opher Donchin: It's easy, but you may find over the course of the semester that the fact that it kicks you out after a certain amount of time is inconvenient for you.
+- [02:33:43.340 - 02:33:46.169] Opher Donchin: And so, I want you to be able to run things locally as well.
+- [02:33:47.590 - 02:33:48.770] Opher Donchin: Questions?
+- [02:33:57.220 - 02:33:57.960] Opher Donchin: Yep.
+- [02:33:57.960 - 02:34:00.510] shaked zur: automotive.
+- [02:34:03.700 - 02:34:09.079] Opher Donchin: We have not… Come up with any… yet?
+- [02:34:11.300 - 02:34:17.650] Opher Donchin: why don't… Why don't you send me a mail?
+- [02:34:18.410 - 02:34:28.449] Opher Donchin: With, your situation, and we're gonna… and we'll use… and anybody else who's listening to me who has reserve duty, send me a mail what the situation is.
+- [02:34:29.270 - 02:34:36.030] Opher Donchin: And we'll use what we know about what's going on to come up with what we think of as a fair general policy.
+- [02:34:37.000 - 02:34:39.430] shaked zur: Okay, an AWM kilometer.
+- [02:34:39.980 - 02:34:49.579] Opher Donchin: Yeah, if you guys can… if you guys can work together and sort of give me a sense of what's going on in the class, that would be helpful, but it's also fine if you just each individual send me, or any combination.
+- [02:34:49.730 - 02:34:52.100] Opher Donchin: Try to have something ready for you by next week.
+- [02:34:52.760 - 02:34:53.400] shaked zur: Ta-da.
+- [02:34:55.970 - 02:34:57.140] Opher Donchin: More questions.
+- [02:35:00.830 - 02:35:07.449] Opher Donchin: I will say, just so that we're, clear on the… on where this will go.
+- [02:35:07.830 - 02:35:18.630] Opher Donchin: The general policy on reserve duty… is to… Focus on ensuring I'm gonna stop the share.
+- [02:35:20.050 - 02:35:25.749] Opher Donchin: Focus on ensuring that you know the material, At the cost of,
+- [02:35:26.500 - 02:35:29.900] Opher Donchin: Allowing late submissions and extra work on our part.
+- [02:35:30.340 - 02:35:37.139] Opher Donchin: As opposed to the kind of, considerations which excuse you from certain submissions or certain
+- [02:35:37.700 - 02:35:40.580] Opher Donchin: Amounts the material, or just somehow give points.
+- [02:35:41.970 - 02:35:43.179] Opher Donchin: Does that make sense?
+- [02:35:43.970 - 02:35:48.789] shaked zur: If sur la guia qui…
+- [02:35:48.790 - 02:36:01.280] Opher Donchin: So the WooClapse, the rule on the WooClapse, and this is not just reserve duty, is that you are excused from WooClapse and have to do them later, or whatever, we'll figure that out.
+- [02:36:01.570 - 02:36:06.390] Opher Donchin: Under the same rules as which you are excused from exams.
+- [02:36:07.220 - 02:36:12.269] Opher Donchin: And I don't remember exactly what they are, but it's in your student handbook. There's, like, 4 different reasons.
+- [02:36:12.410 - 02:36:20.330] Opher Donchin: I think if you're hospitalized, for, you know, during… you're actively hospitalized during the exam, if you're getting married.
+- [02:36:20.950 - 02:36:24.730] Opher Donchin: I think death in the immediate family and reserve duty is one of them.
+- [02:36:26.910 - 02:36:28.009] Opher Donchin: And so…
+- [02:36:28.280 - 02:36:35.149] Opher Donchin: And there may be… there may be others, but there's a very specific list, and for everything, for every…
+- [02:36:35.650 - 02:36:37.970] Opher Donchin: That includes also the midterm.
+- [02:36:38.560 - 02:36:44.159] Opher Donchin: Our general policy is that only those reasons allow for excuses.
+- [02:36:44.830 - 02:36:48.780] Opher Donchin: And otherwise, you're gonna have to,
+- [02:36:48.950 - 02:36:51.779] Opher Donchin: You know, either pay the price of not going.
+- [02:36:52.140 - 02:36:55.659] Opher Donchin: Or find a different accommodation with the rest of your life.
+- [02:36:57.940 - 02:37:05.169] Opher Donchin: Okay, things that require you to be there are, in general, a low percentage, or a McGen, so it feels like it's fair.
+- [02:37:07.200 - 02:37:08.260] Opher Donchin: Okay?
+- [02:37:08.710 - 02:37:09.610] shaked zur: Yeah, don't know.
+- [02:37:11.150 - 02:37:14.239] Opher Donchin: Alright, I will see you guys next week. Thanks for coming.
+- [02:37:16.250 - 02:37:17.600] Ohad Hofman: Dalba.
+- [02:37:17.600 - 02:37:18.780] Noga Grosfeld: Go down.
+- [02:37:18.780 - 02:37:20.000] Adi: That one!
+- [02:37:20.310 - 02:37:20.625] Deniss Garejevs: Soda.

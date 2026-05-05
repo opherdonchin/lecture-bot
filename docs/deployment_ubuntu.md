@@ -159,6 +159,21 @@ sudo find /srv/lecture-bot/.git -type d -exec chmod g+rx {} \;
 sudo find /srv/lecture-bot/.git -type f -exec chmod g+r {} \;
 ```
 
+## 6a. Configure sparse checkout to protect the lectures directory
+
+The public repo includes `lectures/lecture_01/` as an example, but production servers manage their own private `lectures/` content (copied in via rsync, not git). Configure sparse checkout so that `git pull` never touches `lectures/`:
+
+```bash
+cd /srv/lecture-bot
+git sparse-checkout init --no-cone
+printf '/*\n!/lectures\n' > .git/info/sparse-checkout
+git sparse-checkout reapply
+```
+
+After `reapply`, git removes the example `lectures/lecture_01/` files it just cloned — that is the intended behaviour. The `lectures/` directory will be populated in step 10 via rsync from the private source.
+
+From this point on, all future `git pull origin main` calls will update application code but leave `lectures/` completely untouched.
+
 ## 7. Create runtime directories inside the repo
 
 ```bash
@@ -751,4 +766,4 @@ set +a
 pixi run test
 ```
 
-If the code update includes changes to the private lecture packages, sync those too before restarting.
+`git pull` will not touch `lectures/` because sparse checkout (configured in step 6a) excludes that directory. If you need to update lecture packages on this server, sync them separately via rsync from the private source.

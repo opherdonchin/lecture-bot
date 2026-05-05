@@ -1,0 +1,350 @@
+{
+  "lecture_metadata": {
+    "title": "Lecture 1: Probabilities",
+    "lecture_identifier": "lecture_01_probabilities",
+    "main_purpose": "Introduce statistics as model-mediated reasoning from finite, imperfect measurements to claims about reality, then motivate probability distributions and descriptive parameters as tools for representing uncertainty.",
+    "source_files": {
+      "slides": "slides.md",
+      "handout": "handout.md",
+      "notebook": "notebook.md",
+      "transcript": "transcript.md"
+    }
+  },
+  "teaching_notes": {
+    "central_arc": [
+      "Statistics is needed because reality is hidden from direct view; we only get measurements and must reason through models.",
+      "Data are finite measurement products, often heavily processed, so what counts as data already depends on collection and transformation choices.",
+      "Before modeling, students must separate different kinds of data quality problems and understand that some failures come from collection rather than from later analysis.",
+      "Probability enters as the language for uncertainty, and the lecture sharply separated randomness in the world from uncertainty due to incomplete knowledge.",
+      "Probability distributions and their parameters are not just formulas: their plots, code, and summaries must be interpreted as claims about likely values, spread, asymmetry, and tails."
+    ],
+    "sections": [
+      {
+        "section_id": "1.1-1.2",
+        "section_title": "Why statistics exists / What is statistics",
+        "importance": "core",
+        "teaching_goal": "Help students see statistics as indirect reasoning about hidden reality through data and models rather than as a machine for extracting truth directly.",
+        "orally_sharpened_distinctions": [
+          "Reality is what we care about, data are the measurements we can see, and models are the ideas that let measurements say something about reality.",
+          "Statistics tells us what the data imply about a model, not what reality is with certainty.",
+          "The same measurements can be compatible with more than one model."
+        ],
+        "resolved_confusions": [
+          "Why statistics is still useful even though we never 'see inside the box': it constrains ideas about reality rather than revealing reality directly.",
+          "Why the reality-data-model relation is iterative: data update models, and models generate new questions and new data collection."
+        ],
+        "warnings_common_mistakes": [
+          "Do not talk as if statistical analysis directly reveals the true state of the world.",
+          "Do not treat agreement between data and a model as proof that the model is true."
+        ],
+        "oral_interpretations": [
+          {
+            "kind": "figure",
+            "item": "Reality / experiment / measurement / model diagrams",
+            "takeaway": "The figures were used to show that measurements only become informative after being interpreted through a model, and that inference always stays one step removed from reality."
+          }
+        ],
+        "high_value_checks": [
+          "Can the student explain the role of the model in the reality-data-model diagram?",
+          "Can the student explain why statistics can inform a model without guaranteeing truth?",
+          "Can the student describe the loop from data to model revision to further data collection?"
+        ],
+        "incidental_or_do_not_assess": [
+          "Historical names and dates used for motivation.",
+          "The scientist-versus-engineer framing used as general motivation."
+        ]
+      },
+      {
+        "section_id": "1.3",
+        "section_title": "What is data",
+        "importance": "core",
+        "teaching_goal": "Make students understand data as finite observations produced by measurement processes, including preprocessing and derived quantities.",
+        "orally_sharpened_distinctions": [
+          "Data are not reality itself; they are recorded outputs of a measurement process.",
+          "A derived or normalized quantity can still be data if it is part of the measurement-and-processing pipeline.",
+          "A dataset is finite at the moment of analysis even if more data could be collected later."
+        ],
+        "resolved_confusions": [
+          "Why an apparently obvious claim like 'data are finite' matters later: students will be tempted to reason as if more data were already available.",
+          "Why preprocessing does not make a quantity cease to be data."
+        ],
+        "warnings_common_mistakes": [
+          "Do not ignore the chain of operations that produced a number and then speak as if it were raw reality.",
+          "Do not slide from 'I could collect more data' to 'my current dataset is effectively unlimited.'"
+        ],
+        "oral_interpretations": [
+          {
+            "kind": "example",
+            "item": "Raw versus normalized cerebellar volume example",
+            "takeaway": "The example showed that a transformed quantity may be more useful than a raw one because it better matches the scientific comparison of interest."
+          }
+        ],
+        "high_value_checks": [
+          "Can the student explain why normalized cerebellar volume may be a better measure than raw cerebellar volume for some questions?",
+          "Can the student explain why a processed quantity can still count as data?",
+          "Can the student state why finiteness of the dataset matters for later inference?"
+        ],
+        "incidental_or_do_not_assess": [
+          "Detailed MRI physics or voxel-processing specifics."
+        ]
+      },
+      {
+        "section_id": "1.4",
+        "section_title": "Imperfect data",
+        "importance": "core",
+        "teaching_goal": "Teach students to distinguish major sources of data imperfection and to recognize where interpretation breaks before formal statistics even begins.",
+        "orally_sharpened_distinctions": [
+          "Precision is consistency of repeated measurement; validity is whether the measure tracks the intended thing; reliability is whether the same process or rater gives stable answers.",
+          "Missing data can actively bias conclusions, not just make them noisier.",
+          "A proxy measure is something observed in place of the quantity actually of interest."
+        ],
+        "resolved_confusions": [
+          "Validity was made more concrete as requiring a meaningful monotonic relation between the measure and the thing cared about.",
+          "Reliability was distinguished from mere imprecision by examples where the procedure is stable or unstable across raters or times.",
+          "Proxy measures were clarified as often unavoidable rather than automatically illegitimate."
+        ],
+        "warnings_common_mistakes": [
+          "Do not assume statistics can rescue fundamentally bad data collection.",
+          "Do not talk as if a proxy measure is identical to the target construct.",
+          "Do not treat ethical issues as separate from data quality and use."
+        ],
+        "oral_interpretations": [
+          {
+            "kind": "example",
+            "item": "Pulse oximeter calibration example",
+            "takeaway": "Sampling bias can create systematic failure in real devices even when the measurement technology seems established."
+          },
+          {
+            "kind": "example",
+            "item": "Glucose monitor example",
+            "takeaway": "Measurement error can have harmful consequences when people act on a noisy signal as if it were accurate enough for control."
+          },
+          {
+            "kind": "example",
+            "item": "Neural activity proxy examples",
+            "takeaway": "Extracellular recordings and calcium signals were used to show how scientific inference often depends on imperfect stand-ins for the variable of interest."
+          }
+        ],
+        "high_value_checks": [
+          "Can the student distinguish precision, validity, and reliability on a new example?",
+          "Can the student explain why missing data may reverse or distort a conclusion rather than merely widen uncertainty?",
+          "Can the student explain what makes a measure a proxy and what inferential caution that creates?"
+        ],
+        "incidental_or_do_not_assess": [
+          "Specific historical or policy details of the economics spreadsheet example.",
+          "Detailed ethics checklist language beyond the core ideas of consent, privacy, power asymmetry, and downstream harm."
+        ]
+      },
+      {
+        "section_id": "1.5",
+        "section_title": "Types of data",
+        "importance": "important",
+        "teaching_goal": "Help students recognize common data types while seeing that type treatment can sometimes be an analytic choice rather than a fixed property.",
+        "orally_sharpened_distinctions": [
+          "Continuous, ordinal, and categorical are the main working types in the lecture.",
+          "The ontological type of a variable and the way an analyst chooses to treat it are related but not always identical."
+        ],
+        "resolved_confusions": [
+          "An ordinal scale with many levels can sometimes be treated as continuous for convenience, provided that the choice is recognized as a modeling decision.",
+          "Real datasets often combine several types simultaneously."
+        ],
+        "warnings_common_mistakes": [
+          "Do not treat recoding or type simplification as a trivial move with no consequences.",
+          "Do not assume every variable comes with a single uniquely forced analysis type."
+        ],
+        "oral_interpretations": [
+          {
+            "kind": "example",
+            "item": "Mixed cerebellar dataset example",
+            "takeaway": "The variable list was used to show that one dataset can contain categorical, ordinal, and continuous measurements together, with some borderline choices handled pragmatically."
+          }
+        ],
+        "high_value_checks": [
+          "Can the student classify example variables and explain any borderline choice?",
+          "Can the student explain why treating an ordinal variable as continuous can be acceptable in some contexts?",
+          "Can the student connect data type recognition to later model choice?"
+        ],
+        "incidental_or_do_not_assess": [
+          "The exact list of sample variables from the cerebellar table."
+        ]
+      },
+      {
+        "section_id": "1.6",
+        "section_title": "Probability and uncertainty",
+        "importance": "core",
+        "teaching_goal": "Establish probability as the language for uncertainty and sharply separate aleatory uncertainty from epistemic uncertainty.",
+        "orally_sharpened_distinctions": [
+          "Aleatory uncertainty is uncertainty because the process itself is stochastic.",
+          "Epistemic uncertainty is uncertainty because relevant information is missing, hidden, or unevenly distributed.",
+          "Repeated-trial frequency is a natural interpretation for aleatory cases but not for one-off predictive situations like wars or markets."
+        ],
+        "resolved_confusions": [
+          "Why different people can legitimately assign different probabilities in epistemic settings: they condition on different information.",
+          "Why both types of uncertainty can coexist in scientific data: some variation comes from the world, some from limited knowledge and measurement."
+        ],
+        "warnings_common_mistakes": [
+          "Do not collapse every use of probability into long-run frequency language.",
+          "Do not describe single-case prediction-market probabilities as if they referred to repeated identical worlds.",
+          "Do not over-read the brief frequentist-versus-Bayesian preview in this lecture as a complete treatment."
+        ],
+        "oral_interpretations": [
+          {
+            "kind": "plot",
+            "item": "Running proportion of heads plot",
+            "takeaway": "The coin-flip plot illustrated the frequentist long-run convergence idea tied to aleatory uncertainty."
+          },
+          {
+            "kind": "example",
+            "item": "Poker and prediction-market examples",
+            "takeaway": "These examples were used to show epistemic probability as a graded state of knowledge that changes with information rather than with repeated trials."
+          }
+        ],
+        "high_value_checks": [
+          "Can the student explain the roulette-versus-poker contrast in terms of aleatory and epistemic uncertainty?",
+          "Can the student explain why more information changes epistemic uncertainty but does not remove aleatory uncertainty from a stochastic process?",
+          "Can the student connect the two uncertainty types to the data-model loop used in the lecture?"
+        ],
+        "incidental_or_do_not_assess": [
+          "Specific Polymarket prices, dates, or war-specific details.",
+          "The brief value judgment about Bayesian versus frequentist statistics."
+        ]
+      },
+      {
+        "section_id": "1.7",
+        "section_title": "Probability distributions",
+        "importance": "core",
+        "teaching_goal": "Teach students to interpret probability distributions as model objects over possible values, including the difference between discrete probabilities, continuous densities, and cumulative probability.",
+        "orally_sharpened_distinctions": [
+          "For discrete random variables, values get probabilities; for continuous random variables, values get densities and probability lives over intervals.",
+          "A PDF describes local density; a CDF gives accumulated probability up to a point.",
+          "Samples drawn from a distribution are data generated by that distribution, not the same thing as the distribution itself."
+        ],
+        "resolved_confusions": [
+          "Why the probability between two continuous values is obtained by subtracting CDF values or integrating the density over the interval.",
+          "Why the top-row versus bottom-row plots in the PDF/CDF comparison are different kinds of objects."
+        ],
+        "warnings_common_mistakes": [
+          "Do not read the height of a continuous PDF at a single point as a point probability.",
+          "Do not confuse a simulated histogram with the underlying distribution that generated it."
+        ],
+        "oral_interpretations": [
+          {
+            "kind": "notebook_demo",
+            "item": "Sampling from a binomial distribution and comparing histogram to the PMF",
+            "takeaway": "The notebook demonstration linked abstract distributions to generated datasets while preserving the distinction between model and sample."
+          },
+          {
+            "kind": "plot",
+            "item": "Normal distribution with shaded region from -2 to 0",
+            "takeaway": "The shaded region was explicitly interpreted as interval probability computed from CDF(0) minus CDF(-2)."
+          },
+          {
+            "kind": "code",
+            "item": "PDF/CDF plotting code in Preliz",
+            "takeaway": "The code was used mainly to reinforce the meaning of the objects: draw the density, accumulate it, and use the CDF to get probabilities over ranges."
+          }
+        ],
+        "high_value_checks": [
+          "Can the student explain the discrete-versus-continuous distinction without saying that a continuous point has a regular probability?",
+          "Can the student explain how to compute probability between two continuous values from the CDF?",
+          "Can the student explain what the PDF/CDF comparison plots are showing?"
+        ],
+        "incidental_or_do_not_assess": [
+          "Package-specific function names unless they are needed to interpret the notebook output."
+        ]
+      },
+      {
+        "section_id": "1.8",
+        "section_title": "Parameters and describing distributions",
+        "importance": "core",
+        "teaching_goal": "Show how a distribution can be summarized compactly, while making clear that different descriptive numbers capture different aspects of shape.",
+        "orally_sharpened_distinctions": [
+          "Parameters are convenient compact descriptors of a distribution; descriptive summaries like center and spread are another compact language for the same object.",
+          "Mean, median, and mode are different notions of the 'middle,' and they separate when the distribution is asymmetric.",
+          "Kurtosis is about tails relative to peak and relative to the normal baseline, not simply about having a larger standard deviation."
+        ],
+        "resolved_confusions": [
+          "The median was tied directly to the CDF as the point where cumulative probability reaches 0.5.",
+          "The mean was clarified as tail-sensitive and therefore pulled toward the long tail in an asymmetric distribution.",
+          "The repeated student question on kurtosis was resolved by showing how same-standard-deviation distributions can still differ in tail weight and by explaining why excess kurtosis subtracts 3."
+        ],
+        "warnings_common_mistakes": [
+          "Do not assume a single number can fully describe a distribution.",
+          "Do not treat wider tails as automatically the same concept as greater spread.",
+          "Do not memorize kurtosis as a formula without understanding the comparison to the normal distribution."
+        ],
+        "oral_interpretations": [
+          {
+            "kind": "plot",
+            "item": "Asymmetric gamma distribution with mean, median, and mode marked",
+            "takeaway": "The plot was used to show that these summaries coincide only in special symmetric cases and separate in skewed distributions."
+          },
+          {
+            "kind": "plot",
+            "item": "Center-and-dispersion histogram annotation",
+            "takeaway": "The slide framed two-number description as center plus typical distance from center."
+          },
+          {
+            "kind": "plot",
+            "item": "Skewness and kurtosis comparison panels",
+            "takeaway": "The panels were interpreted qualitatively: skewness tracks tail direction, and kurtosis tracks how quickly the tails die out relative to a normal distribution with the same spread."
+          }
+        ],
+        "high_value_checks": [
+          "Can the student explain where mean, median, and mode sit in an asymmetric distribution and why?",
+          "Can the student explain why two distributions can share a standard deviation yet differ in kurtosis?",
+          "Can the student interpret the sign of skewness from the direction of the long tail?"
+        ],
+        "incidental_or_do_not_assess": [
+          "Deriving the third- and fourth-moment formulas in detail.",
+          "Exact Greek-letter notation for every parameter."
+        ]
+      }
+    ],
+    "cross_section_priorities": {
+      "highest_value_distinctions": [
+        "Reality vs data vs model.",
+        "Precision vs validity vs reliability.",
+        "Aleatory vs epistemic uncertainty.",
+        "Density over a range vs point probability for continuous distributions."
+      ],
+      "sound_right_but_wrong_risks": [
+        "Saying that statistics or a fitted model directly reveals reality.",
+        "Treating bad collection or proxy problems as if later statistics alone can fix them.",
+        "Using long-run frequency language for one-off epistemic predictions.",
+        "Equating heavier tails with merely having a larger standard deviation."
+      ],
+      "important_interpretations": [
+        "Normalized cerebellar volume as an example of processed data that may be better aligned with the scientific target.",
+        "Running proportion of heads as the lecture's concrete image of long-run aleatory probability.",
+        "CDF difference as the way to read interval probability from a continuous distribution.",
+        "Gamma / skewness / kurtosis plots as evidence that different summary numbers answer different descriptive questions."
+      ],
+      "brief_or_incidental_topics": [
+        "Historical survey of early statistics figures.",
+        "Detailed prediction-market mechanics and payout arithmetic.",
+        "Course logistics and WooClap procedure.",
+        "Exact moment-formula details beyond conceptual interpretation."
+      ]
+    }
+  },
+  "rubric_handoff": {
+    "static_materials_sufficient_for": [
+      "Basic named definitions of data types and of terms like probability distribution, random variable, and parameter.",
+      "The broad lecture flow from measurement to data to probabilistic models.",
+      "The existence of common summary measures such as mean, median, mode, variance, and standard deviation."
+    ],
+    "minutes_matter_most_for": [
+      "Treating the reality-data-model diagram as a claim about indirect inference rather than as decorative lecture framing.",
+      "Remembering that data are finite and may be heavily processed while still counting as data.",
+      "Separating precision, validity, reliability, proxy measurement, and missing-data problems in conceptually usable ways.",
+      "Interpreting aleatory versus epistemic uncertainty, PDF versus CDF, and kurtosis versus spread in the way the lecture actually taught them."
+    ],
+    "do_not_turn_into_direct_questions": [
+      "Do not ask students to recall historical names, dates, or book titles from the motivational slides.",
+      "Do not ask for Polymarket-specific facts, exact prices, or war-specific details from the example.",
+      "Do not turn package syntax or notebook library names into standalone assessment targets.",
+      "Do not make the brief frequentist-versus-Bayesian preview in this lecture carry more assessment weight than the lecture itself gave it."
+    ]
+  }
+}
