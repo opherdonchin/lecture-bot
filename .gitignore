@@ -42,8 +42,10 @@ logs/
 # Lecture content (keep directory structure but not files)
 lectures/**
 !lectures/
-!lectures/config.json
 !lectures/**/.gitkeep
 
 # Ensure tutor_prompt.md is tracked
 !prompts/tutor_prompt.md
+
+# Grading submissions (keep directory structure but not files)
+data/submissions/**

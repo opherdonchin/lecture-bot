@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Lecture Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Admin App</p>
+          <h1>Lecture Bot Admin</h1>
+          <p class="lead">Choose the workflow you want to work on.</p>
+        </div>
+      </section>
+
+      <section class="admin-menu-grid">
+        <a class="admin-menu-item" href="{{ url_path('admin_lectures') }}">
+          <strong>Content</strong>
+          <span>Manage lecture folders, sources, minutes, and rubrics.</span>
+        </a>
+        <a class="admin-menu-item" href="{{ url_path('admin_sessions') }}">
+          <strong>Sessions</strong>
+          <span>Review activity and export selected tutoring sessions.</span>
+        </a>
+        <a class="admin-menu-item" href="{{ url_path('admin_grades') }}">
+          <strong>Grades</strong>
+          <span>Upload Moodle submission ZIPs and prepare grade-import files.</span>
+        </a>
+        <a class="admin-menu-item" href="{{ url_path('admin_analysis') }}">
+          <strong>Analysis</strong>
+          <span>Reserved for course-level summaries and investigation workflows.</span>
+        </a>
+      </section>
+    </main>
+  </body>
+</html>

@@ -32,7 +32,7 @@ body {
 }
 
 .admin-card {
-  border-radius: 14px;
+  border-radius: 8px;
   border-color: #cfd8e6;
   box-shadow: 0 10px 30px rgba(71, 89, 120, 0.08);
 }
@@ -41,7 +41,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 14px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .back-link {
@@ -50,8 +52,53 @@ body {
   font-weight: 600;
 }
 
+.admin-nav {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.admin-nav a {
+  color: #2753a5;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.admin-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.admin-menu-item {
+  min-height: 130px;
+  padding: 18px;
+  border: 1px solid #cfd8e6;
+  border-radius: 8px;
+  background: #f9fbff;
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 10px 30px rgba(71, 89, 120, 0.08);
+}
+
+.admin-menu-item strong,
+.admin-menu-item span {
+  display: block;
+}
+
+.admin-menu-item strong {
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+}
+
+.admin-menu-item span {
+  color: #4e5969;
+  line-height: 1.4;
+}
+
 .notice {
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 12px 14px;
   margin-bottom: 14px;
 }
@@ -122,7 +169,7 @@ body {
   align-items: center;
   padding: 12px 14px;
   border: 1px solid #dbe3ef;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #f9fbff;
 }
 
@@ -200,7 +247,7 @@ body {
   margin-top: 16px;
   padding: 12px 14px;
   background: #f5f8ff;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid #d8e2f3;
 }
 
@@ -251,6 +298,40 @@ body {
   margin-top: 14px;
 }
 
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.summary-grid div {
+  padding: 12px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #f9fbff;
+}
+
+.summary-grid strong,
+.summary-grid span {
+  display: block;
+}
+
+.summary-grid strong {
+  font-size: 1.4rem;
+}
+
+.summary-grid span {
+  color: #4e5969;
+}
+
+.standalone-row {
+  margin-bottom: 14px;
+}
+
+.grade-upload-row input[type="file"] {
+  max-width: 320px;
+}
+
 .status-ready {
   color: #176b35;
   font-weight: 600;
@@ -272,7 +353,8 @@ body {
   .topbar,
   .section-header,
   .folder-row,
-  .file-row {
+  .file-row,
+  .admin-nav {
     flex-direction: column;
     align-items: flex-start;
   }

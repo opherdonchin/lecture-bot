@@ -348,6 +348,8 @@ def export_package(
         "tutor_generator_prompt.md",
         "master_rubric_generation_prompt.md",
         "minutes_generation_prompt.md",
+        "log_analysis_prompt.md",
+        "comment_analysis_prompt.md",
     ]
     for name in prompt_files:
         copy_file(PROMPTS_DIR / name, package_dir / "prompts" / name)

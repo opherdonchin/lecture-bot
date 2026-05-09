@@ -33,8 +33,13 @@ def _admin_auth():
 def _admin_settings(tmp_path):
     lectures_dir = tmp_path / "lectures"
     lectures_dir.mkdir(parents=True)
+    submissions_dir = tmp_path / "submissions"
     return config_module.Settings(
         lectures_dir=lectures_dir,
+        moodle_submissions_dir=submissions_dir,
+        moodle_participants_csv=submissions_dir / "participants.csv",
+        moodle_grade_import_csv=submissions_dir / "moodle_grade_import.csv",
+        moodle_grade_import_report_csv=submissions_dir / "moodle_grade_import_report.csv",
         admin_username="admin",
         admin_password="secret",
     )
@@ -141,9 +146,16 @@ def test_admin_default_prefix_rendered_in_index_static_links_and_forms(tmp_path,
     assert response.status_code == 200
     assert 'href="/bot-admin/static/style.css"' in response.text
     assert 'href="/bot-admin/static/admin.css"' in response.text
+    assert 'href="/bot-admin/lectures"' in response.text
+    assert 'href="/bot-admin/sessions"' in response.text
+    assert 'href="/bot-admin/grades"' in response.text
+    assert 'href="/bot-admin/analysis"' in response.text
+
+    response = client.get("/bot-admin/lectures", auth=_admin_auth())
+
+    assert response.status_code == 200
     assert 'action="/bot-admin/lectures"' in response.text
     assert 'href="/bot-admin/lectures/lecture_01"' in response.text
-    assert 'href="/bot-admin/sessions"' in response.text
 
 
 def test_admin_override_prefix_rendered_in_detail_links_and_forms(tmp_path, monkeypatch):
@@ -180,9 +192,12 @@ def test_prefix_sensitive_frontend_files_do_not_keep_root_relative_urls():
 
     for template_path in [
         pathlib.Path("app/templates/chat.html"),
+        pathlib.Path("app/templates/admin_home.html"),
         pathlib.Path("app/templates/admin_index.html"),
         pathlib.Path("app/templates/admin_lecture.html"),
         pathlib.Path("app/templates/admin_sessions.html"),
+        pathlib.Path("app/templates/admin_grades.html"),
+        pathlib.Path("app/templates/admin_analysis.html"),
     ]:
         template = template_path.read_text(encoding="utf-8")
         assert not re.search(r"\b(?:href|src|action)=['\"]/", template)

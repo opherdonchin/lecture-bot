@@ -1,0 +1,11 @@
+# Lecture 01 topics — one per line, optionally: name | importance (core/important/brief)
+Why statistics is needed | core
+What statistics does | core
+What counts as data | core
+Measurement quality and imperfect data | core
+Types of data and representational choice | important
+Probability as uncertainty: aleatory vs epistemic | core
+Probability distributions and parameters | core
+PMF/PDF/CDF, interval probability, and code/plot interpretation | core
+Center, spread, and multimodality | core
+Shape: skewness and kurtosis | core

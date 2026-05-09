@@ -258,7 +258,11 @@ sudo systemctl restart lecture-bot-admin
 
 ## 10. Copy in private lecture material
 
-The public repo only contains the lecture scaffold. Copy the actual private lecture folders into `/srv/lecture-bot/lectures/`.
+The public repo only contains the lecture scaffold. Copy the actual private lecture folders into `/srv/lecture-bot/lectures/`. The repo includes `example_content/` with a working `config.json` and `lecture_01/`; you can use this as a starting point or reference before copying in real content:
+
+```bash
+cp -r /srv/lecture-bot/example_content/. /srv/lecture-bot/lectures/
+```
 
 For first deployment, `rsync` is the cleanest method.
 

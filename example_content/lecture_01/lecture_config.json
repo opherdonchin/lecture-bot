@@ -1,0 +1,67 @@
+{
+  "lecture_id": "lecture_01",
+  "title": "Lecture 1: Probabilities",
+  "course": "Statistics 367-1-4361",
+  "active": true,
+  "files": {
+    "slides": {
+      "source": "Lecture 1 Probabilities.pptx",
+      "target": "slides.md"
+    },
+    "handout": {
+      "source": "Lecture 1 handout.qmd",
+      "target": "handout.md"
+    },
+    "notebook": {
+      "source": "Lecture01_Probabilities.ipynb",
+      "target": "notebook.md"
+    },
+    "rubric": {
+      "target": "rubric.md"
+    },
+    "transcript": {
+      "source": "Lecture_01_2026.vtt",
+      "target": "transcript.md"
+    },
+    "minutes": {
+      "target": "minutes.json"
+    }
+  },
+  "topics": [
+    {
+      "topic_id": "T1",
+      "label": "Statistics as indirect reasoning about reality through data and models",
+      "importance": "core"
+    },
+    {
+      "topic_id": "T2",
+      "label": "What counts as data: measurement, processing, and finiteness",
+      "importance": "core"
+    },
+    {
+      "topic_id": "T3",
+      "label": "Imperfect data and measurement quality",
+      "importance": "core"
+    },
+    {
+      "topic_id": "T4",
+      "label": "Data types and analytic treatment",
+      "importance": "important"
+    },
+    {
+      "topic_id": "T5",
+      "label": "Probability as a language for uncertainty",
+      "importance": "core"
+    },
+    {
+      "topic_id": "T6",
+      "label": "Probability distributions and how to read them",
+      "importance": "core"
+    },
+    {
+      "topic_id": "T7",
+      "label": "Parameters and descriptive summaries of distributions",
+      "importance": "core"
+    }
+  ]
+}

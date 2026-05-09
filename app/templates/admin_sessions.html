@@ -10,7 +10,13 @@
   <body>
     <main class="admin-shell">
       <div class="topbar">
-        <a href="{{ url_path('admin_lectures') }}" class="back-link">All Lecture Folders</a>
+        <a href="{{ url_path('admin_root') }}" class="back-link">Admin Home</a>
+        <nav class="admin-nav" aria-label="Admin sections">
+          <a href="{{ url_path('admin_lectures') }}">Content</a>
+          <a href="{{ url_path('admin_sessions') }}">Sessions</a>
+          <a href="{{ url_path('admin_grades') }}">Grades</a>
+          <a href="{{ url_path('admin_analysis') }}">Analysis</a>
+        </nav>
         <span class="muted">{{ session_page.total }} sessions</span>
       </div>
 

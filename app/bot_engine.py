@@ -231,7 +231,11 @@ def generate_reply(
             temperature=0.3,
         )
         raw = response.choices[0].message.content
-        parsed = j_.loads(raw)
+        try:
+            parsed = j_.loads(raw)
+        except j_.JSONDecodeError:
+            _log.error("raw response unparseable (first 2000 chars): %r", raw[:2000])
+            raise
         assistant_message = sanitize_assistant_message(
             str(parsed["assistant_message"]),
             topic_defs=topic_defs,

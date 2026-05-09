@@ -125,6 +125,8 @@ Each per-session package preserves the existing `scripts/export_session_package.
 - `schemas/`
 - `lecture/`
 
+The prompt bundle includes both the staged tutor-behavior analysis prompt and the separate comment-analysis prompt. The main analysis uses student comments only for late triangulation; the comment-analysis workflow gives those comments their fuller user-facing treatment without folding them into the ordinary chat transcript.
+
 Student comments submitted through `POST /submit_note` are stored in `session_notes` and must appear in each exported session as:
 
 ```text

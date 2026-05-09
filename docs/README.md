@@ -26,6 +26,8 @@ Prompt files live in [`../prompts`](../prompts), not in this directory.
 - Tutor prompt generator: [`../prompts/tutor_generator_prompt.md`](../prompts/tutor_generator_prompt.md)
 - Minutes generation prompt: [`../prompts/minutes_generation_prompt.md`](../prompts/minutes_generation_prompt.md)
 - Rubric generation prompt: [`../prompts/master_rubric_generation_prompt.md`](../prompts/master_rubric_generation_prompt.md)
+- Staged log analysis prompt: [`../prompts/log_analysis_prompt.md`](../prompts/log_analysis_prompt.md)
+- Student comment analysis prompt: [`../prompts/comment_analysis_prompt.md`](../prompts/comment_analysis_prompt.md)
 
 Generated tutor prompts may have an accompanying `*_private_artifact_schema.json` file. At session creation, the backend snapshots the active schema into the session row; prompt history and schema history are not stored.
 

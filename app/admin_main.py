@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Stre
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.datastructures import UploadFile as StarletteUploadFile
 import sqlalchemy.orm as sqlalchemy_orm
 
 import app.admin_documents as admin_documents_module
@@ -17,6 +18,7 @@ import app.admin_sessions as admin_sessions
 import app.admin_workflow as workflow
 import app.config as config_module
 import app.db as db_module
+import app.moodle_grade_import as moodle_grade_import
 import app.root_path as root_path_module
 
 
@@ -49,6 +51,12 @@ def _lectures_dir() -> pathlib.Path:
     return lectures_dir
 
 
+def _submissions_dir() -> pathlib.Path:
+    submissions_dir = config_module.get_settings().moodle_submissions_dir
+    submissions_dir.mkdir(parents=True, exist_ok=True)
+    return submissions_dir
+
+
 def _url_path(request: fa.Request, route_name: str, **path_params: str) -> str:
     return request.url_for(route_name, **path_params).path
 
@@ -58,6 +66,14 @@ def _template_context(request: fa.Request, values: dict):
         **values,
         "url_path": lambda route_name, **path_params: _url_path(request, route_name, **path_params),
     }
+
+
+def _render_home(request: fa.Request):
+    return templates.TemplateResponse(
+        request,
+        "admin_home.html",
+        _template_context(request, {}),
+    )
 
 
 def _render_index(request: fa.Request, notice: str | None = None, error: str | None = None):
@@ -86,6 +102,98 @@ def _render_index(request: fa.Request, notice: str | None = None, error: str | N
             },
         ),
     )
+
+
+def _moodle_database_path() -> pathlib.Path:
+    database_path = db_module._sqlite_file_path(config_module.get_settings().database_url)
+    if database_path is None:
+        raise ValueError("Moodle grade import currently requires a file-backed SQLite database.")
+    return database_path
+
+
+def _grade_file_info(path: pathlib.Path) -> dict:
+    if not path.exists():
+        return {"exists": False, "name": path.name, "size_bytes": 0, "modified_at": ""}
+    modified_at = dt_module.datetime.fromtimestamp(path.stat().st_mtime, tz=dt_module.timezone.utc)
+    return {
+        "exists": True,
+        "name": path.name,
+        "size_bytes": path.stat().st_size,
+        "modified_at": modified_at.strftime("%Y-%m-%d %H:%M UTC"),
+    }
+
+
+def _grade_context(
+    *,
+    notice: str | None = None,
+    error: str | None = None,
+    summary: dict[str, int] | None = None,
+) -> dict:
+    settings = config_module.get_settings()
+    submissions_dir = _submissions_dir()
+    lecture_rows = []
+    archives = {}
+    for lecture_dir in workflow.list_lecture_dirs(_lectures_dir()):
+        lecture_id = lecture_dir.name
+        archive_path = moodle_grade_import.default_submission_zip_path(submissions_dir, lecture_id)
+        archives[lecture_id] = archive_path
+        config = workflow.load_lecture_config(lecture_dir)
+        lecture_rows.append(
+            {
+                "lecture_id": lecture_id,
+                "title": config.get("title", lecture_id),
+                "archive": _grade_file_info(archive_path),
+            }
+        )
+
+    return {
+        "notice": notice,
+        "error": error,
+        "summary": summary,
+        "lectures": lecture_rows,
+        "participants_file": _grade_file_info(settings.moodle_participants_csv),
+        "upload_file": _grade_file_info(settings.moodle_grade_import_csv),
+        "report_file": _grade_file_info(settings.moodle_grade_import_report_csv),
+        "has_archives": any(path.exists() for path in archives.values()),
+    }
+
+
+def _render_grades(
+    request: fa.Request,
+    *,
+    notice: str | None = None,
+    error: str | None = None,
+    summary: dict[str, int] | None = None,
+):
+    return templates.TemplateResponse(
+        request,
+        "admin_grades.html",
+        _template_context(request, _grade_context(notice=notice, error=error, summary=summary)),
+    )
+
+
+def _run_grade_import() -> dict[str, int]:
+    settings = config_module.get_settings()
+    submissions_dir = _submissions_dir()
+    known_lecture_ids = {lecture_dir.name for lecture_dir in workflow.list_lecture_dirs(_lectures_dir())}
+    archives = {
+        lecture_id: path
+        for lecture_id, path in moodle_grade_import.discover_submission_archives(submissions_dir).items()
+        if lecture_id in known_lecture_ids
+    }
+    if not archives:
+        raise ValueError("No lecture submission ZIPs have been uploaded yet.")
+    result = moodle_grade_import.prepare_moodle_grade_import(
+        submission_archives=archives,
+        participants_csv_path=settings.moodle_participants_csv,
+        db_path=_moodle_database_path(),
+    )
+    moodle_grade_import.write_grade_import_outputs(
+        result,
+        upload_csv_path=settings.moodle_grade_import_csv,
+        report_csv_path=settings.moodle_grade_import_report_csv,
+    )
+    return result.summary
 
 
 def _session_filters_from_params(
@@ -223,12 +331,96 @@ def restart_student_app(request: fa.Request):
 
 @app.get("/", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_root")
 def admin_root(request: fa.Request):
-    return _render_index(request)
+    return _render_home(request)
+
+
+@app.get("/analysis", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_analysis")
+def admin_analysis(request: fa.Request):
+    return templates.TemplateResponse(
+        request,
+        "admin_analysis.html",
+        _template_context(request, {}),
+    )
 
 
 @app.get("/lectures", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_lectures")
 def admin_lectures(request: fa.Request):
     return _render_index(request)
+
+
+@app.get("/grades", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_grades")
+def admin_grades(request: fa.Request):
+    return _render_grades(request)
+
+
+@app.post("/grades/participants", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_grade_participants")
+async def upload_grade_participants(
+    request: fa.Request,
+    uploaded_file: fa.UploadFile = fa.File(...),
+):
+    if not uploaded_file.filename:
+        return _render_grades(request, error="Choose a participants CSV file to upload.")
+    try:
+        workflow.save_uploaded_file(config_module.get_settings().moodle_participants_csv, uploaded_file)
+    except Exception as exc:
+        return _render_grades(request, error=str(exc))
+    return _render_grades(request, notice="Participants CSV updated.")
+
+
+@app.post("/grades/submissions", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_grade_submissions")
+async def upload_grade_submissions(request: fa.Request):
+    form = await request.form()
+    saved: list[str] = []
+    submissions_dir = _submissions_dir()
+    for lecture_dir in workflow.list_lecture_dirs(_lectures_dir()):
+        field_name = f"submission_{lecture_dir.name}"
+        uploaded_file = form.get(field_name)
+        if not isinstance(uploaded_file, StarletteUploadFile) or not uploaded_file.filename:
+            continue
+        destination = moodle_grade_import.default_submission_zip_path(submissions_dir, lecture_dir.name)
+        try:
+            workflow.save_uploaded_file(destination, uploaded_file)
+        except Exception as exc:
+            return _render_grades(request, error=str(exc))
+        saved.append(lecture_dir.name)
+
+    if not saved:
+        return _render_grades(request, error="Choose at least one lecture submission ZIP to upload.")
+
+    try:
+        summary = _run_grade_import()
+    except Exception as exc:
+        return _render_grades(
+            request,
+            error=f"Saved {', '.join(saved)}, but grade import preparation failed: {exc}",
+        )
+    return _render_grades(
+        request,
+        notice=f"Saved {', '.join(saved)} and regenerated Moodle import files.",
+        summary=summary,
+    )
+
+
+@app.post("/grades/prepare", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="prepare_grade_import")
+async def prepare_grade_import(request: fa.Request):
+    try:
+        summary = _run_grade_import()
+    except Exception as exc:
+        return _render_grades(request, error=str(exc))
+    return _render_grades(request, notice="Regenerated Moodle import files.", summary=summary)
+
+
+@app.get("/grades/files/{kind}", dependencies=[fa.Depends(require_admin)], name="download_grade_file")
+def download_grade_file(kind: str):
+    settings = config_module.get_settings()
+    paths = {
+        "import": settings.moodle_grade_import_csv,
+        "report": settings.moodle_grade_import_report_csv,
+    }
+    target = paths.get(kind)
+    if target is None or not target.exists():
+        raise fa.HTTPException(status_code=404, detail="File not found.")
+    return FileResponse(target, media_type="text/csv", filename=target.name)
 
 
 @app.get("/sessions", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_sessions")
