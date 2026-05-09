@@ -9,10 +9,20 @@
   </head>
   <body>
     <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_root') }}" class="back-link">Admin Home</a>
+        <nav class="admin-nav" aria-label="Admin sections">
+          <a href="{{ url_path('admin_lectures') }}">Content</a>
+          <a href="{{ url_path('admin_sessions') }}">Sessions</a>
+          <a href="{{ url_path('admin_grades') }}">Grades</a>
+          <a href="{{ url_path('admin_analysis') }}">Analysis</a>
+        </nav>
+      </div>
+
       <section class="admin-hero">
         <div>
           <p class="eyebrow">Admin App</p>
-          <h1>Lecture Setup Console</h1>
+          <h1>Content</h1>
           <p class="lead">Create or reopen a lecture folder, then step through the manual build workflow.</p>
         </div>
       </section>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Grades Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_root') }}" class="back-link">Admin Home</a>
+        <nav class="admin-nav" aria-label="Admin sections">
+          <a href="{{ url_path('admin_lectures') }}">Content</a>
+          <a href="{{ url_path('admin_sessions') }}">Sessions</a>
+          <a href="{{ url_path('admin_grades') }}">Grades</a>
+          <a href="{{ url_path('admin_analysis') }}">Analysis</a>
+        </nav>
+      </div>
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Admin App</p>
+          <h1>Grades</h1>
+          <p class="lead">Upload Moodle submission ZIPs, validate Lecture Bot reports, and generate one Moodle grade-import CSV plus a mismatch report.</p>
+        </div>
+      </section>
+
+      {% if notice %}
+      <div class="notice success">{{ notice }}</div>
+      {% endif %}
+      {% if error %}
+      <div class="notice error">{{ error }}</div>
+      {% endif %}
+
+      {% if summary %}
+      <section class="card admin-card">
+        <h2>Latest Preparation</h2>
+        <div class="summary-grid">
+          <div><strong>{{ summary.participants }}</strong><span>Participants</span></div>
+          <div><strong>{{ summary.archives }}</strong><span>Archives</span></div>
+          <div><strong>{{ summary.records }}</strong><span>Reports</span></div>
+          <div><strong>{{ summary.accepted }}</strong><span>Accepted</span></div>
+          <div><strong>{{ summary.rejected }}</strong><span>Rejected</span></div>
+          <div><strong>{{ summary.difficulties }}</strong><span>Difficulties</span></div>
+          <div><strong>{{ summary.upload_rows }}</strong><span>Upload rows</span></div>
+        </div>
+      </section>
+      {% endif %}
+
+      <section class="card admin-card">
+        <div class="section-header">
+          <div>
+            <h2>Generated Files</h2>
+            <p class="muted">Import the grade CSV in Moodle and map <code>ID number</code> to <code>useridnumber</code>.</p>
+          </div>
+          <form method="post" action="{{ url_path('prepare_grade_import') }}">
+            <button type="submit" {% if not has_archives %}disabled{% endif %}>Regenerate</button>
+          </form>
+        </div>
+        <div class="file-list">
+          <div class="file-row">
+            <div>
+              <strong>{{ upload_file.name }}</strong>
+              {% if upload_file.exists %}
+              <p>{{ upload_file.size_bytes }} bytes. Updated {{ upload_file.modified_at }}.</p>
+              {% else %}
+              <p class="muted">Not generated yet.</p>
+              {% endif %}
+            </div>
+            {% if upload_file.exists %}
+            <a href="{{ url_path('download_grade_file', kind='import') }}">Download</a>
+            {% endif %}
+          </div>
+          <div class="file-row">
+            <div>
+              <strong>{{ report_file.name }}</strong>
+              {% if report_file.exists %}
+              <p>{{ report_file.size_bytes }} bytes. Updated {{ report_file.modified_at }}.</p>
+              {% else %}
+              <p class="muted">Not generated yet.</p>
+              {% endif %}
+            </div>
+            {% if report_file.exists %}
+            <a href="{{ url_path('download_grade_file', kind='report') }}">Download</a>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="card admin-card">
+        <h2>Participants CSV</h2>
+        <div class="file-row standalone-row">
+          <div>
+            <strong>{{ participants_file.name }}</strong>
+            {% if participants_file.exists %}
+            <p>{{ participants_file.size_bytes }} bytes. Updated {{ participants_file.modified_at }}.</p>
+            {% else %}
+            <p class="muted">No participants CSV found.</p>
+            {% endif %}
+          </div>
+        </div>
+        <form method="post" action="{{ url_path('upload_grade_participants') }}" enctype="multipart/form-data" class="upload-form">
+          <input type="file" name="uploaded_file" accept=".csv,text/csv" required />
+          <button type="submit">Upload Participants CSV</button>
+        </form>
+      </section>
+
+      <section class="card admin-card">
+        <h2>Submission ZIPs</h2>
+        {% if lectures %}
+        <form method="post" action="{{ url_path('upload_grade_submissions') }}" enctype="multipart/form-data">
+          <div class="file-list">
+            {% for lecture in lectures %}
+            <div class="file-row grade-upload-row">
+              <div>
+                <strong>{{ lecture.lecture_id }}</strong>
+                <p>{{ lecture.title }}</p>
+                {% if lecture.archive.exists %}
+                <p class="muted">{{ lecture.archive.name }} · {{ lecture.archive.size_bytes }} bytes · {{ lecture.archive.modified_at }}</p>
+                {% else %}
+                <p class="muted">Expected file: {{ lecture.archive.name }}</p>
+                {% endif %}
+              </div>
+              <input type="file" name="submission_{{ lecture.lecture_id }}" accept=".zip,application/zip" />
+            </div>
+            {% endfor %}
+          </div>
+          <button type="submit">Upload Selected ZIPs</button>
+        </form>
+        {% else %}
+        <p class="muted">No lecture folders are available yet.</p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>

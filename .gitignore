@@ -46,3 +46,6 @@ lectures/**
 
 # Ensure tutor_prompt.md is tracked
 !prompts/tutor_prompt.md
+
+# Grading submissions (keep directory structure but not files)
+data/submissions/**

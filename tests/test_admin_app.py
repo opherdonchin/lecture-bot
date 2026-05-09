@@ -1,4 +1,5 @@
 import json
+import re
 
 from fastapi.testclient import TestClient
 
@@ -13,8 +14,13 @@ def _auth():
 def _settings(tmp_path):
     lectures_dir = tmp_path / "lectures"
     lectures_dir.mkdir(parents=True)
+    submissions_dir = tmp_path / "submissions"
     return config_module.Settings(
         lectures_dir=lectures_dir,
+        moodle_submissions_dir=submissions_dir,
+        moodle_participants_csv=submissions_dir / "participants.csv",
+        moodle_grade_import_csv=submissions_dir / "moodle_grade_import.csv",
+        moodle_grade_import_report_csv=submissions_dir / "moodle_grade_import_report.csv",
         admin_username="admin",
         admin_password="secret",
     )
@@ -25,6 +31,19 @@ def test_admin_requires_basic_auth(tmp_path, monkeypatch):
     client = TestClient(admin_main.app)
     response = client.get("/")
     assert response.status_code == 401
+
+
+def test_admin_home_links_to_primary_sections(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_module, "get_settings", lambda: _settings(tmp_path))
+    client = TestClient(admin_main.app)
+
+    response = client.get("/", auth=_auth())
+
+    assert response.status_code == 200
+    assert re.search(r'href="[^"]*/lectures"', response.text)
+    assert re.search(r'href="[^"]*/sessions"', response.text)
+    assert re.search(r'href="[^"]*/grades"', response.text)
+    assert re.search(r'href="[^"]*/analysis"', response.text)
 
 
 def test_admin_can_create_lecture_and_select_sources(tmp_path, monkeypatch):
@@ -130,3 +149,49 @@ def test_admin_build_local_and_upload_generated_artifacts(tmp_path, monkeypatch)
 
     config = json.loads((lecture_dir / "lecture_config.json").read_text(encoding="utf-8"))
     assert config["topics"] == [{"topic_id": "T1", "label": "Topic One", "importance": "core"}]
+
+
+def test_admin_grades_uploads_submission_zip_and_regenerates_outputs(tmp_path, monkeypatch):
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    lecture_dir = settings.lectures_dir / "lecture_01"
+    lecture_dir.mkdir(parents=True)
+    (lecture_dir / "lecture_config.json").write_text(
+        json.dumps({"lecture_id": "lecture_01", "title": "Lecture 1", "active": True, "files": {}, "topics": []}) + "\n",
+        encoding="utf-8",
+    )
+    called = {}
+
+    def fake_run_grade_import():
+        called["ran"] = True
+        settings.moodle_grade_import_csv.parent.mkdir(parents=True, exist_ok=True)
+        settings.moodle_grade_import_csv.write_text("ID number,lecture_01\n206391179,85\n", encoding="utf-8")
+        settings.moodle_grade_import_report_csv.write_text("status\naccepted\n", encoding="utf-8")
+        return {
+            "participants": 1,
+            "archives": 1,
+            "records": 1,
+            "accepted": 1,
+            "accepted_superseded": 0,
+            "rejected": 0,
+            "difficulties": 0,
+            "upload_rows": 1,
+        }
+
+    monkeypatch.setattr(admin_main, "_run_grade_import", fake_run_grade_import)
+    client = TestClient(admin_main.app)
+
+    response = client.post(
+        "/grades/submissions",
+        auth=_auth(),
+        files={"submission_lecture_01": ("lecture_01.zip", b"zip bytes", "application/zip")},
+    )
+
+    assert response.status_code == 200
+    assert called["ran"] is True
+    assert (settings.moodle_submissions_dir / "lecture_01_submissions.zip").read_bytes() == b"zip bytes"
+    assert "regenerated Moodle import files" in response.text
+
+    download = client.get("/grades/files/import", auth=_auth())
+    assert download.status_code == 200
+    assert "206391179" in download.text

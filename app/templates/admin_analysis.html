@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Analysis Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_root') }}" class="back-link">Admin Home</a>
+        <nav class="admin-nav" aria-label="Admin sections">
+          <a href="{{ url_path('admin_lectures') }}">Content</a>
+          <a href="{{ url_path('admin_sessions') }}">Sessions</a>
+          <a href="{{ url_path('admin_grades') }}">Grades</a>
+          <a href="{{ url_path('admin_analysis') }}">Analysis</a>
+        </nav>
+      </div>
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Admin App</p>
+          <h1>Analysis</h1>
+          <p class="lead">Course-level analysis workflows will live here.</p>
+        </div>
+      </section>
+
+      <section class="card admin-card">
+        <h2>Planned</h2>
+        <p class="muted">This section is reserved for summaries, investigations, and cross-session analysis.</p>
+      </section>
+    </main>
+  </body>
+</html>
