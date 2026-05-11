@@ -95,3 +95,9 @@ This archive was built from distinct versions of `docs/tutor_specification.md` i
 - Source: current working tree snapshot under the current archiving rules
 - Based on: `docs/tutor_specification.md`
 - Best guess: This revision expands the tutor specification from the abbreviated 2026-05-09 archived form into the full revised adaptive conceptual review tutor specification. It preserves the AI-rich, Socratic-but-pragmatic stance while adding a full-characterization continuation pathway, highest-value remaining move logic, grade-improvement process guidance, fallback/low-traction recovery, near-100 mastery guidance, and explicit runtime delegation boundaries.
+
+## 2026-05-11_1.md
+
+- Source: current working tree snapshot before the next tutor prompt/specification revision
+- Based on: `docs/tutor_specification.md`
+- Best guess: This snapshot records the active compact adaptive conceptual review tutor specification used during the score-improvement investigation. It emphasizes lecture-grounded evidence, marginal-value breadth/depth decisions, coverage transparency, consolidation and terminal closure, plateau-cause disclosure, repetition control, high-performing student depth, and explicit delegation of official grades, reports, lifecycle, persistence, and runtime transport.

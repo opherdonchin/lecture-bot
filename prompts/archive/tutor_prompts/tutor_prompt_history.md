@@ -65,3 +65,9 @@ This archive tracks snapshots of `prompts/tutor_prompt.md`. Entries before this 
 - Source: current working tree snapshot under the current archiving rules
 - Based on: `prompts/tutor_prompt.md`
 - Best guess: This runtime prompt reflects the revised adaptive conceptual review tutor specification. It foregrounds strict JSON output, backend-owned state boundaries, sparse state deltas, private-artifact separation, full-characterization continuation, grade-improvement process guidance, time/lifecycle constraints, and stronger repair behavior after low-traction or copied turns.
+
+## 2026-05-11_1.md
+
+- Source: current working tree snapshot before the next tutor prompt/specification revision
+- Based on: `prompts/tutor_prompt.md`
+- Best guess: This runtime prompt reflects the active post-investigation prompt after score-improvement and mastery-frontier adjustments. It keeps the strict JSON/runtime contract and backend ownership rules while strengthening student-requested continuation, grade-improvement response, breadth/depth selection, coverage transparency, adaptive challenge, and high-value follow-up behavior for strong engaged students.
