@@ -89,3 +89,9 @@ This archive was built from distinct versions of `docs/tutor_specification.md` i
 - No detailed private-artifact schema is specified.
 - No major redesign of grading weights or official grade computation is introduced.
 - Polished/AI-assisted answer handling is not substantially redesigned pending a more targeted diagnostic review.
+
+## 2026-05-11.md
+
+- Source: current working tree snapshot under the current archiving rules
+- Based on: `docs/tutor_specification.md`
+- Best guess: This revision expands the tutor specification from the abbreviated 2026-05-09 archived form into the full revised adaptive conceptual review tutor specification. It preserves the AI-rich, Socratic-but-pragmatic stance while adding a full-characterization continuation pathway, highest-value remaining move logic, grade-improvement process guidance, fallback/low-traction recovery, near-100 mastery guidance, and explicit runtime delegation boundaries.

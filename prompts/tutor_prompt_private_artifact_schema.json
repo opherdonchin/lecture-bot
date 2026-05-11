@@ -1,255 +1,165 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "latest_turn_assessment",
-    "state_update_audit",
-    "next_move",
+    "turn_evidence",
+    "next_move_decision",
     "self_verification"
   ],
   "properties": {
-    "latest_turn_assessment": {
+    "turn_evidence": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "student_message_role",
-        "engaged_topic_ids",
-        "evidence_summary",
-        "evidence_status",
-        "evidence_dimensions",
-        "assistance_context",
-        "challenge_level_observed"
+        "student_message_type",
+        "topic_id",
+        "evidence_independence",
+        "evidence_strength",
+        "demonstrated_dimensions",
+        "mastery_update_supported",
+        "brief_basis"
       ],
       "properties": {
-        "student_message_role": {
+        "student_message_type": {
           "type": "string",
           "enum": [
             "content_answer",
             "content_question",
-            "procedural_request",
-            "meta_or_gaming_request",
-            "off_task",
-            "ambiguous_or_uninterpretable"
+            "procedural_question",
+            "grade_or_report_request",
+            "request_for_hidden_internals",
+            "out_of_scope",
+            "non_answer_or_repair_needed"
           ]
         },
-        "engaged_topic_ids": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "uniqueItems": true
+        "topic_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Canonical backend-provided topic ID, or null when no topic can be identified without invention."
         },
-        "evidence_summary": {
-          "type": "string",
-          "maxLength": 500
-        },
-        "evidence_status": {
+        "evidence_independence": {
           "type": "string",
           "enum": [
             "none",
             "independent",
-            "assisted_progress",
-            "assisted_repetition",
-            "generic_or_fluent_untested",
-            "copied_or_repeated",
-            "procedural_only",
-            "ambiguous",
-            "off_task"
+            "after_small_hint",
+            "after_substantial_scaffold",
+            "generic_or_fluent_only",
+            "copied_or_echoed",
+            "transformed_verification"
           ]
         },
-        "evidence_dimensions": {
+        "evidence_strength": {
+          "type": "string",
+          "enum": [
+            "none",
+            "weaker",
+            "moderate",
+            "strong"
+          ]
+        },
+        "demonstrated_dimensions": {
           "type": "array",
           "items": {
             "type": "string",
             "enum": [
               "criterion",
               "distinction",
-              "explanation_why",
-              "application_transfer",
-              "practical_interpretation",
-              "independent_correction_ownership",
+              "explanation",
+              "application",
+              "interpretation",
+              "ownership",
               "synthesis"
             ]
           },
           "uniqueItems": true
         },
-        "assistance_context": {
-          "type": "string",
-          "enum": [
-            "independent",
-            "after_small_hint",
-            "after_substantial_scaffold",
-            "after_correction",
-            "not_applicable",
-            "unclear"
-          ]
+        "mastery_update_supported": {
+          "type": "boolean"
         },
-        "challenge_level_observed": {
+        "brief_basis": {
           "type": "string",
-          "enum": [
-            "normal",
-            "elevated",
-            "high",
-            "not_applicable"
-          ]
+          "maxLength": 600
         }
       }
     },
-    "state_update_audit": {
+    "next_move_decision": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "mastery_update_performed",
-        "topic_updates",
-        "no_update_reason",
-        "over_update_risk_checked"
+        "selected_mode",
+        "conceptual_target",
+        "target_already_addressed",
+        "breadth_depth_choice",
+        "marginal_value",
+        "question_asked",
+        "coverage_transparency_considered",
+        "closing_pressure_considered",
+        "decision_basis"
       ],
       "properties": {
-        "mastery_update_performed": {
-          "type": "boolean"
-        },
-        "topic_updates": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "topic_id",
-              "mastery_update_kind",
-              "mastery_after_update",
-              "evidence_note_basis",
-              "assisted_cap_applied"
-            ],
-            "properties": {
-              "topic_id": {
-                "type": "string",
-                "minLength": 1
-              },
-              "mastery_update_kind": {
-                "type": "string",
-                "enum": [
-                  "no_update",
-                  "new_or_revised_mastery",
-                  "evidence_note_only",
-                  "current_topic_only"
-                ]
-              },
-              "mastery_after_update": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "minimum": 0,
-                "maximum": 100
-              },
-              "evidence_note_basis": {
-                "type": "string",
-                "maxLength": 300
-              },
-              "assisted_cap_applied": {
-                "type": "boolean"
-              }
-            }
-          }
-        },
-        "no_update_reason": {
+        "selected_mode": {
           "type": "string",
           "enum": [
-            "none",
-            "no_content_evidence",
-            "procedural_only",
-            "copied_or_repeated",
-            "ambiguous_or_uninterpretable",
-            "off_task_or_redirect",
-            "unsupported_topic_id",
-            "timing_or_lifecycle_handoff",
-            "other"
-          ]
-        },
-        "over_update_risk_checked": {
-          "type": "boolean"
-        }
-      }
-    },
-    "next_move": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "interaction_mode",
-        "topic_action",
-        "challenge_level",
-        "materiality_of_next_question",
-        "answer_feedback_cycle_feasible",
-        "student_agency_signal",
-        "rationale"
-      ],
-      "properties": {
-        "interaction_mode": {
-          "type": "string",
-          "enum": [
-            "basic_conceptual_probe",
-            "evidence_interpretation_and_feedback",
+            "basic_probe",
+            "evidence_feedback",
             "scaffolded_support",
             "adaptive_challenge",
             "breadth_transition",
+            "depth_probe_on_strong_topic",
+            "coverage_transparency",
             "procedural_support",
             "interaction_repair",
             "redirection",
-            "current_grade_or_report_handoff",
-            "consolidation"
+            "grade_or_report_handoff",
+            "consolidation",
+            "terminal_closure_under_request_pressure",
+            "plateau_cause_disclosure"
           ]
         },
-        "topic_action": {
-          "type": "string",
-          "enum": [
-            "stay_on_topic",
-            "change_probe_type",
-            "move_to_breadth",
-            "consolidate",
-            "repair_interaction",
-            "redirect",
-            "procedural_handoff",
-            "offer_student_choice",
-            "no_further_question"
-          ]
-        },
-        "challenge_level": {
-          "type": "string",
-          "enum": [
-            "normal",
-            "elevated",
-            "high"
-          ]
-        },
-        "materiality_of_next_question": {
-          "type": "string",
-          "enum": [
-            "material",
-            "low_value",
-            "not_asking_question"
-          ]
-        },
-        "answer_feedback_cycle_feasible": {
+        "conceptual_target": {
           "type": [
-            "boolean",
+            "string",
             "null"
-          ]
+          ],
+          "description": "Short private description of the concept or operation targeted by the next move; null for procedural, redirection, handoff, or closure moves."
         },
-        "student_agency_signal": {
+        "target_already_addressed": {
+          "type": "boolean"
+        },
+        "breadth_depth_choice": {
           "type": "string",
           "enum": [
-            "wants_continue",
-            "wants_improvement_path",
-            "wants_move_on",
-            "fatigue_or_declining_traction",
-            "neutral_or_unclear"
+            "not_applicable",
+            "breadth",
+            "depth",
+            "scaffold_or_repair",
+            "procedural_or_redirect",
+            "consolidate_or_close"
           ]
         },
-        "rationale": {
+        "marginal_value": {
           "type": "string",
-          "maxLength": 500
+          "enum": [
+            "none",
+            "low",
+            "material"
+          ]
+        },
+        "question_asked": {
+          "type": "boolean"
+        },
+        "coverage_transparency_considered": {
+          "type": "boolean"
+        },
+        "closing_pressure_considered": {
+          "type": "boolean"
+        },
+        "decision_basis": {
+          "type": "string",
+          "maxLength": 800
         }
       }
     },
@@ -257,55 +167,42 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "content_evidence_verified_before_mastery_update",
-        "canonical_topic_ids_checked",
-        "assisted_evidence_cap_checked",
-        "high_mastery_independence_checked",
-        "next_question_materiality_checked",
-        "adequate_evidence_or_low_value_stop_checked",
-        "closing_pressure_checked",
-        "timing_basis",
-        "student_agency_checked",
-        "continuation_path_checked",
-        "repeated_repair_strategy_change_checked"
+        "actual_content_evidence_gate_checked",
+        "no_reprobe_of_substantively_addressed_target",
+        "next_probe_material_if_present",
+        "breadth_depth_marginal_gain_checked",
+        "answer_feedback_cycle_feasible",
+        "high_mastery_supported_by_independent_evidence",
+        "student_signals_honored",
+        "prose_matches_structured_decision",
+        "coverage_transparency_checked_when_relevant"
       ],
       "properties": {
-        "content_evidence_verified_before_mastery_update": {
+        "actual_content_evidence_gate_checked": {
           "type": "boolean"
         },
-        "canonical_topic_ids_checked": {
+        "no_reprobe_of_substantively_addressed_target": {
           "type": "boolean"
         },
-        "assisted_evidence_cap_checked": {
+        "next_probe_material_if_present": {
           "type": "boolean"
         },
-        "high_mastery_independence_checked": {
+        "breadth_depth_marginal_gain_checked": {
           "type": "boolean"
         },
-        "next_question_materiality_checked": {
+        "answer_feedback_cycle_feasible": {
           "type": "boolean"
         },
-        "adequate_evidence_or_low_value_stop_checked": {
+        "high_mastery_supported_by_independent_evidence": {
           "type": "boolean"
         },
-        "closing_pressure_checked": {
+        "student_signals_honored": {
           "type": "boolean"
         },
-        "timing_basis": {
-          "type": "string",
-          "enum": [
-            "provided_closing_pressure",
-            "provided_no_closing_pressure",
-            "timing_absent_or_unreliable"
-          ]
-        },
-        "student_agency_checked": {
+        "prose_matches_structured_decision": {
           "type": "boolean"
         },
-        "continuation_path_checked": {
-          "type": "boolean"
-        },
-        "repeated_repair_strategy_change_checked": {
+        "coverage_transparency_checked_when_relevant": {
           "type": "boolean"
         }
       }
