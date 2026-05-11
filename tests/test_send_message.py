@@ -34,63 +34,34 @@ def test_send_message_invalid_session(client):
 
 
 VALID_PRIVATE_ARTIFACT = {
-    "latest_message_check": {
-        "role_in_interaction": "new_assessable_content",
-        "contains_new_assessable_content": True,
-        "contains_repair_or_pushback": False,
-        "contains_procedural_or_meta_content": False,
-        "relevant_topic_id": "T1",
-        "brief_account": "The student offered a relevant lecture-content response.",
+    "turn_assessment": {
+        "latest_message_type": "content_answer",
+        "engaged_topic_id": "T1",
+        "evidence_strength": "moderate",
+        "independence_level": "independent",
+        "demonstrated_dimensions": ["distinction"],
+        "remaining_uncertainties": ["Needs a concrete example."],
+        "substantive_target_already_addressed": False,
     },
-    "evidence_update_check": {
-        "mastery_increase_recorded": False,
-        "basis_for_update": "new_weak_content_evidence",
-        "independence_judgment": "unclear_treated_as_assisted",
-        "evidence_strength": "vague_recognition",
-        "scaffolding_effect": "unclear_assistance_treated_as_assisted",
-        "feedback_language_calibrated": True,
-        "why_no_mastery_increase_if_applicable": "The response is not enough for a mastery increase.",
+    "next_move": {
+        "mode": "basic_probe",
+        "question_substance": "substantive_question",
+        "materiality_rationale": "A focused example would test independent use.",
+        "breadth_depth_choice": "depth",
+        "closing_pressure_considered": False,
+        "student_signals_considered": ["none"],
+        "coverage_transparency_considered": False,
     },
-    "current_characterization_check": {
-        "topic_id": "T1",
-        "characterization": "The student has begun engaging with T1 but has not shown independent use yet.",
-        "uses_latest_evidence_or_prior_evidence": "latest_evidence",
-        "material_conceptual_error_remaining": False,
-        "material_uncertainty_remaining": True,
-        "adequate_for_current_local_purpose": False,
-        "next_evidence_that_would_matter": "A concrete distinction or example.",
-    },
-    "next_question_value_check": {
-        "visible_move_type": "open_question",
-        "asks_content_question": True,
-        "question_text": "What is one example?",
-        "correct_answer_would_change": "It would strengthen the characterization.",
-        "incorrect_answer_would_change": "It would reveal a target for repair.",
-        "is_low_value_retest": False,
-        "time_yield_judgment": "no_reliable_time_information",
-        "target_selection_reason": "A focused example would test independent use.",
-    },
-    "same_locus_stopping_check": {
-        "same_or_equivalent_question_recently_answered": False,
-        "remaining_issue_type": "unclear_independence_after_scaffolding",
-        "stay_or_leave_locus": "stay",
-        "reason": "The current locus still has useful assessment value.",
-    },
-    "state_update_check": {
-        "updated_state_keys_returned": ["mastery", "evidence_notes", "current_topic_id", "tutor_comment"],
-        "mastery_updates_are_sparse_and_evidence_based": True,
-        "evidence_notes_function_as_characterizations": True,
-        "no_backend_owned_fields_returned": True,
-        "canonical_topic_ids_only": True,
-        "state_update_rationale": "Only tutor-owned sparse state keys are returned.",
-    },
-    "visible_response_check": {
-        "assistant_message_matches_decision": True,
-        "private_artifact_not_exposed": True,
-        "asks_at_most_one_contribution": True,
-        "does_not_overstate_mastery": True,
-        "does_not_retest_low_value_same_locus": True,
-        "brief_actual_response_account": "The assistant asks one focused follow-up.",
+    "self_verification": {
+        "content_evidence_gate_passed": True,
+        "repetition_check_passed": True,
+        "materiality_check_passed": True,
+        "breadth_vs_depth_check_passed": True,
+        "time_feasibility_check_passed": True,
+        "high_mastery_evidence_check_passed": True,
+        "student_signal_honoring_check_passed": True,
+        "prose_consistency_check_passed": True,
+        "plateau_coverage_check_passed": True,
     },
 }
 
@@ -189,7 +160,7 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
     artifact_row = db.query(models.PrivateArtifactLogModel).filter(
         models.PrivateArtifactLogModel.session_id == session_id
     ).one()
-    assert j.loads(artifact_row.artifact_json)["next_question_value_check"]["visible_move_type"] == "open_question"
+    assert j.loads(artifact_row.artifact_json)["next_move"]["mode"] == "basic_probe"
     assert artifact_row.validation_error is None
 
 
@@ -412,7 +383,7 @@ def test_send_message_writes_dialogue_turn_audit_row(client):
     assert audit_row.turn_index == 1
     assert audit_row.prompt_template_name == "tutor_prompt.md"
     assert audit_row.dialogue_model
-    assert "You are the runtime tutor for one lecture-review tutoring session" in audit_row.rendered_system_prompt
+    assert "You are the runtime tutor for an adaptive conceptual lecture review session." in audit_row.rendered_system_prompt
     assert audit_row.user_message == "What counts as data"
 
 
@@ -433,7 +404,7 @@ def test_send_message_injects_private_artifact_schema_json(client):
     assert response.status_code == 200
     system_prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
     assert '"private_artifact_schema_json":' in system_prompt
-    assert "latest_message_check" in system_prompt
+    assert "turn_assessment" in system_prompt
 
 
 def test_send_message_missing_private_artifact_retries_and_logs_repaired_artifact(client):

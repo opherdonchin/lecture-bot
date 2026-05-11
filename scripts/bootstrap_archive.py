@@ -103,7 +103,7 @@ def _build_linked_documents(items: list[dict]) -> dict[str, str | None]:
     """
     Return a mapping of document_type -> linked_documents_json string (or None).
     """
-    by_type = {item["document_type"]: item["document_id"] for item in items}
+    by_type = {item["document_type"]: item["resolved_document_id"] for item in items}
 
     result: dict[str, str | None] = {}
     for item in items:
@@ -141,6 +141,53 @@ def _deactivate_type(db: sqlalchemy_orm.Session, document_type: str) -> None:
     ).update({"active": False})
 
 
+def _find_existing_content_match(
+    db: sqlalchemy_orm.Session,
+    item: dict,
+) -> models.ArchiveDocumentModel | None:
+    existing_by_id = db.get(models.ArchiveDocumentModel, item["document_id"])
+    if existing_by_id is not None and existing_by_id.content_sha256 == item["content_sha256"]:
+        return existing_by_id
+
+    return (
+        db.query(models.ArchiveDocumentModel)
+        .filter(
+            models.ArchiveDocumentModel.document_type == item["document_type"],
+            models.ArchiveDocumentModel.content_sha256 == item["content_sha256"],
+        )
+        .order_by(models.ArchiveDocumentModel.active.desc(), models.ArchiveDocumentModel.created_at.desc())
+        .first()
+    )
+
+
+def _version_key_with_suffix(version_key: str, suffix_index: int) -> str:
+    if suffix_index == 0:
+        return version_key
+    return f"{version_key}_{suffix_index}"
+
+
+def _select_import_version_key(
+    db: sqlalchemy_orm.Session,
+    items: list[dict],
+    requested_version_key: str,
+) -> str:
+    suffix_index = 0
+    while True:
+        candidate_version_key = _version_key_with_suffix(requested_version_key, suffix_index)
+        has_collision = False
+        for item in items:
+            if item.get("existing_document_id"):
+                continue
+            candidate_id = helpers.make_document_id(item["document_type"], candidate_version_key)
+            existing = db.get(models.ArchiveDocumentModel, candidate_id)
+            if existing is not None and existing.content_sha256 != item["content_sha256"]:
+                has_collision = True
+                break
+        if not has_collision:
+            return candidate_version_key
+        suffix_index += 1
+
+
 def bootstrap_archive(
     db: sqlalchemy_orm.Session,
     repo_root: pathlib.Path,
@@ -158,6 +205,20 @@ def bootstrap_archive(
         version_key = datetime.date.today().isoformat()
 
     items = _build_import_items(repo_root, version_key)
+
+    for item in items:
+        existing_match = _find_existing_content_match(db, item)
+        item["existing_document_id"] = existing_match.document_id if existing_match is not None else None
+
+    import_version_key = _select_import_version_key(db, items, version_key)
+    for item in items:
+        if item["existing_document_id"]:
+            item["resolved_document_id"] = item["existing_document_id"]
+        else:
+            item["version_key"] = import_version_key
+            item["document_id"] = helpers.make_document_id(item["document_type"], import_version_key)
+            item["resolved_document_id"] = item["document_id"]
+
     linked_map = _build_linked_documents(items)
 
     for item in items:
@@ -170,27 +231,13 @@ def bootstrap_archive(
         doc_id = item["document_id"]
         document_type = item["document_type"]
 
-        existing_by_id = db.get(models.ArchiveDocumentModel, doc_id)
-        if existing_by_id is not None:
-            skipped.append(doc_id)
-            if not dry_run and not existing_by_id.active:
+        existing_doc_id = item["existing_document_id"]
+        if existing_doc_id:
+            skipped.append(existing_doc_id)
+            existing_by_id = db.get(models.ArchiveDocumentModel, existing_doc_id)
+            if not dry_run and existing_by_id is not None and not existing_by_id.active:
                 _deactivate_type(db, document_type)
                 existing_by_id.active = True
-            continue
-
-        existing_by_sha = (
-            db.query(models.ArchiveDocumentModel)
-            .filter(
-                models.ArchiveDocumentModel.document_type == document_type,
-                models.ArchiveDocumentModel.content_sha256 == item["content_sha256"],
-            )
-            .first()
-        )
-        if existing_by_sha is not None:
-            skipped.append(existing_by_sha.document_id)
-            if not dry_run and not existing_by_sha.active:
-                _deactivate_type(db, document_type)
-                existing_by_sha.active = True
             continue
 
         if dry_run:
@@ -229,6 +276,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    db_module.Base.metadata.create_all(bind=db_module.engine)
     db = db_module.SessionLocal()
     try:
         summary = bootstrap_archive(

@@ -680,7 +680,7 @@ def test_grading_validation_non_dict_entry_skipped():
 
 def test_load_prompt_template_reads_tutor_prompt_markdown():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
-    assert "You are the runtime tutor for one lecture-review tutoring session" in loaded
+    assert "You are the runtime tutor for an adaptive conceptual lecture review session." in loaded
 
 
 def test_tutor_prompt_uses_backend_runtime_context_names():
@@ -698,17 +698,16 @@ def test_tutor_prompt_uses_backend_runtime_context_names():
 def test_tutor_prompt_describes_backend_owned_lifecycle_boundaries():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
     assert "The backend owns the opening message and timeout closure." in loaded
-    assert "The backend owns session creation, opening message behavior" in loaded
+    assert "Do not assume you control session start or forced session end." in loaded
     assert "session_timing" in loaded
     assert "timeout_warning_sent" in loaded
 
 
 def test_tutor_prompt_keeps_private_artifacts_out_of_state_and_message():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
-    assert "If private_artifact_schema_json is present" in loaded
-    assert "Never put private_artifact content inside updated_state." in loaded
-    assert "Never put private_artifact content inside assistant_message." in loaded
-    assert "private_artifact, when required, is private and backend-facing only." in loaded
+    assert "When private_artifact_schema_json is present" in loaded
+    assert "Do not place private_artifact content inside assistant_message or updated_state." in loaded
+    assert "private_artifact is required and must conform to that injected schema." in loaded
     assert "topics_covered" in loaded
 
 
@@ -762,8 +761,8 @@ def test_backend_runtime_contract_defines_private_artifact_mechanics():
 
 def test_current_tutor_specification_defines_c5_and_delegates_runtime_mechanics():
     spec = (prompt_loader._REPO_ROOT / "docs" / "tutor_specification.md").read_text(encoding="utf-8")
-    assert "### C5. Inspectability / self-verification commitments" in spec
-    assert "concrete private-artifact schema, transport, validation, persistence, and visibility are delegated" in spec
+    assert "plain-language transparency about session shape" in spec
+    assert "Session lifecycle, opening message mechanics when backend-owned, timeout closure" in spec
 
 
 def test_generate_reply_uses_tutor_prompt_markdown_with_injected_context():
@@ -827,7 +826,7 @@ def test_generate_reply_uses_tutor_prompt_markdown_with_injected_context():
 
     create_kwargs = mock_client.chat.completions.create.call_args.kwargs
     system_prompt = create_kwargs["messages"][0]["content"]
-    assert "You are the runtime tutor for one lecture-review tutoring session" in system_prompt
+    assert "You are the runtime tutor for an adaptive conceptual lecture review session." in system_prompt
     assert "Runtime context" in system_prompt
     assert '"topic_id": "T1"' in system_prompt
     assert '"label": "Reality–Data–Model distinction"' in system_prompt

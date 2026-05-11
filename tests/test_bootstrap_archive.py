@@ -165,3 +165,30 @@ def test_bootstrap_sha256_match_skips_even_with_different_id(db, repo_root):
     summary = bootstrap_archive(db, repo_root, version_key="2026-05-02")
     assert len(summary["imported"]) == 0
     assert len(summary["skipped"]) == 7
+
+
+def test_bootstrap_same_version_changed_content_uses_suffixed_id_and_real_links(db, repo_root):
+    bootstrap_archive(db, repo_root, version_key="2026-05-01")
+    (repo_root / "prompts" / "tutor_prompt.md").write_text(
+        "# Tutor Prompt\n\nUpdated tutor prompt.",
+        encoding="utf-8",
+    )
+
+    summary = bootstrap_archive(db, repo_root, version_key="2026-05-01")
+
+    assert summary["imported"] == ["doc_tutor_prompt_2026-05-01_1"]
+    new_prompt = db.get(models.ArchiveDocumentModel, "doc_tutor_prompt_2026-05-01_1")
+    assert new_prompt is not None
+    assert new_prompt.active is True
+
+    links = helpers.parse_linked_documents(new_prompt.linked_documents_json)
+    assert links == {
+        "tutor_spec": "doc_tutor_spec_2026-05-01",
+        "tutor_artifact_schema": "doc_tutor_artifact_schema_2026-05-01",
+        "tutor_generator_prompt": "doc_tutor_generator_prompt_2026-05-01",
+        "tutor_spec_contract": "doc_tutor_spec_contract_2026-05-01",
+        "backend_contract": "doc_backend_contract_2026-05-01",
+    }
+    activatable, reasons = helpers.is_activatable(new_prompt, db)
+    assert activatable is True
+    assert reasons == []
