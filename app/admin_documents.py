@@ -10,8 +10,7 @@ import app.models as models
 
 REPO_ROOT = pathlib.Path(__file__).parent.parent
 
-# Canonical runtime files written on activation
-_CANONICAL = {
+CANONICAL_DOCUMENT_PATHS = {
     "tutor_prompt": REPO_ROOT / "prompts" / "tutor_prompt.md",
     "tutor_artifact_schema": REPO_ROOT / "prompts" / "tutor_prompt_private_artifact_schema.json",
     "tutor_spec": REPO_ROOT / "docs" / "tutor_specification.md",
@@ -36,6 +35,12 @@ def doc_row(doc: models.ArchiveDocumentModel, db: sqlalchemy_orm.Session) -> dic
         "links": helpers.parse_linked_documents(doc.linked_documents_json),
         "created_at": doc.created_at,
     }
+
+
+def document_summary(doc: models.ArchiveDocumentModel, db: sqlalchemy_orm.Session) -> dict:
+    row = doc_row(doc, db)
+    row["provenance"] = json.loads(doc.provenance_json) if doc.provenance_json else None
+    return row
 
 
 def list_all_documents(db: sqlalchemy_orm.Session) -> dict[str, list[dict]]:
@@ -67,12 +72,11 @@ def get_document_detail(db: sqlalchemy_orm.Session, document_id: str) -> dict | 
     doc = db.get(models.ArchiveDocumentModel, document_id)
     if doc is None:
         return None
-    row = doc_row(doc, db)
+    row = document_summary(doc, db)
     row["description"] = doc.description
     row["content_text"] = doc.content_text
     row["content_format"] = doc.content_format
     row["content_sha256"] = doc.content_sha256
-    row["provenance"] = json.loads(doc.provenance_json) if doc.provenance_json else None
     row["updated_at"] = doc.updated_at
 
     linked_docs = {}
@@ -189,11 +193,13 @@ def activate_tutor_prompt(
 
     schema_doc = db.get(models.ArchiveDocumentModel, links["tutor_artifact_schema"])
     spec_doc = db.get(models.ArchiveDocumentModel, links["tutor_spec"])
+    if schema_doc is None or spec_doc is None:
+        return False, "Linked generated spec or schema document is missing."
 
     # Write canonical runtime files
-    _CANONICAL["tutor_prompt"].write_text(doc.content_text, encoding="utf-8")
-    _CANONICAL["tutor_artifact_schema"].write_text(schema_doc.content_text, encoding="utf-8")
-    _CANONICAL["tutor_spec"].write_text(spec_doc.content_text, encoding="utf-8")
+    CANONICAL_DOCUMENT_PATHS["tutor_prompt"].write_text(doc.content_text, encoding="utf-8")
+    CANONICAL_DOCUMENT_PATHS["tutor_artifact_schema"].write_text(schema_doc.content_text, encoding="utf-8")
+    CANONICAL_DOCUMENT_PATHS["tutor_spec"].write_text(spec_doc.content_text, encoding="utf-8")
 
     # Update active flag: deactivate others, activate this one
     db.query(models.ArchiveDocumentModel).filter(

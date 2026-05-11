@@ -90,7 +90,7 @@ def test_start_session_snapshots_active_private_artifact_schema(client):
     ).first()
     schema = json.loads(row.private_artifact_schema_json)
     assert schema["type"] == "object"
-    assert "latest_message_check" in schema["required"]
+    assert "turn_assessment" in schema["required"]
 
 
 def test_start_session_with_no_schema_leaves_private_artifact_schema_null(client):

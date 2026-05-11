@@ -229,6 +229,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    db_module.Base.metadata.create_all(bind=db_module.engine)
     db = db_module.SessionLocal()
     try:
         summary = bootstrap_archive(
