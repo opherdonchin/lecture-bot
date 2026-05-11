@@ -2,62 +2,60 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "turn_evidence",
-    "next_move_decision",
+    "turn_assessment",
+    "next_move",
     "self_verification"
   ],
   "properties": {
-    "turn_evidence": {
+    "turn_assessment": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "student_message_type",
-        "topic_id",
-        "evidence_independence",
+        "latest_message_type",
+        "engaged_topic_id",
         "evidence_strength",
+        "independence_level",
         "demonstrated_dimensions",
-        "mastery_update_supported",
-        "brief_basis"
+        "remaining_uncertainties",
+        "substantive_target_already_addressed"
       ],
       "properties": {
-        "student_message_type": {
+        "latest_message_type": {
           "type": "string",
           "enum": [
             "content_answer",
             "content_question",
             "procedural_question",
-            "grade_or_report_request",
-            "request_for_hidden_internals",
-            "out_of_scope",
-            "non_answer_or_repair_needed"
+            "repair_case",
+            "redirection_case",
+            "mixed",
+            "unclear"
           ]
         },
-        "topic_id": {
+        "engaged_topic_id": {
           "type": [
             "string",
             "null"
-          ],
-          "description": "Canonical backend-provided topic ID, or null when no topic can be identified without invention."
-        },
-        "evidence_independence": {
-          "type": "string",
-          "enum": [
-            "none",
-            "independent",
-            "after_small_hint",
-            "after_substantial_scaffold",
-            "generic_or_fluent_only",
-            "copied_or_echoed",
-            "transformed_verification"
           ]
         },
         "evidence_strength": {
           "type": "string",
           "enum": [
             "none",
-            "weaker",
+            "weak",
             "moderate",
             "strong"
+          ]
+        },
+        "independence_level": {
+          "type": "string",
+          "enum": [
+            "independent",
+            "assisted_after_small_hint",
+            "assisted_after_substantial_scaffold",
+            "generic_or_copied",
+            "procedural_only",
+            "unclear"
           ]
         },
         "demonstrated_dimensions": {
@@ -76,33 +74,34 @@
           },
           "uniqueItems": true
         },
-        "mastery_update_supported": {
-          "type": "boolean"
+        "remaining_uncertainties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
-        "brief_basis": {
-          "type": "string",
-          "maxLength": 600
+        "substantive_target_already_addressed": {
+          "type": "boolean"
         }
       }
     },
-    "next_move_decision": {
+    "next_move": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "selected_mode",
-        "conceptual_target",
-        "target_already_addressed",
+        "mode",
+        "question_substance",
+        "materiality_rationale",
         "breadth_depth_choice",
-        "marginal_value",
-        "question_asked",
-        "coverage_transparency_considered",
         "closing_pressure_considered",
-        "decision_basis"
+        "student_signals_considered",
+        "coverage_transparency_considered"
       ],
       "properties": {
-        "selected_mode": {
+        "mode": {
           "type": "string",
           "enum": [
+            "opening",
             "basic_probe",
             "evidence_feedback",
             "scaffolded_support",
@@ -115,51 +114,55 @@
             "redirection",
             "grade_or_report_handoff",
             "consolidation",
-            "terminal_closure_under_request_pressure",
+            "terminal_closure_under_recurring_request_pressure",
             "plateau_cause_disclosure"
           ]
         },
-        "conceptual_target": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Short private description of the concept or operation targeted by the next move; null for procedural, redirection, handoff, or closure moves."
+        "question_substance": {
+          "type": "string",
+          "enum": [
+            "substantive_question",
+            "no_substantive_question"
+          ]
         },
-        "target_already_addressed": {
-          "type": "boolean"
+        "materiality_rationale": {
+          "type": "string"
         },
         "breadth_depth_choice": {
           "type": "string",
           "enum": [
-            "not_applicable",
             "breadth",
             "depth",
-            "scaffold_or_repair",
-            "procedural_or_redirect",
-            "consolidate_or_close"
+            "neither"
           ]
-        },
-        "marginal_value": {
-          "type": "string",
-          "enum": [
-            "none",
-            "low",
-            "material"
-          ]
-        },
-        "question_asked": {
-          "type": "boolean"
-        },
-        "coverage_transparency_considered": {
-          "type": "boolean"
         },
         "closing_pressure_considered": {
           "type": "boolean"
         },
-        "decision_basis": {
-          "type": "string",
-          "maxLength": 800
+        "student_signals_considered": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "none",
+              "fatigue",
+              "move_on_request",
+              "declining_traction",
+              "frustration",
+              "anxiety",
+              "grade_request",
+              "grade_frustration",
+              "request_for_more_low_value_probing",
+              "request_for_hidden_internals",
+              "copy_paste_loop",
+              "disagreement",
+              "out_of_scope_request"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "coverage_transparency_considered": {
+          "type": "boolean"
         }
       }
     },
@@ -167,42 +170,42 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "actual_content_evidence_gate_checked",
-        "no_reprobe_of_substantively_addressed_target",
-        "next_probe_material_if_present",
-        "breadth_depth_marginal_gain_checked",
-        "answer_feedback_cycle_feasible",
-        "high_mastery_supported_by_independent_evidence",
-        "student_signals_honored",
-        "prose_matches_structured_decision",
-        "coverage_transparency_checked_when_relevant"
+        "content_evidence_gate_passed",
+        "repetition_check_passed",
+        "materiality_check_passed",
+        "breadth_vs_depth_check_passed",
+        "time_feasibility_check_passed",
+        "high_mastery_evidence_check_passed",
+        "student_signal_honoring_check_passed",
+        "prose_consistency_check_passed",
+        "plateau_coverage_check_passed"
       ],
       "properties": {
-        "actual_content_evidence_gate_checked": {
+        "content_evidence_gate_passed": {
           "type": "boolean"
         },
-        "no_reprobe_of_substantively_addressed_target": {
+        "repetition_check_passed": {
           "type": "boolean"
         },
-        "next_probe_material_if_present": {
+        "materiality_check_passed": {
           "type": "boolean"
         },
-        "breadth_depth_marginal_gain_checked": {
+        "breadth_vs_depth_check_passed": {
           "type": "boolean"
         },
-        "answer_feedback_cycle_feasible": {
+        "time_feasibility_check_passed": {
           "type": "boolean"
         },
-        "high_mastery_supported_by_independent_evidence": {
+        "high_mastery_evidence_check_passed": {
           "type": "boolean"
         },
-        "student_signals_honored": {
+        "student_signal_honoring_check_passed": {
           "type": "boolean"
         },
-        "prose_matches_structured_decision": {
+        "prose_consistency_check_passed": {
           "type": "boolean"
         },
-        "coverage_transparency_checked_when_relevant": {
+        "plateau_coverage_check_passed": {
           "type": "boolean"
         }
       }

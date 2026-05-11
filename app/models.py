@@ -10,6 +10,20 @@ def utcnow() -> dt_module.datetime:
     return dt_module.datetime.now(dt_module.timezone.utc)
 
 
+DOCUMENT_TYPES: frozenset[str] = frozenset({
+    "tutor_spec",
+    "tutor_prompt",
+    "tutor_artifact_schema",
+    "tutor_spec_contract",
+    "backend_contract",
+    "tutor_generator_prompt",
+    "spec_repair_prompt",
+    "tutor_analysis_prompt",
+})
+
+CONTRACT_TYPES: frozenset[str] = frozenset({"tutor_spec_contract", "backend_contract"})
+
+
 class SessionModel(db_module.Base):
     __tablename__ = "sessions"
 
@@ -96,4 +110,39 @@ class SessionNoteModel(db_module.Base):
     latest_message_id: sqlalchemy_orm.Mapped[int | None] = sqlalchemy_orm.mapped_column(sa.Integer, nullable=True)
     latest_assistant_message_id: sqlalchemy_orm.Mapped[int | None] = sqlalchemy_orm.mapped_column(sa.Integer, nullable=True)
     state_json: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    created_at: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)
+
+
+class ArchiveDocumentModel(db_module.Base):
+    __tablename__ = "archive_documents"
+
+    document_id: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(128), primary_key=True)
+    document_type: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(64), index=True)
+    version_key: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(128))
+    title: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(256))
+    description: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+    content_text: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.Text)
+    content_format: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(32))
+    linked_documents_json: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+    content_sha256: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(64))
+    active: sqlalchemy_orm.Mapped[bool] = sqlalchemy_orm.mapped_column(sa.Boolean, default=False)
+    provenance_json: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+    created_at: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)
+    updated_at: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class TutorGenerationRunModel(db_module.Base):
+    __tablename__ = "tutor_generation_runs"
+
+    id: sqlalchemy_orm.Mapped[int] = sqlalchemy_orm.mapped_column(sa.Integer, primary_key=True, autoincrement=True)
+    run_id: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(64), unique=True, index=True)
+    status: sqlalchemy_orm.Mapped[str] = sqlalchemy_orm.mapped_column(sa.String(32))
+    input_spec_text: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+    input_spec_title: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.String(256), nullable=True)
+    generator_document_id: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.String(128), nullable=True)
+    spec_contract_document_id: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.String(128), nullable=True)
+    backend_contract_document_id: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.String(128), nullable=True)
+    output_document_ids_json: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+    raw_output_json: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+    error_text: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
     created_at: sqlalchemy_orm.Mapped[dt_module.datetime] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), default=utcnow)
