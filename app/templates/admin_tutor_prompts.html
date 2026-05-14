@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Tutor Prompts — Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_documents') }}" class="back-link">← Document Archive</a>
+        <div class="inline-actions">
+          <a href="{{ url_path('upload_tutor_spec_form') }}" class="secondary-action">Upload Spec</a>
+          <a href="{{ url_path('upload_tutor_prompt_form') }}" class="secondary-action">Upload Prompt</a>
+          <a href="{{ url_path('generate_tutor_prompt_form') }}" class="secondary-action">Generate New Prompt →</a>
+        </div>
+      </div>
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Admin App</p>
+          <h1>Tutor Prompts</h1>
+          <p class="lead">Review and activate tutor prompts. Activating writes the canonical runtime files and requires a student app restart.</p>
+        </div>
+        <form method="post" action="{{ url_path('restart_student_app') }}">
+          <button type="submit" class="danger">Restart Student App</button>
+        </form>
+      </section>
+
+      {% if notice %}
+      <div class="notice success">{{ notice }}</div>
+      {% endif %}
+      {% if error %}
+      <div class="notice error">{{ error }}</div>
+      {% endif %}
+
+      {% if not prompts %}
+      <section class="card admin-card">
+        <p class="muted">No tutor prompt documents in the archive yet.</p>
+      </section>
+      {% else %}
+      {% for row in prompts %}
+      <section class="card admin-card">
+        <div class="section-header">
+          <div>
+            <h2>
+              <a href="{{ url_path('admin_document_detail', document_id=row.document_id) }}" class="secondary-action"><code>{{ row.document_id }}</code></a>
+            </h2>
+            <p class="muted" style="margin-top:4px">{{ row.title }} &middot; {{ row.version_key }}</p>
+          </div>
+          <div class="inline-actions">
+            {% if row.active %}
+            <span class="step-chip">Active</span>
+            {% elif row.activatable %}
+            <form method="post" action="{{ url_path('activate_document', document_id=row.document_id) }}">
+              <button type="submit">Activate</button>
+            </form>
+            {% else %}
+            <span class="muted">Not activatable</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="tutor-prompt-meta">
+          <table class="session-table" style="min-width:0">
+            <tbody>
+              <tr>
+                <th style="width:160px">Active</th>
+                <td>{% if row.active %}<span class="status-ready">yes</span>{% else %}<span class="muted">no</span>{% endif %}</td>
+              </tr>
+              <tr>
+                <th>Compatible</th>
+                <td>{% if row.compatible %}<span class="status-ready">yes</span>{% else %}<span class="status-pending">no</span>{% endif %}</td>
+              </tr>
+              <tr>
+                <th>Activatable</th>
+                <td>{% if row.activatable %}<span class="status-ready">yes</span>{% else %}<span class="status-pending">no</span>{% endif %}</td>
+              </tr>
+              {% if row.blocking_reasons %}
+              <tr>
+                <th>Blocking reasons</th>
+                <td>
+                  <ul style="margin:0;padding-left:18px">
+                    {% for reason in row.blocking_reasons %}
+                    <li>{{ reason }}</li>
+                    {% endfor %}
+                  </ul>
+                </td>
+              </tr>
+              {% endif %}
+              {% for link_type, link_id in row.links.items() %}
+              <tr>
+                <th>{{ link_type }}</th>
+                <td><code><a href="{{ url_path('admin_document_detail', document_id=link_id) }}" class="secondary-action">{{ link_id }}</a></code></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endfor %}
+      {% endif %}
+    </main>
+  </body>
+</html>

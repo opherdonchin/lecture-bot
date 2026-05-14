@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Generate Tutor Prompt — Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_tutor_prompts') }}" class="back-link">← Tutor Prompts</a>
+      </div>
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Admin App</p>
+          <h1>Generate Tutor Prompt</h1>
+          <p class="lead">Choose a validated tutor specification from the archive. New specs are uploaded and validated separately.</p>
+        </div>
+      </section>
+
+      <section class="card admin-card">
+        <h2>Active documents for this generation</h2>
+        <table class="session-table" style="min-width:0">
+          <tbody>
+            {% for doc_type, info in context_docs.items() %}
+            <tr>
+              <th style="width:220px"><code>{{ doc_type }}</code></th>
+              <td>
+                {% if info.found %}
+                <a href="{{ url_path('admin_document_detail', document_id=info.document_id) }}" class="secondary-action"><code>{{ info.document_id }}</code></a>
+                — {{ info.title }}
+                {% else %}
+                <span class="status-pending">No active document found — generation will fail.</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      {% if error %}
+      <div class="notice error">{{ error }}</div>
+      {% endif %}
+
+      <section class="card admin-card">
+        <div class="section-header">
+          <h2>Validated Tutor Specifications</h2>
+          <a href="{{ url_path('upload_tutor_spec_form') }}" class="secondary-action">Upload Spec</a>
+        </div>
+        {% if not specs %}
+        <p class="muted">No validated specs are available. Upload and validate a tutor specification first.</p>
+        {% else %}
+        <form method="post" action="{{ url_path('generate_tutor_prompt') }}">
+          <div style="margin-bottom:12px">
+            <label>
+              <span style="display:block;margin-bottom:6px;font-size:0.9rem;color:#445065">Specification</span>
+              <select name="spec_document_id" required style="width:100%;max-width:720px">
+                {% for spec in specs %}
+                <option value="{{ spec.document_id }}">
+                  {{ spec.title }} · {{ spec.version_key }}{% if spec.active %} · active{% endif %} · {{ spec.document_id }}
+                </option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+          <button type="submit">Generate</button>
+          <span class="muted" style="margin-left:12px;font-size:0.88rem">This may take up to a minute.</span>
+        </form>
+        <table class="session-table" style="min-width:0;margin-top:16px">
+          <thead>
+            <tr><th>Spec</th><th>Version</th><th>Active</th></tr>
+          </thead>
+          <tbody>
+            {% for spec in specs %}
+            <tr>
+              <td><a href="{{ url_path('admin_document_detail', document_id=spec.document_id) }}" class="secondary-action"><code>{{ spec.document_id }}</code></a> — {{ spec.title }}</td>
+              <td>{{ spec.version_key }}</td>
+              <td>{% if spec.active %}<span class="status-ready">yes</span>{% else %}<span class="muted">no</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>

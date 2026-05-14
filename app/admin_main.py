@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pathlib
 import datetime as dt_module
+import subprocess
 
 import fastapi as fa
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
@@ -11,6 +12,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.datastructures import UploadFile as StarletteUploadFile
 import sqlalchemy.orm as sqlalchemy_orm
 
+import app.admin_documents as admin_documents_module
+import app.admin_generation as admin_generation_module
 import app.admin_sessions as admin_sessions
 import app.admin_workflow as workflow
 import app.config as config_module
@@ -294,6 +297,36 @@ def _render_lecture(
             },
         ),
     )
+
+
+_STUDENT_SERVICE = "lecture-bot.service"
+
+
+def _restart_student_app() -> tuple[bool, str]:
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "restart", _STUDENT_SERVICE],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode == 0:
+            return True, "Student app restarted successfully."
+        return False, f"systemctl returned exit code {result.returncode}: {(result.stderr or result.stdout).strip()}"
+    except FileNotFoundError:
+        return False, "systemctl not found — restart is not supported in this environment."
+    except subprocess.TimeoutExpired:
+        return False, "Restart command timed out."
+    except Exception as exc:
+        return False, f"Unexpected error: {exc}"
+
+
+@app.post("/restart-student-app", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="restart_student_app")
+def restart_student_app(request: fa.Request):
+    ok, message = _restart_student_app()
+    notice = message if ok else None
+    error = None if ok else message
+    return _render_index(request, notice=notice, error=error)
 
 
 @app.get("/", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_root")
@@ -597,6 +630,330 @@ def download_lecture_file(lecture_id: str, filename: str):
     if target.parent != lecture_dir.resolve() or not target.exists():
         raise fa.HTTPException(status_code=404, detail="File not found.")
     return FileResponse(target)
+
+
+@app.get("/documents", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_documents")
+def admin_documents_list(
+    request: fa.Request,
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    grouped = admin_documents_module.list_all_documents(db)
+    return templates.TemplateResponse(
+        request,
+        "admin_documents.html",
+        _template_context(request, {"grouped_docs": grouped}),
+    )
+
+
+@app.get("/documents/tutor-prompts", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_tutor_prompts")
+def admin_tutor_prompts(
+    request: fa.Request,
+    notice: str = "",
+    error: str = "",
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    prompts = admin_documents_module.list_tutor_prompts(db)
+    return templates.TemplateResponse(
+        request,
+        "admin_tutor_prompts.html",
+        _template_context(request, {
+            "prompts": prompts,
+            "notice": notice or None,
+            "error": error or None,
+        }),
+    )
+
+
+async def _document_text_from_form(uploaded_file: fa.UploadFile | None, fallback_text: str) -> str:
+    if uploaded_file is not None and uploaded_file.filename:
+        return (await uploaded_file.read()).decode("utf-8")
+    return fallback_text
+
+
+@app.get("/documents/upload-spec", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_tutor_spec_form")
+def upload_tutor_spec_form(request: fa.Request):
+    return templates.TemplateResponse(
+        request,
+        "admin_upload_spec.html",
+        _template_context(request, {"result": None, "form_title": "", "form_text": ""}),
+    )
+
+
+@app.post("/documents/upload-spec", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_tutor_spec")
+async def upload_tutor_spec(
+    request: fa.Request,
+    action: str = fa.Form("validate"),
+    spec_title: str = fa.Form(""),
+    spec_text: str = fa.Form(""),
+    uploaded_file: fa.UploadFile | None = fa.File(None),
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    content_text = (await _document_text_from_form(uploaded_file, spec_text)).strip()
+    if not content_text:
+        return templates.TemplateResponse(
+            request,
+            "admin_upload_spec.html",
+            _template_context(request, {
+                "result": {"ok": False, "error": "Tutor specification text is required."},
+                "form_title": spec_title,
+                "form_text": spec_text,
+            }),
+        )
+
+    validation = admin_generation_module.validate_spec_against_contracts(db, content_text)
+    if not validation.get("ok"):
+        return templates.TemplateResponse(
+            request,
+            "admin_upload_spec.html",
+            _template_context(request, {"result": validation, "form_title": spec_title, "form_text": content_text}),
+        )
+
+    if action == "validate":
+        return templates.TemplateResponse(
+            request,
+            "admin_upload_spec.html",
+            _template_context(request, {"result": validation, "form_title": spec_title, "form_text": content_text}),
+        )
+
+    spec_doc = admin_generation_module.save_validated_spec(db, content_text, spec_title.strip())
+    if action == "save_activate":
+        ok, message = admin_generation_module.activate_tutor_spec(db, spec_doc.document_id)
+        if not ok:
+            return RedirectResponse(
+                url=str(request.url_for("admin_document_detail", document_id=spec_doc.document_id)) + f"?error={message}",
+                status_code=303,
+            )
+    if action == "generate":
+        preview = admin_generation_module.generate_prompt_preview(db, spec_doc.document_id)
+        return templates.TemplateResponse(
+            request,
+            "admin_generate_preview.html",
+            _template_context(request, {"preview": preview, "spec_doc": spec_doc}),
+        )
+
+    return RedirectResponse(
+        url=str(request.url_for("admin_document_detail", document_id=spec_doc.document_id)) + "?notice=Tutor specification saved.",
+        status_code=303,
+    )
+
+
+@app.post("/documents/specs/{document_id}/activate", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="activate_tutor_spec")
+def activate_tutor_spec(
+    request: fa.Request,
+    document_id: str,
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    ok, message = admin_generation_module.activate_tutor_spec(db, document_id)
+    query_key = "notice" if ok else "error"
+    return RedirectResponse(
+        url=str(request.url_for("admin_document_detail", document_id=document_id)) + f"?{query_key}={message}",
+        status_code=303,
+    )
+
+
+@app.post("/documents/specs/{document_id}/generate-prompt", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="generate_prompt_from_spec")
+def generate_prompt_from_spec(
+    request: fa.Request,
+    document_id: str,
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    spec_doc = db.get(admin_documents_module.models.ArchiveDocumentModel, document_id)
+    preview = admin_generation_module.generate_prompt_preview(db, document_id)
+    return templates.TemplateResponse(
+        request,
+        "admin_generate_preview.html",
+        _template_context(request, {"preview": preview, "spec_doc": spec_doc}),
+    )
+
+
+@app.post("/documents/generated-prompt", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="save_generated_prompt")
+def save_generated_prompt(
+    request: fa.Request,
+    action: str = fa.Form("save"),
+    spec_document_id: str = fa.Form(...),
+    tutor_prompt: str = fa.Form(...),
+    tutor_artifact_schema: str = fa.Form(...),
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    if action == "cancel":
+        return RedirectResponse(url=str(request.url_for("admin_tutor_prompts")), status_code=303)
+    result = admin_generation_module.save_generated_prompt_preview(
+        db,
+        spec_document_id,
+        tutor_prompt,
+        tutor_artifact_schema,
+        activate=action == "save_activate",
+    )
+    if not result.get("ok"):
+        return templates.TemplateResponse(
+            request,
+            "admin_generate_preview.html",
+            _template_context(request, {
+                "preview": {
+                    "ok": True,
+                    "spec_document_id": spec_document_id,
+                    "tutor_prompt": tutor_prompt,
+                    "tutor_artifact_schema": tutor_artifact_schema,
+                    "error": result.get("error"),
+                },
+                "spec_doc": db.get(admin_documents_module.models.ArchiveDocumentModel, spec_document_id),
+            }),
+        )
+    message = "Generated tutor prompt saved."
+    if result.get("activation"):
+        message = result["activation"]["message"]
+    return RedirectResponse(
+        url=str(request.url_for("admin_document_detail", document_id=result["tutor_prompt_document_id"])) + f"?notice={message}",
+        status_code=303,
+    )
+
+
+@app.get("/documents/upload-prompt", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_tutor_prompt_form")
+def upload_tutor_prompt_form(request: fa.Request):
+    return templates.TemplateResponse(
+        request,
+        "admin_upload_prompt.html",
+        _template_context(request, {"result": None, "form_title": "", "form_text": ""}),
+    )
+
+
+@app.post("/documents/upload-prompt", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_tutor_prompt")
+async def upload_tutor_prompt(
+    request: fa.Request,
+    action: str = fa.Form("validate"),
+    prompt_title: str = fa.Form(""),
+    prompt_text: str = fa.Form(""),
+    uploaded_file: fa.UploadFile | None = fa.File(None),
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    content_text = (await _document_text_from_form(uploaded_file, prompt_text)).strip()
+    if not content_text:
+        return templates.TemplateResponse(
+            request,
+            "admin_upload_prompt.html",
+            _template_context(request, {
+                "result": {"ok": False, "error": "Tutor prompt text is required."},
+                "form_title": prompt_title,
+                "form_text": prompt_text,
+            }),
+        )
+    validation = admin_generation_module.validate_prompt_against_active_spec(db, content_text)
+    if not validation.get("ok"):
+        return templates.TemplateResponse(
+            request,
+            "admin_upload_prompt.html",
+            _template_context(request, {"result": validation, "form_title": prompt_title, "form_text": content_text}),
+        )
+    if action == "validate":
+        return templates.TemplateResponse(
+            request,
+            "admin_upload_prompt.html",
+            _template_context(request, {"result": validation, "form_title": prompt_title, "form_text": content_text}),
+        )
+    result = admin_generation_module.save_validated_prompt(
+        db,
+        content_text,
+        prompt_title.strip(),
+        activate=action == "save_activate",
+    )
+    if not result.get("ok"):
+        return templates.TemplateResponse(
+            request,
+            "admin_upload_prompt.html",
+            _template_context(request, {"result": result, "form_title": prompt_title, "form_text": content_text}),
+        )
+    message = "Tutor prompt saved."
+    if result.get("activation"):
+        message = result["activation"]["message"]
+    return RedirectResponse(
+        url=str(request.url_for("admin_document_detail", document_id=result["tutor_prompt_document_id"])) + f"?notice={message}",
+        status_code=303,
+    )
+
+
+@app.get("/documents/{document_id}", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_document_detail")
+def admin_document_detail(
+    request: fa.Request,
+    document_id: str,
+    notice: str = "",
+    error: str = "",
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    doc = admin_documents_module.get_document_detail(db, document_id)
+    if doc is None:
+        raise fa.HTTPException(status_code=404, detail=f"Document {document_id!r} not found.")
+    return templates.TemplateResponse(
+        request,
+        "admin_document_detail.html",
+        _template_context(request, {
+            "doc": doc,
+            "notice": notice or None,
+            "error": error or None,
+        }),
+    )
+
+
+@app.post("/documents/{document_id}/activate", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="activate_document")
+def activate_document(
+    request: fa.Request,
+    document_id: str,
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    ok, message = admin_documents_module.activate_tutor_prompt(db, document_id)
+    if ok:
+        return RedirectResponse(
+            url=str(request.url_for("admin_tutor_prompts")) + f"?notice={message}",
+            status_code=303,
+        )
+    doc = admin_documents_module.get_document_detail(db, document_id)
+    if doc is None:
+        raise fa.HTTPException(status_code=404, detail=f"Document {document_id!r} not found.")
+    return templates.TemplateResponse(
+        request,
+        "admin_document_detail.html",
+        _template_context(request, {"doc": doc, "notice": None, "error": message}),
+    )
+
+
+@app.get("/generate-tutor-prompt", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="generate_tutor_prompt_form")
+def generate_tutor_prompt_form(
+    request: fa.Request,
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    context_docs = admin_generation_module.get_generation_context(db)
+    specs = admin_generation_module.list_validated_specs(db)
+    return templates.TemplateResponse(
+        request,
+        "admin_generate.html",
+        _template_context(request, {"context_docs": context_docs, "specs": specs, "error": None}),
+    )
+
+
+@app.post("/generate-tutor-prompt", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="generate_tutor_prompt")
+async def generate_tutor_prompt(
+    request: fa.Request,
+    spec_document_id: str = fa.Form(""),
+    db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
+):
+    context_docs = admin_generation_module.get_generation_context(db)
+    specs = admin_generation_module.list_validated_specs(db)
+    if not spec_document_id:
+        return templates.TemplateResponse(
+            request,
+            "admin_generate.html",
+            _template_context(request, {
+                "context_docs": context_docs,
+                "specs": specs,
+                "error": "Choose a validated tutor specification.",
+            }),
+        )
+    spec_doc = db.get(admin_documents_module.models.ArchiveDocumentModel, spec_document_id)
+    preview = admin_generation_module.generate_prompt_preview(db, spec_document_id)
+    return templates.TemplateResponse(
+        request,
+        "admin_generate_preview.html",
+        _template_context(request, {"preview": preview, "spec_doc": spec_doc}),
+    )
 
 
 @app.post("/lectures/{lecture_id}/generated/{kind}", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_generated_artifact")

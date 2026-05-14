@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{{ doc.document_id }} — Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        {% if doc.document_type == 'tutor_prompt' %}
+        <a href="{{ url_path('admin_tutor_prompts') }}" class="back-link">← Tutor Prompts</a>
+        {% else %}
+        <a href="{{ url_path('admin_documents') }}" class="back-link">← Document Archive</a>
+        {% endif %}
+        {% if doc.activatable %}
+        <form method="post" action="{{ url_path('activate_document', document_id=doc.document_id) }}">
+          <button type="submit">Activate This Prompt</button>
+        </form>
+        {% endif %}
+        {% if doc.document_type == 'tutor_spec' and doc.compatible %}
+        <form method="post" action="{{ url_path('generate_prompt_from_spec', document_id=doc.document_id) }}">
+          <button type="submit">Generate Prompt</button>
+        </form>
+        {% if not doc.active %}
+        <form method="post" action="{{ url_path('activate_tutor_spec', document_id=doc.document_id) }}">
+          <button type="submit">Activate This Spec</button>
+        </form>
+        {% endif %}
+        {% endif %}
+      </div>
+
+      {% if notice %}
+      <div class="notice success">{{ notice }}</div>
+      {% endif %}
+      {% if error %}
+      <div class="notice error">{{ error }}</div>
+      {% endif %}
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow"><code>{{ doc.document_type }}</code></p>
+          <h1>{{ doc.title }}</h1>
+          <p class="lead"><code>{{ doc.document_id }}</code></p>
+        </div>
+        {% if doc.active %}
+        <span class="step-chip">Active</span>
+        {% endif %}
+      </section>
+
+      <section class="card admin-card">
+        <h2>Metadata</h2>
+        <table class="session-table" style="min-width:0">
+          <tbody>
+            <tr><th style="width:200px">Document ID</th><td><code>{{ doc.document_id }}</code></td></tr>
+            <tr><th>Type</th><td><code>{{ doc.document_type }}</code></td></tr>
+            <tr><th>Version key</th><td>{{ doc.version_key }}</td></tr>
+            <tr><th>Format</th><td>{{ doc.content_format }}</td></tr>
+            <tr><th>SHA-256</th><td><code style="font-size:0.8em">{{ doc.content_sha256 }}</code></td></tr>
+            <tr><th>Active</th><td>{% if doc.active %}<span class="status-ready">yes</span>{% else %}no{% endif %}</td></tr>
+            <tr><th>Compatible</th><td>{% if doc.compatible %}<span class="status-ready">yes</span>{% else %}<span class="status-pending">no</span>{% endif %}</td></tr>
+            {% if doc.document_type == 'tutor_prompt' %}
+            <tr><th>Activatable</th><td>{% if doc.activatable %}<span class="status-ready">yes</span>{% else %}<span class="status-pending">no</span>{% endif %}</td></tr>
+            {% if doc.blocking_reasons %}
+            <tr>
+              <th>Blocking reasons</th>
+              <td>
+                <ul style="margin:0;padding-left:18px">
+                  {% for reason in doc.blocking_reasons %}
+                  <li>{{ reason }}</li>
+                  {% endfor %}
+                </ul>
+              </td>
+            </tr>
+            {% endif %}
+            {% endif %}
+            <tr><th>Created</th><td>{{ doc.created_at }}</td></tr>
+            <tr><th>Updated</th><td>{{ doc.updated_at }}</td></tr>
+            {% if doc.description %}
+            <tr><th>Description</th><td>{{ doc.description }}</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </section>
+
+      {% if doc.linked_docs %}
+      <section class="card admin-card">
+        <h2>Linked Documents</h2>
+        <table class="session-table" style="min-width:0">
+          <thead>
+            <tr><th>Type</th><th>Document ID</th><th>Title</th></tr>
+          </thead>
+          <tbody>
+            {% for link_type, link in doc.linked_docs.items() %}
+            <tr>
+              <td><code>{{ link_type }}</code></td>
+              <td>
+                {% if link.found %}
+                <a href="{{ url_path('admin_document_detail', document_id=link.document_id) }}" class="secondary-action"><code>{{ link.document_id }}</code></a>
+                {% else %}
+                <code class="status-pending">{{ link.document_id }}</code> <span class="muted">(not found)</span>
+                {% endif %}
+              </td>
+              <td>{{ link.title or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+      {% endif %}
+
+      {% if doc.provenance %}
+      <section class="card admin-card">
+        <h2>Provenance</h2>
+        <pre class="build-log" style="white-space:pre-wrap;word-break:break-all">{{ doc.provenance | tojson(indent=2) }}</pre>
+      </section>
+      {% endif %}
+
+      <section class="card admin-card">
+        <h2>Content</h2>
+        {% if doc.content_format == 'json' %}
+        <pre class="build-log" style="white-space:pre-wrap;word-break:break-all;font-size:0.82em">{{ doc.content_text }}</pre>
+        {% else %}
+        <pre class="build-log" style="white-space:pre-wrap;word-break:break-word;font-size:0.88em">{{ doc.content_text }}</pre>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>

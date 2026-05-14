@@ -6,7 +6,6 @@ import sqlalchemy.orm as sqlalchemy_orm
 
 import app.models as models
 
-
 CONTRACT_TYPES: frozenset[str] = models.CONTRACT_TYPES
 
 TUTOR_PROMPT_REQUIRED_LINKS: frozenset[str] = frozenset({
@@ -62,12 +61,19 @@ def compatible_with_active_contracts(
     doc: models.ArchiveDocumentModel,
     db: sqlalchemy_orm.Session,
 ) -> bool:
+    """
+    True if every contract-type link in doc.linked_documents_json points to the
+    currently active document of that type. Documents with no contract links are
+    always compatible (including contracts themselves).
+    """
     links = parse_linked_documents(doc.linked_documents_json)
     for contract_type in CONTRACT_TYPES:
         if contract_type not in links:
             continue
         active_id = get_active_document_id(db, contract_type)
-        if active_id is None or links[contract_type] != active_id:
+        if active_id is None:
+            return False
+        if links[contract_type] != active_id:
             return False
     return True
 
@@ -76,10 +82,15 @@ def is_activatable(
     doc: models.ArchiveDocumentModel,
     db: sqlalchemy_orm.Session,
 ) -> tuple[bool, list[str]]:
+    """
+    Return (activatable, blocking_reasons) for a tutor_prompt document.
+    Only tutor_prompt documents can be activatable; all others return False.
+    """
     reasons: list[str] = []
 
     if doc.document_type != "tutor_prompt":
-        return False, ["document is not a tutor_prompt"]
+        reasons.append("document is not a tutor_prompt")
+        return False, reasons
 
     links = parse_linked_documents(doc.linked_documents_json)
 
@@ -100,25 +111,31 @@ def is_activatable(
                 f"does not match active ({active_id!r})"
             )
 
-    tutor_spec = db.get(models.ArchiveDocumentModel, links["tutor_spec"])
-    if tutor_spec is None:
-        reasons.append(f"linked tutor_spec {links['tutor_spec']!r} not found in archive")
-    elif not compatible_with_active_contracts(tutor_spec, db):
-        reasons.append("linked tutor_spec is not compatible with active contracts")
+    tutor_spec_id = links.get("tutor_spec")
+    if tutor_spec_id:
+        tutor_spec = db.get(models.ArchiveDocumentModel, tutor_spec_id)
+        if tutor_spec is None:
+            reasons.append(f"linked tutor_spec {tutor_spec_id!r} not found in archive")
+        elif not compatible_with_active_contracts(tutor_spec, db):
+            reasons.append("linked tutor_spec is not compatible with active contracts")
 
-    gen_prompt = db.get(models.ArchiveDocumentModel, links["tutor_generator_prompt"])
-    if gen_prompt is None:
-        reasons.append(f"linked tutor_generator_prompt {links['tutor_generator_prompt']!r} not found in archive")
-    elif not compatible_with_active_contracts(gen_prompt, db):
-        reasons.append("linked tutor_generator_prompt is not compatible with active contracts")
+    gen_prompt_id = links.get("tutor_generator_prompt")
+    if gen_prompt_id:
+        gen_prompt = db.get(models.ArchiveDocumentModel, gen_prompt_id)
+        if gen_prompt is None:
+            reasons.append(f"linked tutor_generator_prompt {gen_prompt_id!r} not found in archive")
+        elif not compatible_with_active_contracts(gen_prompt, db):
+            reasons.append("linked tutor_generator_prompt is not compatible with active contracts")
 
-    schema_doc = db.get(models.ArchiveDocumentModel, links["tutor_artifact_schema"])
-    if schema_doc is None:
-        reasons.append(f"linked tutor_artifact_schema {links['tutor_artifact_schema']!r} not found in archive")
-    else:
-        try:
-            json.loads(schema_doc.content_text)
-        except json.JSONDecodeError:
-            reasons.append("linked tutor_artifact_schema does not parse as valid JSON")
+    schema_id = links.get("tutor_artifact_schema")
+    if schema_id:
+        schema_doc = db.get(models.ArchiveDocumentModel, schema_id)
+        if schema_doc is None:
+            reasons.append(f"linked tutor_artifact_schema {schema_id!r} not found in archive")
+        else:
+            try:
+                json.loads(schema_doc.content_text)
+            except json.JSONDecodeError:
+                reasons.append("linked tutor_artifact_schema does not parse as valid JSON")
 
     return len(reasons) == 0, reasons

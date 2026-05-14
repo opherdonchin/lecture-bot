@@ -60,14 +60,16 @@ def fetch_all_dicts(conn: sqlite3.Connection, query: str, params: tuple) -> list
 def get_session(conn: sqlite3.Connection, lecture_id: str | None, session_id: str | None) -> dict:
     if session_id:
         query = """
-            select session_id, student_id, lecture_id, started_at, ended_at, current_grade, private_artifact_schema_json
+            select session_id, student_id, lecture_id, started_at, ended_at, current_grade,
+                   private_artifact_schema_json, prompt_document_id
             from sessions
             where session_id = ?
         """
         params = (session_id,)
     else:
         query = """
-            select session_id, student_id, lecture_id, started_at, ended_at, current_grade, private_artifact_schema_json
+            select session_id, student_id, lecture_id, started_at, ended_at, current_grade,
+                   private_artifact_schema_json, prompt_document_id
             from sessions
             where lecture_id = ?
             order by started_at desc
@@ -386,6 +388,7 @@ def build_manifest(
         "started_at": session["started_at"],
         "ended_at": session["ended_at"],
         "current_grade": session["current_grade"],
+        "prompt_document_id": session.get("prompt_document_id"),
         "source_database": str(database_path),
         "source_lecture_dir": str(lecture_dir),
         "prompt_template_name": template_name,

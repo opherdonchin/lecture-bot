@@ -142,6 +142,7 @@ def test_admin_default_prefix_rendered_in_index_static_links_and_forms(tmp_path,
     with _temporary_root_path(admin_main.app, "/bot-admin"):
         client = TestClient(admin_main.app)
         response = client.get("/bot-admin/", auth=_admin_auth())
+        lectures_response = client.get("/bot-admin/lectures", auth=_admin_auth())
 
     assert response.status_code == 200
     assert 'href="/bot-admin/static/style.css"' in response.text
@@ -151,11 +152,9 @@ def test_admin_default_prefix_rendered_in_index_static_links_and_forms(tmp_path,
     assert 'href="/bot-admin/grades"' in response.text
     assert 'href="/bot-admin/analysis"' in response.text
 
-    response = client.get("/bot-admin/lectures", auth=_admin_auth())
-
-    assert response.status_code == 200
-    assert 'action="/bot-admin/lectures"' in response.text
-    assert 'href="/bot-admin/lectures/lecture_01"' in response.text
+    assert lectures_response.status_code == 200
+    assert 'action="/bot-admin/lectures"' in lectures_response.text
+    assert 'href="/bot-admin/lectures/lecture_01"' in lectures_response.text
 
 
 def test_admin_override_prefix_rendered_in_detail_links_and_forms(tmp_path, monkeypatch):

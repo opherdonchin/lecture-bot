@@ -20,6 +20,10 @@ def _ensure_sqlite_schema_updates() -> None:
             conn.exec_driver_sql(
                 "ALTER TABLE sessions ADD COLUMN private_artifact_schema_json TEXT"
             )
+        if "prompt_document_id" not in session_columns:
+            conn.exec_driver_sql(
+                "ALTER TABLE sessions ADD COLUMN prompt_document_id TEXT"
+            )
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ class SessionModel(db_module.Base):
     ended_at: sqlalchemy_orm.Mapped[dt_module.datetime | None] = sqlalchemy_orm.mapped_column(sa.DateTime(timezone=True), nullable=True)
     current_grade: sqlalchemy_orm.Mapped[float | None] = sqlalchemy_orm.mapped_column(sa.Float, nullable=True)
     private_artifact_schema_json: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.Text, nullable=True)
+    prompt_document_id: sqlalchemy_orm.Mapped[str | None] = sqlalchemy_orm.mapped_column(sa.String(128), nullable=True)
 
 
 class MessageModel(db_module.Base):

@@ -43,6 +43,24 @@
       </section>
 
       <section class="card admin-card">
+        <div class="section-header">
+          <h2>Document Archive</h2>
+          <a href="{{ url_path('admin_tutor_prompts') }}" class="secondary-action">Tutor Prompts</a>
+        </div>
+        <p class="muted">View and activate archived tutor prompts, specs, contracts, and generator prompts. <a href="{{ url_path('admin_documents') }}" class="secondary-action">All Documents →</a></p>
+      </section>
+
+      <section class="card admin-card">
+        <div class="section-header">
+          <h2>Student App</h2>
+          <form method="post" action="{{ url_path('restart_student_app') }}">
+            <button type="submit" class="danger">Restart Student App</button>
+          </form>
+        </div>
+        <p class="muted">Restarts the <code>lecture-bot.service</code> systemd unit. Required after activating a new tutor prompt. Active sessions will be interrupted.</p>
+      </section>
+
+      <section class="card admin-card">
         <h2>Create Lecture Folder</h2>
         <form method="post" action="{{ url_path('create_lecture') }}" class="grid-form">
           <label>
