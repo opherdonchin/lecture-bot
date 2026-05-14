@@ -20,6 +20,16 @@
           <button type="submit">Activate This Prompt</button>
         </form>
         {% endif %}
+        {% if doc.document_type == 'tutor_spec' and doc.compatible %}
+        <form method="post" action="{{ url_path('generate_prompt_from_spec', document_id=doc.document_id) }}">
+          <button type="submit">Generate Prompt</button>
+        </form>
+        {% if not doc.active %}
+        <form method="post" action="{{ url_path('activate_tutor_spec', document_id=doc.document_id) }}">
+          <button type="submit">Activate This Spec</button>
+        </form>
+        {% endif %}
+        {% endif %}
       </div>
 
       {% if notice %}

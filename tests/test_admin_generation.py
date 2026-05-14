@@ -101,6 +101,54 @@ None.
     assert parsed["tutor_prompt"] is None
 
 
+def test_spec_validation_prompt_is_validation_only_and_uses_contract_sections():
+    prompt = admin_generation._spec_validation_system_prompt("generator rules")
+    user_message = admin_generation._build_user_message(
+        "spec contract text",
+        "backend contract text",
+        "candidate spec text",
+    )
+
+    assert "validation only" in prompt.lower()
+    assert "Do not generate a private artifact schema" in prompt
+    assert "### Conformance failures" in prompt
+    assert "### Backend incompatibilities" in prompt
+    assert "### Recommended omissions" in prompt
+    assert "generator rules" in prompt
+    assert "spec contract text" in user_message
+    assert "backend contract text" in user_message
+    assert "candidate spec text" in user_message
+
+
+def test_prompt_generation_prompt_requires_schema_and_prompt_sections():
+    prompt = admin_generation._prompt_generation_system_prompt("generator rules")
+
+    assert "already validated tutor specification" in prompt
+    assert "### Private artifact schema" in prompt
+    assert "### Runtime tutor prompt" in prompt
+    assert "fenced json code block" in prompt
+    assert "generator rules" in prompt
+
+
+def test_prompt_validation_prompt_uses_active_spec_and_contracts():
+    prompt = admin_generation._prompt_validation_system_prompt()
+    user_message = admin_generation._build_prompt_validation_user_message(
+        "spec contract",
+        "backend contract",
+        "active spec",
+        "candidate prompt",
+    )
+
+    assert "validate an uploaded runtime tutor prompt" in prompt
+    assert "updated_state as a sparse delta" in prompt
+    assert "### Validation failures" in prompt
+    assert "### Recommended notes" in prompt
+    assert "spec contract" in user_message
+    assert "backend contract" in user_message
+    assert "active spec" in user_message
+    assert "candidate prompt" in user_message
+
+
 def test_run_generation_stores_generated_docs(monkeypatch):
     db = _session()
     _make_active_generation_docs(db)
@@ -132,6 +180,162 @@ generated prompt
     prompt_doc = db.get(models.ArchiveDocumentModel, result["tutor_prompt_document_id"])
     assert prompt_doc.content_text == "generated prompt"
     assert prompt_doc.active is False
+
+
+def test_save_validated_spec_links_active_contracts():
+    db = _session()
+    spec_contract, backend_contract, _generator = _make_active_generation_docs(db)
+
+    doc = admin_generation.save_validated_spec(db, "new spec", "Uploaded Spec")
+
+    assert doc.document_type == "tutor_spec"
+    assert doc.content_text == "new spec"
+    links = helpers.parse_linked_documents(doc.linked_documents_json)
+    assert links == {
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+    }
+    assert doc.active is False
+
+
+def test_list_validated_specs_requires_active_contract_links():
+    db = _session()
+    spec_contract, backend_contract, _generator = _make_active_generation_docs(db)
+    valid = _make_doc(
+        db,
+        "tutor_spec",
+        "valid",
+        linked={
+            "tutor_spec_contract": spec_contract.document_id,
+            "backend_contract": backend_contract.document_id,
+        },
+    )
+    _make_doc(db, "tutor_spec", "historical-without-links")
+    _make_doc(
+        db,
+        "tutor_spec",
+        "stale-contract",
+        linked={
+            "tutor_spec_contract": "doc_tutor_spec_contract_old",
+            "backend_contract": backend_contract.document_id,
+        },
+    )
+
+    specs = admin_generation.list_validated_specs(db)
+
+    assert [spec["document_id"] for spec in specs] == [valid.document_id]
+
+
+def test_activate_tutor_spec_marks_only_spec_active(tmp_path):
+    db = _session()
+    spec_contract, backend_contract, _generator = _make_active_generation_docs(db)
+    old_spec = _make_doc(
+        db,
+        "tutor_spec",
+        "old",
+        active=True,
+        linked={
+            "tutor_spec_contract": spec_contract.document_id,
+            "backend_contract": backend_contract.document_id,
+        },
+        content="old spec",
+    )
+    new_spec = _make_doc(
+        db,
+        "tutor_spec",
+        "new",
+        linked={
+            "tutor_spec_contract": spec_contract.document_id,
+            "backend_contract": backend_contract.document_id,
+        },
+        content="new spec",
+    )
+
+    ok, message = admin_generation.activate_tutor_spec(db, new_spec.document_id, repo_root=tmp_path)
+
+    assert ok is True
+    assert "activated" in message
+    assert (tmp_path / "docs" / "tutor_specification.md").read_text(encoding="utf-8") == "new spec"
+    assert db.get(models.ArchiveDocumentModel, old_spec.document_id).active is False
+    assert db.get(models.ArchiveDocumentModel, new_spec.document_id).active is True
+
+
+def test_save_validated_prompt_links_active_spec_and_contracts():
+    db = _session()
+    spec_contract, backend_contract, generator = _make_active_generation_docs(db)
+    spec = _make_doc(
+        db,
+        "tutor_spec",
+        "active",
+        active=True,
+        linked={
+            "tutor_spec_contract": spec_contract.document_id,
+            "backend_contract": backend_contract.document_id,
+        },
+        content="active spec",
+    )
+    schema = _make_doc(
+        db,
+        "tutor_artifact_schema",
+        "active",
+        active=True,
+        linked={"backend_contract": backend_contract.document_id},
+        content='{"type":"object"}',
+        content_format="json",
+    )
+
+    result = admin_generation.save_validated_prompt(db, "uploaded prompt", "Uploaded Prompt")
+
+    assert result["ok"] is True
+    prompt_doc = db.get(models.ArchiveDocumentModel, result["tutor_prompt_document_id"])
+    links = helpers.parse_linked_documents(prompt_doc.linked_documents_json)
+    assert links == {
+        "tutor_spec": spec.document_id,
+        "tutor_artifact_schema": schema.document_id,
+        "tutor_generator_prompt": generator.document_id,
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+    }
+    assert prompt_doc.active is False
+
+
+def test_save_generated_prompt_preview_can_activate(tmp_path, monkeypatch):
+    db = _session()
+    spec_contract, backend_contract, generator = _make_active_generation_docs(db)
+    spec = _make_doc(
+        db,
+        "tutor_spec",
+        "saved",
+        linked={
+            "tutor_spec_contract": spec_contract.document_id,
+            "backend_contract": backend_contract.document_id,
+        },
+        content="saved spec",
+    )
+    paths = {
+        "tutor_prompt": tmp_path / "tutor_prompt.md",
+        "tutor_artifact_schema": tmp_path / "schema.json",
+        "tutor_spec": tmp_path / "tutor_specification.md",
+    }
+    monkeypatch.setattr(admin_documents, "CANONICAL_DOCUMENT_PATHS", paths)
+
+    result = admin_generation.save_generated_prompt_preview(
+        db,
+        spec.document_id,
+        "generated prompt",
+        '{"type":"object"}',
+        activate=True,
+    )
+
+    assert result["ok"] is True
+    prompt_doc = db.get(models.ArchiveDocumentModel, result["tutor_prompt_document_id"])
+    links = helpers.parse_linked_documents(prompt_doc.linked_documents_json)
+    assert links["tutor_spec"] == spec.document_id
+    assert links["tutor_generator_prompt"] == generator.document_id
+    assert links["tutor_spec_contract"] == spec_contract.document_id
+    assert links["backend_contract"] == backend_contract.document_id
+    assert prompt_doc.active is True
+    assert paths["tutor_prompt"].read_text(encoding="utf-8") == "generated prompt"
 
 
 def test_activate_tutor_prompt_writes_canonical_files(tmp_path, monkeypatch):

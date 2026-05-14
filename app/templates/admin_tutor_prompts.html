@@ -11,7 +11,11 @@
     <main class="admin-shell">
       <div class="topbar">
         <a href="{{ url_path('admin_documents') }}" class="back-link">← Document Archive</a>
-        <a href="{{ url_path('generate_tutor_prompt_form') }}" class="secondary-action">Generate New Prompt →</a>
+        <div class="inline-actions">
+          <a href="{{ url_path('upload_tutor_spec_form') }}" class="secondary-action">Upload Spec</a>
+          <a href="{{ url_path('upload_tutor_prompt_form') }}" class="secondary-action">Upload Prompt</a>
+          <a href="{{ url_path('generate_tutor_prompt_form') }}" class="secondary-action">Generate New Prompt →</a>
+        </div>
       </div>
 
       <section class="admin-hero">

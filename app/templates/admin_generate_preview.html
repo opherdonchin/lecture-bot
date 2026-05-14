@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Generated Tutor Prompt — Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_tutor_prompts') }}" class="back-link">← Tutor Prompts</a>
+        {% if spec_doc %}
+        <a href="{{ url_path('admin_document_detail', document_id=spec_doc.document_id) }}" class="secondary-action">Spec Detail</a>
+        {% endif %}
+      </div>
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Document Archive</p>
+          <h1>Generated Tutor Prompt</h1>
+          {% if spec_doc %}
+          <p class="lead">Generated from <code>{{ spec_doc.document_id }}</code></p>
+          {% endif %}
+        </div>
+      </section>
+
+      {% if preview.error %}
+      <div class="notice error">{{ preview.error }}</div>
+      {% endif %}
+
+      {% if preview.ok %}
+      <section class="card admin-card">
+        <h2>Review</h2>
+        {% if preview.recommended_omissions %}
+        <h3>Recommended omissions</h3>
+        <ul>
+          {% for item in preview.recommended_omissions %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <form method="post" action="{{ url_path('save_generated_prompt') }}">
+          <input type="hidden" name="spec_document_id" value="{{ preview.spec_document_id }}" />
+          <div style="margin-bottom:12px">
+            <label>
+              <span style="display:block;margin-bottom:6px;font-size:0.9rem;color:#445065">Private artifact schema</span>
+              <textarea name="tutor_artifact_schema" rows="14" style="width:100%;font-family:monospace;font-size:0.85em;padding:10px;border:1px solid #cfd8e6;border-radius:8px;resize:vertical">{{ preview.tutor_artifact_schema }}</textarea>
+            </label>
+          </div>
+          <div style="margin-bottom:12px">
+            <label>
+              <span style="display:block;margin-bottom:6px;font-size:0.9rem;color:#445065">Runtime tutor prompt</span>
+              <textarea name="tutor_prompt" rows="28" style="width:100%;font-family:monospace;font-size:0.85em;padding:10px;border:1px solid #cfd8e6;border-radius:8px;resize:vertical">{{ preview.tutor_prompt }}</textarea>
+            </label>
+          </div>
+          <div class="inline-actions">
+            <button type="submit" name="action" value="cancel" class="secondary">Cancel</button>
+            <button type="submit" name="action" value="save">Save</button>
+            <button type="submit" name="action" value="save_activate">Save and Make Active</button>
+          </div>
+        </form>
+      </section>
+      {% else %}
+      <section class="card admin-card">
+        <h2>Generation did not produce a saveable prompt</h2>
+        {% if preview.conformance_failures %}
+        <h3>Conformance failures</h3>
+        <ul>
+          {% for item in preview.conformance_failures %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% if preview.backend_incompatibilities %}
+        <h3>Backend incompatibilities</h3>
+        <ul>
+          {% for item in preview.backend_incompatibilities %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </section>
+      {% endif %}
+    </main>
+  </body>
+</html>

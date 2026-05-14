@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Upload Tutor Prompt — Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_tutor_prompts') }}" class="back-link">← Tutor Prompts</a>
+        <a href="{{ url_path('upload_tutor_spec_form') }}" class="secondary-action">Upload Spec</a>
+      </div>
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Document Archive</p>
+          <h1>Upload Tutor Prompt</h1>
+          <p class="lead">Validate a runtime prompt against the active tutor spec before saving or activating it.</p>
+        </div>
+      </section>
+
+      {% if result %}
+      <section class="card admin-card">
+        <h2>Validation</h2>
+        {% if result.error %}
+        <div class="notice error">{{ result.error }}</div>
+        {% elif result.ok %}
+        <div class="notice success">Prompt passed validation.</div>
+        {% else %}
+        <div class="notice error">Prompt did not pass validation.</div>
+        {% endif %}
+        {% if result.validation_failures %}
+        <h3>Validation failures</h3>
+        <ul>
+          {% for item in result.validation_failures %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% if result.recommended_notes %}
+        <h3>Recommended notes</h3>
+        <ul>
+          {% for item in result.recommended_notes %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      <section class="card admin-card">
+        <h2>Tutor Prompt</h2>
+        <form method="post" action="{{ url_path('upload_tutor_prompt') }}" enctype="multipart/form-data">
+          <div style="margin-bottom:12px">
+            <label>
+              <span style="display:block;margin-bottom:6px;font-size:0.9rem;color:#445065">Title</span>
+              <input type="text" name="prompt_title" value="{{ form_title or '' }}" style="width:100%;max-width:540px" />
+            </label>
+          </div>
+          <div style="margin-bottom:12px">
+            <label>
+              <span style="display:block;margin-bottom:6px;font-size:0.9rem;color:#445065">Markdown file</span>
+              <input type="file" name="uploaded_file" accept=".md,text/markdown,text/plain" />
+            </label>
+          </div>
+          <div style="margin-bottom:12px">
+            <label>
+              <span style="display:block;margin-bottom:6px;font-size:0.9rem;color:#445065">Prompt text</span>
+              <textarea name="prompt_text" rows="28" style="width:100%;font-family:monospace;font-size:0.85em;padding:10px;border:1px solid #cfd8e6;border-radius:8px;resize:vertical">{{ form_text or '' }}</textarea>
+            </label>
+          </div>
+          <div class="inline-actions">
+            <button type="submit" name="action" value="validate">Validate</button>
+            {% if result and result.ok %}
+            <button type="submit" name="action" value="save">Save Prompt</button>
+            <button type="submit" name="action" value="save_activate">Save and Make Active</button>
+            {% endif %}
+          </div>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

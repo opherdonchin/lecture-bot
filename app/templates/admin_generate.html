@@ -17,7 +17,7 @@
         <div>
           <p class="eyebrow">Admin App</p>
           <h1>Generate Tutor Prompt</h1>
-          <p class="lead">Paste a tutor specification below. The active contracts and generator prompt will be used.</p>
+          <p class="lead">Choose a validated tutor specification from the archive. New specs are uploaded and validated separately.</p>
         </div>
       </section>
 
@@ -42,98 +42,49 @@
         </table>
       </section>
 
-      {% if result %}
+      {% if error %}
+      <div class="notice error">{{ error }}</div>
+      {% endif %}
 
-      {% if result.ok %}
       <section class="card admin-card">
         <div class="section-header">
-          <h2>Generation succeeded — status: <code>{{ result.status }}</code></h2>
-          <a href="{{ url_path('admin_document_detail', document_id=result.tutor_prompt_document_id) }}" class="secondary-action">View Tutor Prompt →</a>
+          <h2>Validated Tutor Specifications</h2>
+          <a href="{{ url_path('upload_tutor_spec_form') }}" class="secondary-action">Upload Spec</a>
         </div>
-        <p class="muted">Run ID: <code>{{ result.run_id }}</code></p>
-
-        <h3 style="margin-top:16px">Created documents</h3>
-        <ul class="workflow-list">
-          {% for doc_id in result.created_document_ids %}
-          <li><a href="{{ url_path('admin_document_detail', document_id=doc_id) }}" class="secondary-action"><code>{{ doc_id }}</code></a></li>
-          {% endfor %}
-        </ul>
-
-        {% if result.recommended_omissions %}
-        <h3 style="margin-top:16px">Recommended omissions (non-blocking)</h3>
-        <ul class="workflow-list">
-          {% for omission in result.recommended_omissions %}
-          <li>{{ omission }}</li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-
-        <div class="notice success" style="margin-top:16px">
-          The new tutor prompt is in the archive but <strong>not yet active</strong>. Go to
-          <a href="{{ url_path('admin_tutor_prompts') }}" class="secondary-action">Tutor Prompts</a>
-          to review and activate it.
-        </div>
-      </section>
-
-      {% else %}
-
-      <section class="card admin-card">
-        <h2>Generation result{% if result.status %}: <code>{{ result.status }}</code>{% endif %}</h2>
-        <p class="muted">Run ID: <code>{{ result.run_id }}</code></p>
-
-        {% if result.error %}
-        <div class="notice error">{{ result.error }}</div>
-        {% endif %}
-
-        {% if result.conformance_failures %}
-        <h3 style="margin-top:16px">Conformance failures</h3>
-        <ul class="workflow-list">
-          {% for f in result.conformance_failures %}
-          <li>{{ f }}</li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-
-        {% if result.backend_incompatibilities %}
-        <h3 style="margin-top:16px">Backend incompatibilities</h3>
-        <ul class="workflow-list">
-          {% for f in result.backend_incompatibilities %}
-          <li>{{ f }}</li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-
-        {% if result.recommended_omissions %}
-        <h3 style="margin-top:16px">Recommended omissions</h3>
-        <ul class="workflow-list">
-          {% for f in result.recommended_omissions %}
-          <li>{{ f }}</li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-      </section>
-
-      {% endif %}
-      {% endif %}
-
-      <section class="card admin-card">
-        <h2>Tutor specification</h2>
+        {% if not specs %}
+        <p class="muted">No validated specs are available. Upload and validate a tutor specification first.</p>
+        {% else %}
         <form method="post" action="{{ url_path('generate_tutor_prompt') }}">
           <div style="margin-bottom:12px">
             <label>
-              <span style="display:block;margin-bottom:6px;font-size:0.9rem;color:#445065">Title</span>
-              <input type="text" name="spec_title" value="{{ form_title or '' }}" placeholder="e.g. Statistics 367 — Spring 2026" style="width:100%;max-width:540px" />
-            </label>
-          </div>
-          <div style="margin-bottom:12px">
-            <label>
-              <span style="display:block;margin-bottom:6px;font-size:0.9rem;color:#445065">Tutor specification text</span>
-              <textarea name="spec_text" rows="28" placeholder="Paste the tutor specification here…" style="width:100%;font-family:monospace;font-size:0.85em;padding:10px;border:1px solid #cfd8e6;border-radius:8px;resize:vertical">{{ form_spec or '' }}</textarea>
+              <span style="display:block;margin-bottom:6px;font-size:0.9rem;color:#445065">Specification</span>
+              <select name="spec_document_id" required style="width:100%;max-width:720px">
+                {% for spec in specs %}
+                <option value="{{ spec.document_id }}">
+                  {{ spec.title }} · {{ spec.version_key }}{% if spec.active %} · active{% endif %} · {{ spec.document_id }}
+                </option>
+                {% endfor %}
+              </select>
             </label>
           </div>
           <button type="submit">Generate</button>
           <span class="muted" style="margin-left:12px;font-size:0.88rem">This may take up to a minute.</span>
         </form>
+        <table class="session-table" style="min-width:0;margin-top:16px">
+          <thead>
+            <tr><th>Spec</th><th>Version</th><th>Active</th></tr>
+          </thead>
+          <tbody>
+            {% for spec in specs %}
+            <tr>
+              <td><a href="{{ url_path('admin_document_detail', document_id=spec.document_id) }}" class="secondary-action"><code>{{ spec.document_id }}</code></a> — {{ spec.title }}</td>
+              <td>{{ spec.version_key }}</td>
+              <td>{% if spec.active %}<span class="status-ready">yes</span>{% else %}<span class="muted">no</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
       </section>
     </main>
   </body>

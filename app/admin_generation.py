@@ -74,18 +74,101 @@ def _build_user_message(
     )
 
 
-def _call_openai(system_prompt: str, user_message: str) -> str:
+def _spec_validation_system_prompt(generator_prompt_text: str) -> str:
+    return (
+        "You validate tutor specifications before they are saved into the document archive.\n\n"
+        "Use the authoritative contract rules from the generator instructions below, but perform validation only.\n"
+        "Do not generate a private artifact schema. Do not generate a runtime tutor prompt. Do not rewrite the spec.\n\n"
+        "Return exactly these Markdown sections, in this order:\n\n"
+        "### Conformance failures\n"
+        "Use bullet points for required tutor-spec contract failures. Use None. if there are no failures.\n\n"
+        "### Backend incompatibilities\n"
+        "Use bullet points for conflicts with the backend runtime contract. Use None. if there are no incompatibilities.\n\n"
+        "### Recommended omissions\n"
+        "Use bullet points for recommended-but-absent spec material only. Use None. if there are no recommended omissions.\n\n"
+        "Generator instructions to apply as validation criteria:\n\n"
+        f"{generator_prompt_text}"
+    )
+
+
+def _prompt_generation_system_prompt(generator_prompt_text: str) -> str:
+    return (
+        "You generate a runtime tutor prompt and private artifact JSON Schema from an already validated tutor specification.\n\n"
+        "The specification has already been validated against the contracts. Use the generator instructions below for "
+        "faithful generation, backend compatibility, runtime output shape, and private artifact schema requirements. "
+        "Do not ask for another spec. Do not produce commentary outside the required sections.\n\n"
+        "Return exactly these Markdown sections, in this order:\n\n"
+        "### Conformance failures\n"
+        "Use None. unless generation reveals a blocking required-contract issue missed during validation.\n\n"
+        "### Backend incompatibilities\n"
+        "Use None. unless generation reveals a blocking backend-contract issue missed during validation.\n\n"
+        "### Recommended omissions\n"
+        "Use bullet points for non-blocking recommended omissions. Use None. if there are none.\n\n"
+        "### Private artifact schema\n"
+        "Return one fenced json code block containing the per-turn private_artifact JSON Schema.\n\n"
+        "### Runtime tutor prompt\n"
+        "Return one fenced code block containing the runtime tutor prompt.\n\n"
+        "Generator instructions:\n\n"
+        f"{generator_prompt_text}"
+    )
+
+
+def _prompt_validation_system_prompt() -> str:
+    return (
+        "You validate an uploaded runtime tutor prompt before it is saved into the document archive.\n\n"
+        "The prompt must be checked against the active tutor specification, the tutor specification contract, "
+        "and the backend runtime contract. Do not rewrite the prompt. Do not generate a replacement prompt.\n\n"
+        "A valid prompt must faithfully operationalize the active tutor specification and must obey the backend "
+        "runtime interface exactly. In particular, check that it requires JSON-only output; treats updated_state "
+        "as a sparse delta rather than full replacement; limits updated_state to the exact tutor-updatable keys; "
+        "keeps backend-owned fields read-only; does not put private artifacts in student-facing text or updated_state; "
+        "does not invent topic IDs, grades, reports, persistence, routing, lifecycle control, or unsupported runtime "
+        "inputs; and respects backend timing/lifecycle ownership.\n\n"
+        "Return exactly these Markdown sections, in this order:\n\n"
+        "### Validation failures\n"
+        "Use bullet points for prompt defects that prevent saving. Use None. if there are no failures.\n\n"
+        "### Recommended notes\n"
+        "Use bullet points for non-blocking concerns or review notes. Use None. if there are none."
+    )
+
+
+def _build_prompt_validation_user_message(
+    spec_contract_text: str,
+    backend_contract_text: str,
+    spec_text: str,
+    prompt_text: str,
+) -> str:
+    return (
+        "# 1. Tutor Specification Contract\n\n"
+        f"{spec_contract_text}\n\n"
+        "---\n\n"
+        "# 2. Backend-Tutor Runtime Contract\n\n"
+        f"{backend_contract_text}\n\n"
+        "---\n\n"
+        "# 3. Active Tutor Specification\n\n"
+        f"{spec_text}\n\n"
+        "---\n\n"
+        "# 4. Candidate Runtime Tutor Prompt\n\n"
+        f"{prompt_text}\n"
+    )
+
+
+def _call_openai_messages(messages: list[dict[str, str]]) -> str:
     settings = config_module.get_settings()
     client = openai.OpenAI(api_key=settings.openai_api_key, timeout=120.0, max_retries=0)
     response = client.chat.completions.create(
         model=settings.openai_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
-        ],
+        messages=messages,
         temperature=0.2,
     )
     return response.choices[0].message.content or ""
+
+
+def _call_openai(system_prompt: str, user_message: str) -> str:
+    return _call_openai_messages([
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ])
 
 
 def _section_text(raw_output: str, heading: str) -> str:
@@ -163,6 +246,24 @@ def parse_generator_output(raw_output: str) -> dict:
     }
 
 
+def parse_validation_output(raw_output: str) -> dict:
+    conformance_failures = _bullet_items(_section_text(raw_output, "Conformance failures"))
+    backend_incompatibilities = _bullet_items(_section_text(raw_output, "Backend incompatibilities"))
+    recommended_omissions = _bullet_items(_section_text(raw_output, "Recommended omissions"))
+    return {
+        "ok": not conformance_failures and not backend_incompatibilities,
+        "conformance_failures": conformance_failures,
+        "backend_incompatibilities": backend_incompatibilities,
+        "recommended_omissions": recommended_omissions,
+    }
+
+
+def parse_prompt_validation_output(raw_output: str) -> dict:
+    failures = _bullet_items(_section_text(raw_output, "Validation failures"))
+    notes = _bullet_items(_section_text(raw_output, "Recommended notes"))
+    return {"ok": not failures, "validation_failures": failures, "recommended_notes": notes}
+
+
 def _insert_doc(
     db: sqlalchemy_orm.Session,
     document_type: str,
@@ -189,6 +290,309 @@ def _insert_doc(
     db.add(doc)
     db.flush()
     return doc
+
+
+def _unique_version_key(db: sqlalchemy_orm.Session, document_type: str) -> str:
+    while True:
+        version_key = _make_version_key()
+        doc_id = helpers.make_document_id(document_type, version_key)
+        if db.get(models.ArchiveDocumentModel, doc_id) is None:
+            return version_key
+
+
+def _active_docs_for_prompt(db: sqlalchemy_orm.Session) -> tuple[dict[str, models.ArchiveDocumentModel] | None, str | None]:
+    docs: dict[str, models.ArchiveDocumentModel] = {}
+    missing: list[str] = []
+    for doc_type in ("tutor_spec", "tutor_artifact_schema", "tutor_generator_prompt", "tutor_spec_contract", "backend_contract"):
+        doc = helpers.get_active_document(db, doc_type)
+        if doc is None:
+            missing.append(doc_type)
+        else:
+            docs[doc_type] = doc
+    if missing:
+        return None, f"No active document(s) in archive: {', '.join(missing)}"
+    return docs, None
+
+
+def spec_is_validated_against_active_contracts(
+    db: sqlalchemy_orm.Session,
+    doc: models.ArchiveDocumentModel,
+) -> bool:
+    if doc.document_type != "tutor_spec":
+        return False
+    links = helpers.parse_linked_documents(doc.linked_documents_json)
+    for contract_type in ("tutor_spec_contract", "backend_contract"):
+        active_id = helpers.get_active_document_id(db, contract_type)
+        if active_id is None or links.get(contract_type) != active_id:
+            return False
+    return True
+
+
+def list_validated_specs(db: sqlalchemy_orm.Session) -> list[dict]:
+    docs = (
+        db.query(models.ArchiveDocumentModel)
+        .filter(models.ArchiveDocumentModel.document_type == "tutor_spec")
+        .order_by(models.ArchiveDocumentModel.active.desc(), models.ArchiveDocumentModel.created_at.desc())
+        .all()
+    )
+    result = []
+    for doc in docs:
+        if not spec_is_validated_against_active_contracts(db, doc):
+            continue
+        result.append({
+            "document_id": doc.document_id,
+            "title": doc.title,
+            "version_key": doc.version_key,
+            "active": doc.active,
+            "created_at": doc.created_at,
+        })
+    return result
+
+
+def validate_spec_against_contracts(db: sqlalchemy_orm.Session, spec_text: str) -> dict:
+    active_docs, missing_error = _get_required_active_docs(db)
+    if missing_error:
+        return {"ok": False, "error": missing_error}
+    assert active_docs is not None
+
+    generator_doc = active_docs["tutor_generator_prompt"]
+    system_prompt = _spec_validation_system_prompt(generator_doc.content_text)
+    user_message = _build_user_message(
+        active_docs["tutor_spec_contract"].content_text,
+        active_docs["backend_contract"].content_text,
+        spec_text,
+    )
+    try:
+        parsed = parse_validation_output(_call_openai(system_prompt, user_message))
+    except openai.AuthenticationError as exc:
+        return {"ok": False, "error": f"OpenAI authentication error: {exc}"}
+    except openai.APIError as exc:
+        return {"ok": False, "error": f"OpenAI API error: {exc}"}
+    parsed["context_docs"] = {doc_type: doc.document_id for doc_type, doc in active_docs.items()}
+    return parsed
+
+
+def save_validated_spec(
+    db: sqlalchemy_orm.Session,
+    spec_text: str,
+    spec_title: str,
+) -> models.ArchiveDocumentModel:
+    active_docs, missing_error = _get_required_active_docs(db)
+    if missing_error:
+        raise ValueError(missing_error)
+    assert active_docs is not None
+
+    version_key = _unique_version_key(db, "tutor_spec")
+    links = {
+        "tutor_spec_contract": active_docs["tutor_spec_contract"].document_id,
+        "backend_contract": active_docs["backend_contract"].document_id,
+    }
+    doc = _insert_doc(
+        db,
+        "tutor_spec",
+        version_key,
+        title=spec_title or f"Tutor Specification {version_key}",
+        content_text=spec_text,
+        content_format="markdown",
+        linked_documents_json=json.dumps(links),
+        run_id="manual-upload",
+    )
+    db.commit()
+    return doc
+
+
+def activate_tutor_spec(
+    db: sqlalchemy_orm.Session,
+    document_id: str,
+    *,
+    repo_root: pathlib.Path = REPO_ROOT,
+) -> tuple[bool, str]:
+    doc = db.get(models.ArchiveDocumentModel, document_id)
+    if doc is None:
+        return False, "Document not found."
+    if doc.document_type != "tutor_spec":
+        return False, "Document is not a tutor_spec."
+    if not spec_is_validated_against_active_contracts(db, doc):
+        return False, "Tutor spec is not validated against the active contracts."
+
+    spec_path = repo_root / "docs" / "tutor_specification.md"
+    spec_path.parent.mkdir(parents=True, exist_ok=True)
+    spec_path.write_text(doc.content_text, encoding="utf-8")
+    db.query(models.ArchiveDocumentModel).filter(
+        models.ArchiveDocumentModel.document_type == "tutor_spec",
+        models.ArchiveDocumentModel.active.is_(True),
+    ).update({"active": False})
+    doc.active = True
+    db.commit()
+    return True, "Tutor specification activated. Generate or upload a prompt, then restart the student app after activating it."
+
+
+def generate_prompt_preview(db: sqlalchemy_orm.Session, spec_document_id: str) -> dict:
+    spec_doc = db.get(models.ArchiveDocumentModel, spec_document_id)
+    if spec_doc is None or spec_doc.document_type != "tutor_spec":
+        return {"ok": False, "error": "Tutor specification document not found."}
+    if not spec_is_validated_against_active_contracts(db, spec_doc):
+        return {"ok": False, "error": "Tutor specification is not validated against the active contracts."}
+
+    active_docs, missing_error = _get_required_active_docs(db)
+    if missing_error:
+        return {"ok": False, "error": missing_error}
+    assert active_docs is not None
+    if not spec_is_validated_against_active_contracts(db, spec_doc):
+        return {"ok": False, "error": "Tutor specification is not validated against the active contracts."}
+
+    generator_doc = active_docs["tutor_generator_prompt"]
+    user_message = _build_user_message(
+        active_docs["tutor_spec_contract"].content_text,
+        active_docs["backend_contract"].content_text,
+        spec_doc.content_text,
+    )
+    try:
+        raw_output = _call_openai(_prompt_generation_system_prompt(generator_doc.content_text), user_message)
+        parsed = parse_generator_output(raw_output)
+    except (openai.AuthenticationError, openai.APIError, GenerationOutputError, json.JSONDecodeError, jsonschema.SchemaError) as exc:
+        return {"ok": False, "error": f"Could not generate prompt: {exc}"}
+    if parsed["status"] == "failed":
+        return {"ok": False, "status": "failed", **parsed}
+    return {
+        "ok": True,
+        "spec_document_id": spec_doc.document_id,
+        "spec_title": spec_doc.title,
+        "tutor_prompt": parsed["tutor_prompt"],
+        "tutor_artifact_schema": parsed["tutor_artifact_schema"],
+        "recommended_omissions": parsed["recommended_omissions"],
+    }
+
+
+def save_generated_prompt_preview(
+    db: sqlalchemy_orm.Session,
+    spec_document_id: str,
+    tutor_prompt_text: str,
+    schema_text: str,
+    *,
+    activate: bool = False,
+) -> dict:
+    spec_doc = db.get(models.ArchiveDocumentModel, spec_document_id)
+    if spec_doc is None or spec_doc.document_type != "tutor_spec":
+        return {"ok": False, "error": "Tutor specification document not found."}
+
+    active_docs, missing_error = _get_required_active_docs(db)
+    if missing_error:
+        return {"ok": False, "error": missing_error}
+    assert active_docs is not None
+    try:
+        schema_obj = json.loads(schema_text)
+        jsonschema.Draft202012Validator.check_schema(schema_obj)
+    except (json.JSONDecodeError, jsonschema.SchemaError) as exc:
+        return {"ok": False, "error": f"Generated private artifact schema is invalid: {exc}"}
+
+    version_key = _unique_version_key(db, "tutor_prompt")
+    schema_doc = _insert_doc(
+        db,
+        "tutor_artifact_schema",
+        version_key,
+        title=f"Tutor Artifact Schema {version_key}",
+        content_text=json.dumps(schema_obj, ensure_ascii=False, indent=2),
+        content_format="json",
+        linked_documents_json=json.dumps({"backend_contract": active_docs["backend_contract"].document_id}),
+        run_id="manual-preview-save",
+    )
+    prompt_links = {
+        "tutor_spec": spec_doc.document_id,
+        "tutor_artifact_schema": schema_doc.document_id,
+        "tutor_generator_prompt": active_docs["tutor_generator_prompt"].document_id,
+        "tutor_spec_contract": active_docs["tutor_spec_contract"].document_id,
+        "backend_contract": active_docs["backend_contract"].document_id,
+    }
+    prompt_doc = _insert_doc(
+        db,
+        "tutor_prompt",
+        version_key,
+        title=f"{spec_doc.title} - Tutor Prompt",
+        content_text=tutor_prompt_text,
+        content_format="markdown",
+        linked_documents_json=json.dumps(prompt_links),
+        run_id="manual-preview-save",
+    )
+    db.commit()
+    activation = None
+    if activate:
+        ok, message = admin_documents.activate_tutor_prompt(db, prompt_doc.document_id)
+        activation = {"ok": ok, "message": message}
+        if not ok:
+            return {"ok": False, "error": message, "tutor_prompt_document_id": prompt_doc.document_id}
+    return {
+        "ok": True,
+        "tutor_prompt_document_id": prompt_doc.document_id,
+        "tutor_artifact_schema_document_id": schema_doc.document_id,
+        "activation": activation,
+    }
+
+
+def validate_prompt_against_active_spec(db: sqlalchemy_orm.Session, prompt_text: str) -> dict:
+    active_docs, missing_error = _active_docs_for_prompt(db)
+    if missing_error:
+        return {"ok": False, "error": missing_error}
+    assert active_docs is not None
+    messages = [
+        {"role": "system", "content": _prompt_validation_system_prompt()},
+        {
+            "role": "user",
+            "content": _build_prompt_validation_user_message(
+                active_docs["tutor_spec_contract"].content_text,
+                active_docs["backend_contract"].content_text,
+                active_docs["tutor_spec"].content_text,
+                prompt_text,
+            ),
+        },
+    ]
+    try:
+        parsed = parse_prompt_validation_output(_call_openai_messages(messages))
+    except openai.AuthenticationError as exc:
+        return {"ok": False, "error": f"OpenAI authentication error: {exc}"}
+    except openai.APIError as exc:
+        return {"ok": False, "error": f"OpenAI API error: {exc}"}
+    parsed["context_docs"] = {doc_type: doc.document_id for doc_type, doc in active_docs.items()}
+    return parsed
+
+
+def save_validated_prompt(
+    db: sqlalchemy_orm.Session,
+    prompt_text: str,
+    prompt_title: str,
+    *,
+    activate: bool = False,
+) -> dict:
+    active_docs, missing_error = _active_docs_for_prompt(db)
+    if missing_error:
+        return {"ok": False, "error": missing_error}
+    assert active_docs is not None
+    version_key = _unique_version_key(db, "tutor_prompt")
+    prompt_links = {
+        "tutor_spec": active_docs["tutor_spec"].document_id,
+        "tutor_artifact_schema": active_docs["tutor_artifact_schema"].document_id,
+        "tutor_generator_prompt": active_docs["tutor_generator_prompt"].document_id,
+        "tutor_spec_contract": active_docs["tutor_spec_contract"].document_id,
+        "backend_contract": active_docs["backend_contract"].document_id,
+    }
+    prompt_doc = _insert_doc(
+        db,
+        "tutor_prompt",
+        version_key,
+        title=prompt_title or f"Tutor Prompt {version_key}",
+        content_text=prompt_text,
+        content_format="markdown",
+        linked_documents_json=json.dumps(prompt_links),
+        run_id="manual-upload",
+    )
+    db.commit()
+    activation = None
+    if activate:
+        ok, message = admin_documents.activate_tutor_prompt(db, prompt_doc.document_id)
+        activation = {"ok": ok, "message": message}
+        if not ok:
+            return {"ok": False, "error": message, "tutor_prompt_document_id": prompt_doc.document_id}
+    return {"ok": True, "tutor_prompt_document_id": prompt_doc.document_id, "activation": activation}
 
 
 def _save_run(
@@ -250,7 +654,7 @@ def run_generation(
     )
 
     try:
-        raw_output = _call_openai(generator_doc.content_text, user_message)
+        raw_output = _call_openai(_prompt_generation_system_prompt(generator_doc.content_text), user_message)
         parsed = parse_generator_output(raw_output)
     except openai.AuthenticationError as exc:
         error_text = f"OpenAI authentication error: {exc}"
@@ -301,7 +705,10 @@ def run_generation(
         title=spec_title or f"Tutor Spec {version_key}",
         content_text=spec_text,
         content_format="markdown",
-        linked_documents_json=json.dumps({"tutor_spec_contract": spec_contract_doc.document_id}),
+        linked_documents_json=json.dumps({
+            "tutor_spec_contract": spec_contract_doc.document_id,
+            "backend_contract": backend_contract_doc.document_id,
+        }),
         run_id=run_id,
     )
     created_ids.append(spec_doc.document_id)
