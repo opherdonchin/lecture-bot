@@ -295,7 +295,12 @@ def test_send_message_fallback_on_openai_error(client):
 
     assert response.status_code == 200
     data = response.json()
-    assert "message" in data
+    assert data["message"] == (
+        "The app cannot connect to the backend AI. "
+        "Please try again in a minute. "
+        "If the problem persists, try again in half an hour. "
+        "If there is still no connection, please post the problem on Moodle."
+    )
     assert data["session_active"] is True
 
 
@@ -383,7 +388,7 @@ def test_send_message_writes_dialogue_turn_audit_row(client):
     assert audit_row.turn_index == 1
     assert audit_row.prompt_template_name == "tutor_prompt.md"
     assert audit_row.dialogue_model
-    assert "You are the runtime tutor for an adaptive conceptual lecture review session." in audit_row.rendered_system_prompt
+    assert "You are the runtime tutor for an adaptive conceptual lecture review session" in audit_row.rendered_system_prompt
     assert audit_row.user_message == "What counts as data"
 
 

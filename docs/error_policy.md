@@ -79,7 +79,7 @@ The ordinary tutor model is not used to decide timeout lifecycle behavior.
 Policy:
 
 - HTTP status remains `200`
-- user sees `_FALLBACK_DIALOGUE_MESSAGE`
+- user sees a transparent backend-AI connection fallback message
 - prior assessment evidence is preserved
 - `turn_count` is incremented
 - no new mastery/evidence is invented

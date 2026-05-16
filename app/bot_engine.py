@@ -22,9 +22,10 @@ _TIME_CLAIM_RE = re_.compile(r"\b\d+\s+minutes?\s+left\b", re_.IGNORECASE)
 _NON_ALNUM_RE = re_.compile(r"[^a-z0-9]+")
 
 _FALLBACK_DIALOGUE_MESSAGE = (
-    "I'm having trouble updating the tutoring state cleanly. "
-    "Let's keep going with one focused question: "
-    "what idea from this lecture seems most important to you, and why?"
+    "The app cannot connect to the backend AI. "
+    "Please try again in a minute. "
+    "If the problem persists, try again in half an hour. "
+    "If there is still no connection, please post the problem on Moodle."
 )
 def get_tutor_prompt_template(lecture_package: dict | None = None) -> str:
     """Return the tutor prompt template name, allowing lecture config override."""
