@@ -34,6 +34,7 @@ Thumbs.db
 
 # Data and logs
 data/*.db
+data/*.db.bak*
 data/*.sqlite
 data/*.sqlite3
 exports/
