@@ -678,6 +678,227 @@ def test_grading_validation_non_dict_entry_skipped():
 # prompt loading
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# build_dialogue_system_prompt — caching structure
+# ---------------------------------------------------------------------------
+
+_CACHING_LECTURE_PACKAGE = {
+    "lecture_id": "lecture_cache",
+    "config": {"title": "Cache Test Lecture"},
+    "rubric": SAMPLE_RUBRIC,
+    "context_sections": [
+        {"key": "bot_notes", "label": "Bot Notes", "content": "Important lecture notes here."},
+    ],
+    "topics": [
+        {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
+        {"topic_id": "T2", "label": "Purpose of statistics", "importance": "core"},
+        {"topic_id": "T3", "label": "Definition and structure of data", "importance": "important"},
+    ],
+}
+
+_DYNAMIC_SECTION_HEADER = "\n\n## Current session state\n"
+
+
+def _make_topic_defs_for_caching():
+    return bot_engine.resolve_topic_defs(_CACHING_LECTURE_PACKAGE)
+
+
+def _make_lecture_context_for_caching():
+    return bot_engine.build_dialogue_context(_CACHING_LECTURE_PACKAGE, 10000)
+
+
+def test_build_dialogue_system_prompt_static_prefix_identical_for_different_states():
+    """The static prefix must be byte-identical across sessions using the same lecture."""
+    topic_defs = _make_topic_defs_for_caching()
+    context = _make_lecture_context_for_caching()
+
+    state_a = {
+        "topics_sampled": ["T1"],
+        "topics_covered": ["T1"],
+        "mastery": {"T1": 80},
+        "best_mastery": {"T1": 92},
+        "evidence_notes": {"T1": "good note"},
+        "current_topic_id": "T1",
+        "tutor_comment": "pressing on T1",
+        "turn_count": 5,
+    }
+    state_b = {
+        "topics_sampled": ["T2", "T3"],
+        "topics_covered": [],
+        "mastery": {},
+        "best_mastery": {},
+        "evidence_notes": {},
+        "current_topic_id": None,
+        "tutor_comment": "",
+        "turn_count": 0,
+    }
+
+    prompt_a = bot_engine.build_dialogue_system_prompt(
+        lecture_package=_CACHING_LECTURE_PACKAGE,
+        state=state_a,
+        topic_defs=topic_defs,
+        lecture_context=context,
+        timing_context={"minutes_remaining": 5, "closing_mode": True},
+    )
+    prompt_b = bot_engine.build_dialogue_system_prompt(
+        lecture_package=_CACHING_LECTURE_PACKAGE,
+        state=state_b,
+        topic_defs=topic_defs,
+        lecture_context=context,
+        timing_context={"minutes_remaining": 18, "closing_mode": False},
+    )
+
+    assert _DYNAMIC_SECTION_HEADER in prompt_a
+    assert _DYNAMIC_SECTION_HEADER in prompt_b
+    prefix_a = prompt_a[: prompt_a.index(_DYNAMIC_SECTION_HEADER)]
+    prefix_b = prompt_b[: prompt_b.index(_DYNAMIC_SECTION_HEADER)]
+    assert prefix_a == prefix_b
+
+
+def test_build_dialogue_system_prompt_dynamic_section_includes_state_fields():
+    """The dynamic suffix must contain all session-specific state fields."""
+    topic_defs = _make_topic_defs_for_caching()
+    context = _make_lecture_context_for_caching()
+    state = {
+        "topics_sampled": ["T1"],
+        "topics_covered": ["T1"],
+        "mastery": {"T1": 75},
+        "best_mastery": {"T1": 90},
+        "evidence_notes": {"T1": "criterion stated"},
+        "current_topic_id": "T1",
+        "tutor_comment": "keep going",
+        "turn_count": 2,
+    }
+
+    prompt = bot_engine.build_dialogue_system_prompt(
+        lecture_package=_CACHING_LECTURE_PACKAGE,
+        state=state,
+        topic_defs=topic_defs,
+        lecture_context=context,
+        timing_context={"minutes_remaining": 8},
+    )
+
+    assert _DYNAMIC_SECTION_HEADER in prompt
+    dynamic_part = prompt[prompt.index(_DYNAMIC_SECTION_HEADER):]
+
+    assert '"current_tutoring_state"' in dynamic_part
+    assert '"session_timing"' in dynamic_part
+    assert '"sampled_topics"' in dynamic_part
+    assert '"mastery"' in dynamic_part
+    assert '"turn_count": 3' in dynamic_part
+    assert '"current_topic_id"' in dynamic_part
+    assert '"topics_covered"' in dynamic_part
+
+
+def test_build_dialogue_system_prompt_static_content_precedes_dynamic_state():
+    """Rubric and lecture context must appear in the prompt before dynamic state fields."""
+    topic_defs = _make_topic_defs_for_caching()
+
+    lecture_package = dict(_CACHING_LECTURE_PACKAGE)
+    lecture_package["rubric"] = "RUBRIC_MARKER_TEXT\n" + SAMPLE_RUBRIC
+    lecture_package["context_sections"] = [
+        {"key": "bot_notes", "label": "Bot Notes", "content": "CONTEXT_MARKER_TEXT notes here."},
+    ]
+    context = bot_engine.build_dialogue_context(lecture_package, 10000)
+    state = {
+        "topics_sampled": ["T1"],
+        "topics_covered": [],
+        "mastery": {},
+        "best_mastery": {},
+        "evidence_notes": {},
+        "current_topic_id": None,
+        "tutor_comment": "",
+        "turn_count": 0,
+    }
+
+    prompt = bot_engine.build_dialogue_system_prompt(
+        lecture_package=lecture_package,
+        state=state,
+        topic_defs=topic_defs,
+        lecture_context=context,
+        timing_context={"minutes_remaining": 15},
+    )
+
+    rubric_pos = prompt.index("RUBRIC_MARKER_TEXT")
+    context_pos = prompt.index("CONTEXT_MARKER_TEXT")
+    state_pos = prompt.index('"current_tutoring_state"')
+    timing_pos = prompt.index('"session_timing"')
+    sampled_pos = prompt.index('"sampled_topics"')
+
+    assert rubric_pos < state_pos, "rubric_text must precede current_tutoring_state"
+    assert rubric_pos < timing_pos, "rubric_text must precede session_timing"
+    assert rubric_pos < sampled_pos, "rubric_text must precede sampled_topics"
+    assert context_pos < state_pos, "lecture_context must precede current_tutoring_state"
+    assert context_pos < timing_pos, "lecture_context must precede session_timing"
+    assert context_pos < sampled_pos, "lecture_context must precede sampled_topics"
+
+
+def test_build_dialogue_system_prompt_private_artifact_schema_in_static_prefix():
+    """private_artifact_schema_json must appear in the static prefix, not the dynamic suffix."""
+    topic_defs = _make_topic_defs_for_caching()
+    context = _make_lecture_context_for_caching()
+    state = {
+        "topics_sampled": ["T1"],
+        "topics_covered": [],
+        "mastery": {},
+        "best_mastery": {},
+        "evidence_notes": {},
+        "current_topic_id": None,
+        "tutor_comment": "",
+        "turn_count": 0,
+    }
+    schema_json = '{"type": "object", "required": ["check"], "properties": {"check": {"type": "string"}}}'
+
+    prompt = bot_engine.build_dialogue_system_prompt(
+        lecture_package=_CACHING_LECTURE_PACKAGE,
+        state=state,
+        topic_defs=topic_defs,
+        lecture_context=context,
+        timing_context={"minutes_remaining": 10},
+        private_artifact_schema_json=schema_json,
+    )
+
+    assert _DYNAMIC_SECTION_HEADER in prompt
+    prefix = prompt[: prompt.index(_DYNAMIC_SECTION_HEADER)]
+    assert '"private_artifact_schema_json"' in prefix
+
+
+def test_build_dialogue_system_prompt_all_tutor_required_fields_present():
+    """All keys referenced by the tutor prompt template must be present somewhere in the prompt."""
+    topic_defs = _make_topic_defs_for_caching()
+    context = _make_lecture_context_for_caching()
+    state = {
+        "topics_sampled": ["T1", "T2"],
+        "topics_covered": ["T1"],
+        "mastery": {"T1": 80},
+        "best_mastery": {"T1": 85},
+        "evidence_notes": {"T1": "noted"},
+        "current_topic_id": "T1",
+        "tutor_comment": "",
+        "turn_count": 1,
+    }
+    schema_json = '{"type": "object"}'
+
+    prompt = bot_engine.build_dialogue_system_prompt(
+        lecture_package=_CACHING_LECTURE_PACKAGE,
+        state=state,
+        topic_defs=topic_defs,
+        lecture_context=context,
+        timing_context={"minutes_remaining": 12, "closing_mode": False},
+        private_artifact_schema_json=schema_json,
+    )
+
+    # All keys listed in the tutor prompt template's "Runtime inputs available to you"
+    assert "lecture_title" in prompt
+    assert "sampled_topics" in prompt
+    assert "topic_structure_note" in prompt
+    assert "current_tutoring_state" in prompt
+    assert "session_timing" in prompt
+    assert "rubric_text" in prompt
+    assert "lecture_context" in prompt
+    assert "private_artifact_schema_json" in prompt
+
+
 def test_load_prompt_template_reads_tutor_prompt_markdown():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
     assert "You are the runtime tutor for an adaptive conceptual lecture review session." in loaded

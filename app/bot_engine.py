@@ -231,6 +231,22 @@ def generate_reply(
             response_format={"type": "json_object"},
             temperature=0.3,
         )
+        try:
+            usage = response.usage
+            if usage is not None:
+                cached = None
+                ptd = getattr(usage, "prompt_tokens_details", None)
+                if ptd is not None:
+                    cached = getattr(ptd, "cached_tokens", None)
+                _log.info(
+                    "dialogue usage: prompt=%s completion=%s total=%s cached=%s",
+                    getattr(usage, "prompt_tokens", None),
+                    getattr(usage, "completion_tokens", None),
+                    getattr(usage, "total_tokens", None),
+                    cached,
+                )
+        except Exception:
+            pass
         raw = response.choices[0].message.content
         try:
             parsed = j_.loads(raw)
@@ -304,6 +320,50 @@ def sample_session_topics(topic_defs: list[dict], session_id: str, count: int = 
 
 
 
+def _build_static_dialogue_prompt_prefix(
+    *,
+    prompt_body: str,
+    lecture_title: str,
+    topic_structure_note: str,
+    rubric_text: str,
+    lecture_context: str,
+    private_artifact_schema_json: str | None = None,
+) -> str:
+    """Build the cache-stable prefix: everything that is identical for the same lecture and prompt template."""
+    static_fields: dict = {
+        "lecture_context": lecture_context,
+        "lecture_title": lecture_title,
+        "rubric_text": rubric_text,
+        "topic_structure_note": topic_structure_note,
+    }
+    if private_artifact_schema_json is not None:
+        static_fields["private_artifact_schema_json"] = private_artifact_schema_json
+    return (
+        f"{prompt_body}\n\n"
+        "Runtime context\n\n"
+        "## Injected lecture/runtime data\n"
+        f"{j_.dumps(static_fields, indent=2, ensure_ascii=False, sort_keys=True)}"
+    )
+
+
+def _build_dynamic_dialogue_prompt_suffix(
+    *,
+    sampled_topics: list[dict],
+    current_state: dict,
+    timing_context: dict | None,
+) -> str:
+    """Build the per-session/per-turn suffix that follows the static prefix."""
+    dynamic_fields = {
+        "sampled_topics": sampled_topics,
+        "current_tutoring_state": current_state,
+        "session_timing": timing_context or {},
+    }
+    return (
+        "\n\n## Current session state\n"
+        f"{j_.dumps(dynamic_fields, indent=2, ensure_ascii=False)}"
+    )
+
+
 def build_dialogue_system_prompt(
     *,
     lecture_package: dict,
@@ -335,25 +395,20 @@ def build_dialogue_system_prompt(
         "tutor_comment": state.get("tutor_comment", ""),
         "turn_count": state.get("turn_count", 0) + 1,
     }
-
-    injected_context = {
-        "lecture_title": lecture_package["config"].get("title", lecture_package["lecture_id"]),
-        "sampled_topics": sampled_topics,
-        "topic_structure_note": "Use the rubric text below as the equivalent topic-to-element map or rubric structure.",
-        "current_tutoring_state": current_state,
-        "session_timing": timing_context or {},
-        "rubric_text": lecture_package["rubric"],
-        "lecture_context": lecture_context,
-    }
-    if private_artifact_schema_json is not None:
-        injected_context["private_artifact_schema_json"] = private_artifact_schema_json
-
-    return (
-        f"{prompt_body}\n\n"
-        "Runtime context\n\n"
-        "## Injected lecture/runtime data\n"
-        f"{j_.dumps(injected_context, indent=2, ensure_ascii=False)}"
+    prefix = _build_static_dialogue_prompt_prefix(
+        prompt_body=prompt_body,
+        lecture_title=lecture_package["config"].get("title", lecture_package["lecture_id"]),
+        topic_structure_note="Use the rubric text below as the equivalent topic-to-element map or rubric structure.",
+        rubric_text=lecture_package["rubric"],
+        lecture_context=lecture_context,
+        private_artifact_schema_json=private_artifact_schema_json,
     )
+    suffix = _build_dynamic_dialogue_prompt_suffix(
+        sampled_topics=sampled_topics,
+        current_state=current_state,
+        timing_context=timing_context,
+    )
+    return prefix + suffix
 
 
 def build_dialogue_context(lecture_package: dict, max_chars: int) -> str:
