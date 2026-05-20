@@ -2,40 +2,117 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "turn_assessment",
+    "turn_focus",
+    "evidence_assessment",
     "next_move",
     "self_verification"
   ],
   "properties": {
-    "turn_assessment": {
+    "turn_focus": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "latest_message_type",
         "engaged_topic_id",
-        "evidence_strength",
-        "independence_level",
-        "demonstrated_dimensions",
-        "remaining_uncertainties",
-        "substantive_target_already_addressed"
+        "engaged_target",
+        "student_signal"
       ],
       "properties": {
-        "latest_message_type": {
-          "type": "string",
-          "enum": [
-            "content_answer",
-            "content_question",
-            "procedural_question",
-            "repair_case",
-            "redirection_case",
-            "mixed",
-            "unclear"
-          ]
-        },
         "engaged_topic_id": {
           "type": [
             "string",
             "null"
+          ],
+          "description": "Backend-provided canonical topic ID if one is engaged on this turn; null if no clear topic is engaged. Do not invent IDs."
+        },
+        "engaged_target": {
+          "type": "string",
+          "description": "Short plain-language description of the conceptual target engaged or attempted on this turn."
+        },
+        "student_signal": {
+          "type": "string",
+          "enum": [
+            "none",
+            "confidence",
+            "frustration",
+            "fatigue",
+            "move_on",
+            "disagreement",
+            "request_more",
+            "grade_request",
+            "procedural",
+            "non_answer"
+          ],
+          "description": "Most salient student signal affecting the next move."
+        }
+      }
+    },
+    "evidence_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "content_engagement",
+        "evidence_independence",
+        "local_adaptation",
+        "cognitive_operation",
+        "scaffolding_status",
+        "evidence_strength",
+        "material_uncertainty"
+      ],
+      "properties": {
+        "content_engagement": {
+          "type": "string",
+          "enum": [
+            "substantive",
+            "procedural",
+            "off_track",
+            "echo_only",
+            "non_answer"
+          ]
+        },
+        "evidence_independence": {
+          "type": "string",
+          "enum": [
+            "independent",
+            "assisted",
+            "copied_or_echoed",
+            "generic_or_external",
+            "transformed_after_support",
+            "unclear"
+          ]
+        },
+        "local_adaptation": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "none"
+          ]
+        },
+        "cognitive_operation": {
+          "type": "string",
+          "enum": [
+            "define",
+            "distinguish",
+            "explain",
+            "apply",
+            "critique",
+            "repair",
+            "compress",
+            "synthesize",
+            "interpret",
+            "procedural",
+            "other"
+          ]
+        },
+        "scaffolding_status": {
+          "type": "string",
+          "enum": [
+            "none",
+            "after_small_hint",
+            "after_substantial_explanation",
+            "after_correction",
+            "unclear"
           ]
         },
         "evidence_strength": {
@@ -43,45 +120,16 @@
           "enum": [
             "none",
             "weak",
-            "moderate",
-            "strong"
-          ]
+            "developing",
+            "solid",
+            "strong",
+            "robust"
+          ],
+          "description": "Qualitative evidence strength for this turn, interpreted conservatively."
         },
-        "independence_level": {
+        "material_uncertainty": {
           "type": "string",
-          "enum": [
-            "independent",
-            "assisted_after_small_hint",
-            "assisted_after_substantial_scaffold",
-            "generic_or_copied",
-            "procedural_only",
-            "unclear"
-          ]
-        },
-        "demonstrated_dimensions": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "criterion",
-              "distinction",
-              "explanation",
-              "application",
-              "interpretation",
-              "ownership",
-              "synthesis"
-            ]
-          },
-          "uniqueItems": true
-        },
-        "remaining_uncertainties": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "substantive_target_already_addressed": {
-          "type": "boolean"
+          "description": "Brief note on the most consequential remaining uncertainty, or 'none material' if none remains."
         }
       }
     },
@@ -89,80 +137,59 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "mode",
-        "question_substance",
-        "materiality_rationale",
+        "selected_mode",
         "breadth_depth_choice",
-        "closing_pressure_considered",
-        "student_signals_considered",
-        "coverage_transparency_considered"
+        "expected_value",
+        "question_feasible"
       ],
       "properties": {
-        "mode": {
+        "selected_mode": {
           "type": "string",
           "enum": [
-            "opening",
             "basic_probe",
             "evidence_feedback",
             "scaffolded_support",
             "adaptive_challenge",
             "breadth_transition",
-            "depth_probe_on_strong_topic",
+            "depth_probe_strong_topic",
             "coverage_transparency",
             "procedural_support",
             "interaction_repair",
             "redirection",
             "grade_or_report_handoff",
             "consolidation",
-            "terminal_closure_under_recurring_request_pressure",
+            "terminal_closure_under_request_pressure",
             "plateau_cause_disclosure"
           ]
-        },
-        "question_substance": {
-          "type": "string",
-          "enum": [
-            "substantive_question",
-            "no_substantive_question"
-          ]
-        },
-        "materiality_rationale": {
-          "type": "string"
         },
         "breadth_depth_choice": {
           "type": "string",
           "enum": [
             "breadth",
             "depth",
-            "neither"
+            "stay",
+            "consolidate",
+            "close",
+            "not_applicable"
           ]
         },
-        "closing_pressure_considered": {
-          "type": "boolean"
+        "expected_value": {
+          "type": "string",
+          "enum": [
+            "material",
+            "limited",
+            "none"
+          ],
+          "description": "Whether the chosen move is expected to materially improve characterization."
         },
-        "student_signals_considered": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "none",
-              "fatigue",
-              "move_on_request",
-              "declining_traction",
-              "frustration",
-              "anxiety",
-              "grade_request",
-              "grade_frustration",
-              "request_for_more_low_value_probing",
-              "request_for_hidden_internals",
-              "copy_paste_loop",
-              "disagreement",
-              "out_of_scope_request"
-            ]
-          },
-          "uniqueItems": true
-        },
-        "coverage_transparency_considered": {
-          "type": "boolean"
+        "question_feasible": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "unknown_no_timing_data"
+          ],
+          "description": "Whether there is enough room for a substantive answer-feedback cycle, based only on supplied timing metadata when available."
         }
       }
     },
@@ -170,42 +197,48 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "content_evidence_gate_passed",
-        "repetition_check_passed",
-        "materiality_check_passed",
-        "breadth_vs_depth_check_passed",
-        "time_feasibility_check_passed",
-        "high_mastery_evidence_check_passed",
-        "student_signal_honoring_check_passed",
-        "prose_consistency_check_passed",
-        "plateau_coverage_check_passed"
+        "latest_message_has_content_evidence",
+        "target_not_already_substantively_addressed",
+        "plausible_answer_would_materially_change_characterization",
+        "chosen_move_beats_main_alternative",
+        "timing_check",
+        "strong_evidence_not_based_on_fluency_alone",
+        "student_signals_honored",
+        "prose_consistent_with_intended_move",
+        "coverage_transparency_considered"
       ],
       "properties": {
-        "content_evidence_gate_passed": {
+        "latest_message_has_content_evidence": {
           "type": "boolean"
         },
-        "repetition_check_passed": {
+        "target_not_already_substantively_addressed": {
           "type": "boolean"
         },
-        "materiality_check_passed": {
+        "plausible_answer_would_materially_change_characterization": {
           "type": "boolean"
         },
-        "breadth_vs_depth_check_passed": {
+        "chosen_move_beats_main_alternative": {
           "type": "boolean"
         },
-        "time_feasibility_check_passed": {
+        "timing_check": {
+          "type": "string",
+          "enum": [
+            "feasible",
+            "not_feasible",
+            "not_applicable_no_substantive_question",
+            "unknown_no_timing_data"
+          ]
+        },
+        "strong_evidence_not_based_on_fluency_alone": {
           "type": "boolean"
         },
-        "high_mastery_evidence_check_passed": {
+        "student_signals_honored": {
           "type": "boolean"
         },
-        "student_signal_honoring_check_passed": {
+        "prose_consistent_with_intended_move": {
           "type": "boolean"
         },
-        "prose_consistency_check_passed": {
-          "type": "boolean"
-        },
-        "plateau_coverage_check_passed": {
+        "coverage_transparency_considered": {
           "type": "boolean"
         }
       }

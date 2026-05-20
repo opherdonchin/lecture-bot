@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta http-equiv="refresh" content="5" />
+    <title>Generating Tutor Prompt — Admin</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_tutor_prompts') }}" class="back-link">← Tutor Prompts</a>
+      </div>
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Document Archive</p>
+          <h1>Generating Tutor Prompt</h1>
+          <p class="lead">Generation is running for <code>{{ job.spec_document_id }}</code>.</p>
+        </div>
+      </section>
+
+      <section class="card admin-card">
+        <h2>Generation in progress</h2>
+        <p class="muted">Started {{ job.created_at }}. This page refreshes automatically.</p>
+        <div class="inline-actions">
+          <a href="{{ url_path('generation_job_status', job_id=job_id) }}" class="secondary-action">Refresh</a>
+          <a href="{{ url_path('admin_document_detail', document_id=job.spec_document_id) }}" class="secondary-action">Spec Detail</a>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

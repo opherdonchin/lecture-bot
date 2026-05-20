@@ -28,6 +28,7 @@ class Settings(ps.BaseSettings):
     sampled_topic_count: int = 5
     opening_topic_choice_count: int = 3
     tutor_prompt_template: str = "tutor_prompt.md"  # Default prompt template name
+    student_restart_command: str = "sudo -n systemctl restart lecture-bot.service"
 
     @pd.field_validator("student_root_path", "admin_root_path")
     @classmethod

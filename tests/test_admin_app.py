@@ -1,5 +1,6 @@
 import json
 import re
+import subprocess
 
 from fastapi.testclient import TestClient
 
@@ -195,3 +196,38 @@ def test_admin_grades_uploads_submission_zip_and_regenerates_outputs(tmp_path, m
     download = client.get("/grades/files/import", auth=_auth())
     assert download.status_code == 200
     assert "206391179" in download.text
+
+
+def test_restart_student_app_uses_configured_system_service_command(tmp_path, monkeypatch):
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(admin_main.subprocess, "run", fake_run)
+
+    ok, message = admin_main._restart_student_app()
+
+    assert ok is True
+    assert message == "Student app restarted successfully."
+    assert calls[0][0] == ["sudo", "-n", "systemctl", "restart", "lecture-bot.service"]
+    assert calls[0][1]["timeout"] == 15
+
+
+def test_restart_student_app_explains_permission_failure(tmp_path, monkeypatch):
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+
+    def fake_run(command, **kwargs):
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="Interactive authentication required.")
+
+    monkeypatch.setattr(admin_main.subprocess, "run", fake_run)
+
+    ok, message = admin_main._restart_student_app()
+
+    assert ok is False
+    assert "needs service-manager permission" in message
+    assert "sudo -n systemctl restart lecture-bot.service" in message

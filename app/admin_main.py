@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pathlib
 import datetime as dt_module
+import concurrent.futures
+import shlex
+import threading
+import uuid
 import subprocess
 
 import fastapi as fa
@@ -30,6 +34,10 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 security = HTTPBasic()
+
+_GENERATION_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="prompt-generation")
+_GENERATION_JOBS_LOCK = threading.Lock()
+_GENERATION_JOBS: dict[str, dict] = {}
 
 
 def require_admin(credentials: HTTPBasicCredentials = fa.Depends(security)) -> str:
@@ -102,6 +110,61 @@ def _render_index(request: fa.Request, notice: str | None = None, error: str | N
             },
         ),
     )
+
+
+def _start_prompt_generation_job(spec_document_id: str) -> str:
+    job_id = uuid.uuid4().hex
+    with _GENERATION_JOBS_LOCK:
+        _GENERATION_JOBS[job_id] = {
+            "status": "running",
+            "spec_document_id": spec_document_id,
+            "preview": None,
+            "spec_doc": None,
+            "error": None,
+            "created_at": dt_module.datetime.now(dt_module.UTC),
+            "finished_at": None,
+        }
+    _GENERATION_EXECUTOR.submit(_run_prompt_generation_job, job_id, spec_document_id)
+    return job_id
+
+
+def _run_prompt_generation_job(job_id: str, spec_document_id: str) -> None:
+    db = db_module.SessionLocal()
+    try:
+        spec_doc = db.get(admin_documents_module.models.ArchiveDocumentModel, spec_document_id)
+        spec_doc_summary = None
+        if spec_doc is not None:
+            spec_doc_summary = {
+                "document_id": spec_doc.document_id,
+                "title": spec_doc.title,
+                "version_key": spec_doc.version_key,
+            }
+        preview = admin_generation_module.generate_prompt_preview(db, spec_document_id)
+        status = "done"
+        error = None
+    except Exception as exc:  # pragma: no cover - defensive guard for background execution
+        preview = {"ok": False, "error": f"Could not generate prompt: {exc}"}
+        spec_doc_summary = None
+        status = "failed"
+        error = str(exc)
+    finally:
+        db.close()
+    with _GENERATION_JOBS_LOCK:
+        job = _GENERATION_JOBS.get(job_id)
+        if job is not None:
+            job.update({
+                "status": status,
+                "preview": preview,
+                "spec_doc": spec_doc_summary,
+                "error": error,
+                "finished_at": dt_module.datetime.now(dt_module.UTC),
+            })
+
+
+def _get_generation_job(job_id: str) -> dict | None:
+    with _GENERATION_JOBS_LOCK:
+        job = _GENERATION_JOBS.get(job_id)
+        return dict(job) if job is not None else None
 
 
 def _moodle_database_path() -> pathlib.Path:
@@ -302,19 +365,38 @@ def _render_lecture(
 _STUDENT_SERVICE = "lecture-bot.service"
 
 
+def _student_restart_command() -> list[str]:
+    command = config_module.get_settings().student_restart_command.strip()
+    if not command:
+        command = f"systemctl restart {_STUDENT_SERVICE}"
+    return shlex.split(command)
+
+
 def _restart_student_app() -> tuple[bool, str]:
+    command = _student_restart_command()
     try:
         result = subprocess.run(
-            ["systemctl", "--user", "restart", _STUDENT_SERVICE],
+            command,
             capture_output=True,
             text=True,
             timeout=15,
         )
         if result.returncode == 0:
             return True, "Student app restarted successfully."
-        return False, f"systemctl returned exit code {result.returncode}: {(result.stderr or result.stdout).strip()}"
+        output = (result.stderr or result.stdout).strip()
+        command_text = shlex.join(command)
+        permission_markers = (
+            "interactive authentication required",
+            "password is required",
+            "not in the sudoers",
+            "permission denied",
+            "access denied",
+        )
+        if any(marker in output.lower() for marker in permission_markers):
+            return False, f"Restart needs service-manager permission. Run `{command_text}` on the server, or grant the admin service permission to run it."
+        return False, f"Restart command `{command_text}` returned exit code {result.returncode}: {output}"
     except FileNotFoundError:
-        return False, "systemctl not found — restart is not supported in this environment."
+        return False, f"Restart command not found: {command[0]}"
     except subprocess.TimeoutExpired:
         return False, "Restart command timed out."
     except Exception as exc:
@@ -724,12 +806,8 @@ async def upload_tutor_spec(
                 status_code=303,
             )
     if action == "generate":
-        preview = admin_generation_module.generate_prompt_preview(db, spec_doc.document_id)
-        return templates.TemplateResponse(
-            request,
-            "admin_generate_preview.html",
-            _template_context(request, {"preview": preview, "spec_doc": spec_doc}),
-        )
+        job_id = _start_prompt_generation_job(spec_doc.document_id)
+        return RedirectResponse(url=str(request.url_for("generation_job_status", job_id=job_id)), status_code=303)
 
     return RedirectResponse(
         url=str(request.url_for("admin_document_detail", document_id=spec_doc.document_id)) + "?notice=Tutor specification saved.",
@@ -757,12 +835,33 @@ def generate_prompt_from_spec(
     document_id: str,
     db: sqlalchemy_orm.Session = fa.Depends(db_module.get_db),
 ):
-    spec_doc = db.get(admin_documents_module.models.ArchiveDocumentModel, document_id)
-    preview = admin_generation_module.generate_prompt_preview(db, document_id)
+    job_id = _start_prompt_generation_job(document_id)
+    return RedirectResponse(url=str(request.url_for("generation_job_status", job_id=job_id)), status_code=303)
+
+
+@app.get("/generation-jobs/{job_id}", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="generation_job_status")
+def generation_job_status(
+    request: fa.Request,
+    job_id: str,
+):
+    job = _get_generation_job(job_id)
+    if job is None:
+        return templates.TemplateResponse(
+            request,
+            "admin_generate_preview.html",
+            _template_context(request, {"preview": {"ok": False, "error": "Generation job not found."}, "spec_doc": None}),
+            status_code=404,
+        )
+    if job["status"] == "running":
+        return templates.TemplateResponse(
+            request,
+            "admin_generation_job.html",
+            _template_context(request, {"job": job, "job_id": job_id}),
+        )
     return templates.TemplateResponse(
         request,
         "admin_generate_preview.html",
-        _template_context(request, {"preview": preview, "spec_doc": spec_doc}),
+        _template_context(request, {"preview": job["preview"], "spec_doc": job["spec_doc"]}),
     )
 
 
@@ -947,13 +1046,8 @@ async def generate_tutor_prompt(
                 "error": "Choose a validated tutor specification.",
             }),
         )
-    spec_doc = db.get(admin_documents_module.models.ArchiveDocumentModel, spec_document_id)
-    preview = admin_generation_module.generate_prompt_preview(db, spec_document_id)
-    return templates.TemplateResponse(
-        request,
-        "admin_generate_preview.html",
-        _template_context(request, {"preview": preview, "spec_doc": spec_doc}),
-    )
+    job_id = _start_prompt_generation_job(spec_document_id)
+    return RedirectResponse(url=str(request.url_for("generation_job_status", job_id=job_id)), status_code=303)
 
 
 @app.post("/lectures/{lecture_id}/generated/{kind}", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_generated_artifact")
