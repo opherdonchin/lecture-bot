@@ -385,15 +385,19 @@ def build_dialogue_system_prompt(
         }
         for tid in sampled_topic_ids
     ]
+    best_mastery = dict(state.get("best_mastery", {}))
     current_state = {
         "topics_sampled": list(sampled_topic_ids),
         "topics_covered": list(state.get("topics_covered", [])),
         "mastery": dict(state.get("mastery", {})),
-        "best_mastery": dict(state.get("best_mastery", {})),
+        "best_mastery": best_mastery,
         "evidence_notes": dict(state.get("evidence_notes", {})),
         "current_topic_id": state.get("current_topic_id"),
         "tutor_comment": state.get("tutor_comment", ""),
         "turn_count": state.get("turn_count", 0) + 1,
+        "grade_impact_deltas": compute_grade_impact_deltas(
+            list(sampled_topic_ids), best_mastery
+        ),
     }
     prefix = _build_static_dialogue_prompt_prefix(
         prompt_body=prompt_body,
@@ -462,6 +466,50 @@ def sanitize_assistant_message(
         sanitized,
         language_policy.ENGLISH_ONLY_ASSISTANT_FALLBACK,
     )
+
+
+_SCORE_IF_SUCCESS = [
+    (0,   0,   45),
+    (1,   30,  42),
+    (31,  54,  62),
+    (55,  71,  77),
+    (72,  87,  92),
+    (88,  99, 100),  # robust but below perfect — project to 100
+    (100, 100, None),  # already at perfect mastery — no gain possible
+]
+
+
+def _grade_from_scores(scores: dict[str, int]) -> int:
+    """Compute weighted grade from a {topic_id: score} dict."""
+    top5 = sorted(scores.values(), reverse=True)[:5]
+    padded = (top5 + [0, 0, 0, 0, 0])[:5]
+    return math_.floor(sum(w * s / 100 for w, s in zip(_GRADE_WEIGHTS, padded)))
+
+
+def compute_grade_impact_deltas(
+    sampled_topic_ids: list[str],
+    best_mastery: dict[str, int],
+) -> dict[str, int]:
+    """Return {topic_id: delta_grade} for each sampled topic.
+
+    delta_grade is the projected grade improvement if the next probe on that
+    topic succeeds. Only topics at perfect mastery (100) return delta=0;
+    all others have a positive delta representing the gain if the student
+    advances toward the next tier or to perfect mastery.
+    """
+    base_scores = {tid: best_mastery.get(tid, 0) for tid in sampled_topic_ids}
+    current = _grade_from_scores(base_scores)
+    deltas: dict[str, int] = {}
+    for tid in sampled_topic_ids:
+        cur = base_scores[tid]
+        sif = next((s for lo, hi, s in _SCORE_IF_SUCCESS if lo <= cur <= hi), None)
+        if sif is None:
+            deltas[tid] = 0
+        else:
+            trial = dict(base_scores)
+            trial[tid] = sif
+            deltas[tid] = _grade_from_scores(trial) - current
+    return deltas
 
 
 def compute_weighted_grade(topic_scores: list[dict]) -> int:

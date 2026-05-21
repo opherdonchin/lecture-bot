@@ -16,7 +16,7 @@ class Settings(ps.BaseSettings):
     moodle_participants_csv: pathlib_.Path = pd.Field(default=pathlib_.Path("data/submissions/courseid_64733_participants.csv"))
     moodle_grade_import_csv: pathlib_.Path = pd.Field(default=pathlib_.Path("data/submissions/moodle_grade_import.csv"))
     moodle_grade_import_report_csv: pathlib_.Path = pd.Field(default=pathlib_.Path("data/submissions/moodle_grade_import_report.csv"))
-    session_timeout_minutes: int = 20
+    session_timeout_minutes: int = 30
     session_warning_minutes: int = 5
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.4-mini"

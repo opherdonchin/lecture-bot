@@ -200,6 +200,8 @@ The generated runtime tutor prompt must allow sparse-delta updates only for exac
 - `current_topic_id`
 - `tutor_comment`
 
+The generated runtime tutor prompt must specify the concrete format of `mastery` as defined in the backend contract: a JSON object mapping canonical topic IDs to integer scores 0–100, with the calibration table from the backend contract included verbatim. The prompt must make clear that this is an evidence summary required when understanding has been demonstrated, not a grade computation. Example: `{"T5": 75, "T3": 60}`.
+
 The backend derives or sanitizes `topics_covered`; do not allow the tutor to return it as a tutor-updatable field.
 Do not drift into full-state replacement language.
 Do not introduce new runtime fields or widen the allowed `updated_state` keys beyond this exact list.
@@ -255,7 +257,7 @@ Unless explicitly established by the tutor specification or backend contract, do
 - control-action behavior outside the tutor-turn contract
 - new runtime fields beyond `private_artifact_schema_json` and `private_artifact`
 - backend lifecycle semantics not stated in the backend contract
-- mastery scales not present in the specification unless the specification explicitly delegates schema design
+- mastery scales not defined in the backend contract (the concrete 0–100 integer format with calibration table is defined there and must always be included in the generated prompt)
 - any backend-owned state transitions or merge rules
 - schema names
 - schema versions

@@ -39,6 +39,8 @@ For each ordinary tutoring turn, the backend injects runtime data into the tutor
 - `rubric_text`
 - `lecture_context`
 
+`current_tutoring_state` includes a backend-computed `grade_impact_deltas` field: a JSON object mapping each sampled topic ID to the integer ΔGrade the tutor would gain if the next probe on that topic succeeds. The backend computes this using the same grading formula and calibration tiers used by `compute_weighted_grade`. The tutor reads these values for move selection and must not recompute or modify them.
+
 The backend provides recent conversation history as prior chat messages and the latest student message as the current user message. These are not duplicated inside the injected runtime JSON.
 
 ### 2.1 Optional private artifact schema input
@@ -105,6 +107,7 @@ Backend-owned and read-only state includes:
 - `current_grade`
 - `timeout_warning_sent`
 - `turn_count`
+- `grade_impact_deltas`
 
 Tutor-updatable tutoring fields include:
 
@@ -121,6 +124,35 @@ The backend derives or sanitizes:
 - turn count
 - best mastery
 - current grade
+
+### 4.2 mastery field format
+
+`mastery` must be a JSON object mapping canonical topic IDs to integer scores in the range 0–100.
+
+```json
+{"T5": 75, "T3": 60}
+```
+
+- Keys must be canonical topic IDs supplied by the backend (e.g., `"T1"`, `"T2"`). Unknown or invented keys are dropped.
+- Values must be integers (or values coercible to integer). Non-numeric values are silently dropped.
+- Values are clamped to the range 0–100.
+- Only topics where the student has demonstrated clear understanding should be included. Topics with no evidence should be omitted, not set to 0.
+- The backend takes the per-turn maximum across the session to produce `best_mastery`, which feeds the final grade. The tutor must not attempt to reproduce this accumulation.
+
+Calibration guidance (tutor-facing, for inclusion in generated runtime prompts):
+
+| Qualitative level | Integer range |
+|---|---|
+| no evidence | omit |
+| weak evidence | 15–25 |
+| developing evidence | 35–50 |
+| solid evidence | 55–70 |
+| strong evidence | 72–85 |
+| robust evidence | 88–100 |
+
+### 4.3 evidence_notes field format
+
+`evidence_notes` must be a JSON object mapping canonical topic IDs to short plain-text strings describing observed evidence for that topic. Values that are not strings are coerced to strings.
 
 The tutor must not return backend-owned fields as proposed updates. The backend ignores unknown or disallowed state keys.
 

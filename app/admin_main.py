@@ -14,6 +14,9 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.datastructures import UploadFile as StarletteUploadFile
+from starlette.formparsers import MultiPartParser
+
+MultiPartParser.max_part_size = 250 * 1024 * 1024  # 250 MB
 import sqlalchemy.orm as sqlalchemy_orm
 
 import app.admin_documents as admin_documents_module
