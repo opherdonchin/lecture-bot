@@ -88,6 +88,10 @@ class DialogueTurnAuditModel(db_module.Base):
     ended_with_content_question: sqlalchemy_orm.Mapped[bool | None] = sqlalchemy_orm.mapped_column(sa.Boolean, default=False)
     repetition_complaint: sqlalchemy_orm.Mapped[bool | None] = sqlalchemy_orm.mapped_column(sa.Boolean, default=False)
     switched_topics: sqlalchemy_orm.Mapped[bool | None] = sqlalchemy_orm.mapped_column(sa.Boolean, default=False)
+    prompt_tokens: sqlalchemy_orm.Mapped[int | None] = sqlalchemy_orm.mapped_column(sa.Integer, nullable=True)
+    completion_tokens: sqlalchemy_orm.Mapped[int | None] = sqlalchemy_orm.mapped_column(sa.Integer, nullable=True)
+    total_tokens: sqlalchemy_orm.Mapped[int | None] = sqlalchemy_orm.mapped_column(sa.Integer, nullable=True)
+    cached_prompt_tokens: sqlalchemy_orm.Mapped[int | None] = sqlalchemy_orm.mapped_column(sa.Integer, nullable=True)
 
 
 class PrivateArtifactLogModel(db_module.Base):

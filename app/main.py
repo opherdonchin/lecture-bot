@@ -218,7 +218,7 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         private_artifact_schema_json=session.private_artifact_schema_json,
     )
 
-    bot_reply, updated_state, private_artifact = bot_engine.generate_reply(
+    reply_result = bot_engine.generate_reply(
         lecture_package=lecture_package,
         recent_messages=recent_messages,
         state=state,
@@ -226,6 +226,8 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         timing_context=timing_context,
         private_artifact_schema_json=session.private_artifact_schema_json,
     )
+    bot_reply, updated_state, private_artifact = reply_result
+    dialogue_usage = reply_result.usage
     validation_error = None
     if session.private_artifact_schema_json is not None:
         validation_error = bot_engine.validate_private_artifact(
@@ -238,7 +240,7 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
                 rendered_system_prompt,
                 repair_instruction,
             )
-            bot_reply, updated_state, private_artifact = bot_engine.generate_reply(
+            repair_result = bot_engine.generate_reply(
                 lecture_package=lecture_package,
                 recent_messages=recent_messages,
                 state=state,
@@ -247,6 +249,8 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
                 private_artifact_schema_json=session.private_artifact_schema_json,
                 repair_instruction=repair_instruction,
             )
+            bot_reply, updated_state, private_artifact = repair_result
+            dialogue_usage = _combine_dialogue_usage(dialogue_usage, repair_result.usage)
             validation_error = bot_engine.validate_private_artifact(
                 private_artifact,
                 session.private_artifact_schema_json,
@@ -281,6 +285,7 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         updated_state=updated_state,
         bot_reply=bot_reply,
         original_user_message=request.message,
+        usage=dialogue_usage,
     )
     if session.private_artifact_schema_json is not None:
         _record_private_artifact_log(
@@ -461,6 +466,30 @@ def _extract_turn_target_topic_id(updated_state: dict) -> str | None:
     return None
 
 
+def _sum_optional_ints(left: int | None, right: int | None) -> int | None:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return left + right
+
+
+def _combine_dialogue_usage(
+    first: bot_engine.DialogueUsage | None,
+    second: bot_engine.DialogueUsage | None,
+) -> bot_engine.DialogueUsage | None:
+    if first is None:
+        return second
+    if second is None:
+        return first
+    return bot_engine.DialogueUsage(
+        prompt_tokens=_sum_optional_ints(first.prompt_tokens, second.prompt_tokens),
+        completion_tokens=_sum_optional_ints(first.completion_tokens, second.completion_tokens),
+        total_tokens=_sum_optional_ints(first.total_tokens, second.total_tokens),
+        cached_prompt_tokens=_sum_optional_ints(first.cached_prompt_tokens, second.cached_prompt_tokens),
+    )
+
+
 def _record_private_artifact_log(
     db: sqlalchemy_orm.Session,
     *,
@@ -494,6 +523,7 @@ def _record_dialogue_turn_audit(
     updated_state: dict,
     bot_reply: str,
     original_user_message: str,
+    usage: bot_engine.DialogueUsage | None = None,
 ) -> None:
     repetition_markers = ("repeat", "repeating", "already asked", "already did", "again")
     repetition_complaint = any(marker in original_user_message.lower() for marker in repetition_markers)
@@ -521,6 +551,10 @@ def _record_dialogue_turn_audit(
             and isinstance(current_topic_after, str)
             and current_topic_before != current_topic_after
         ),
+        prompt_tokens=usage.prompt_tokens if usage is not None else None,
+        completion_tokens=usage.completion_tokens if usage is not None else None,
+        total_tokens=usage.total_tokens if usage is not None else None,
+        cached_prompt_tokens=usage.cached_prompt_tokens if usage is not None else None,
     ))
 
 

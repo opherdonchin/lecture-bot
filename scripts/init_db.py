@@ -24,6 +24,20 @@ def _ensure_sqlite_schema_updates() -> None:
             conn.exec_driver_sql(
                 "ALTER TABLE sessions ADD COLUMN prompt_document_id TEXT"
             )
+        audit_columns = {
+            row[1]
+            for row in conn.exec_driver_sql("PRAGMA table_info(dialogue_turn_audits)").fetchall()
+        }
+        for column_name in (
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
+            "cached_prompt_tokens",
+        ):
+            if column_name not in audit_columns:
+                conn.exec_driver_sql(
+                    f"ALTER TABLE dialogue_turn_audits ADD COLUMN {column_name} INTEGER"
+                )
 
 
 if __name__ == "__main__":

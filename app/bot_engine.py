@@ -1,4 +1,5 @@
 import json as j_
+import dataclasses as dataclasses_
 import logging as logging_
 import math as math_
 import random as random_
@@ -27,6 +28,57 @@ _FALLBACK_DIALOGUE_MESSAGE = (
     "If the problem persists, try again in half an hour. "
     "If there is still no connection, please post the problem on Moodle."
 )
+
+
+@dataclasses_.dataclass(frozen=True)
+class DialogueUsage:
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+    cached_prompt_tokens: int | None = None
+
+
+@dataclasses_.dataclass(frozen=True)
+class DialogueReply:
+    assistant_message: str
+    updated_state: dict
+    private_artifact: object | None
+    usage: DialogueUsage | None = None
+
+    def __iter__(self):
+        yield self.assistant_message
+        yield self.updated_state
+        yield self.private_artifact
+
+
+def _usage_int(value: object) -> int | None:
+    return value if isinstance(value, int) else None
+
+
+def _extract_dialogue_usage(response: object) -> DialogueUsage | None:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    cached = None
+    ptd = getattr(usage, "prompt_tokens_details", None)
+    if ptd is not None:
+        cached = _usage_int(getattr(ptd, "cached_tokens", None))
+    dialogue_usage = DialogueUsage(
+        prompt_tokens=_usage_int(getattr(usage, "prompt_tokens", None)),
+        completion_tokens=_usage_int(getattr(usage, "completion_tokens", None)),
+        total_tokens=_usage_int(getattr(usage, "total_tokens", None)),
+        cached_prompt_tokens=cached,
+    )
+    if (
+        dialogue_usage.prompt_tokens is None
+        and dialogue_usage.completion_tokens is None
+        and dialogue_usage.total_tokens is None
+        and dialogue_usage.cached_prompt_tokens is None
+    ):
+        return None
+    return dialogue_usage
+
+
 def get_tutor_prompt_template(lecture_package: dict | None = None) -> str:
     """Return the tutor prompt template name, allowing lecture config override."""
     # Try lecture_package['config']['tutor_prompt_template'] if present
@@ -193,10 +245,11 @@ def generate_reply(
     timing_context: dict | None = None,
     private_artifact_schema_json: str | None = None,
     repair_instruction: str | None = None,
-) -> tuple[str, dict, object | None]:
+) -> DialogueReply:
     """Generate a tutoring reply using OpenAI.
 
-    Returns (assistant_message, sanitized_updated_state, private_artifact).
+    Returns an object that unpacks as (assistant_message, sanitized_updated_state, private_artifact)
+    and also carries token usage metadata when the API returns it.
     Falls back to a generic message if OpenAI fails or returns malformed output.
     """
     settings = config_module.get_settings()
@@ -231,19 +284,15 @@ def generate_reply(
             response_format={"type": "json_object"},
             temperature=0.3,
         )
+        dialogue_usage = _extract_dialogue_usage(response)
         try:
-            usage = response.usage
-            if usage is not None:
-                cached = None
-                ptd = getattr(usage, "prompt_tokens_details", None)
-                if ptd is not None:
-                    cached = getattr(ptd, "cached_tokens", None)
+            if dialogue_usage is not None:
                 _log.info(
                     "dialogue usage: prompt=%s completion=%s total=%s cached=%s",
-                    getattr(usage, "prompt_tokens", None),
-                    getattr(usage, "completion_tokens", None),
-                    getattr(usage, "total_tokens", None),
-                    cached,
+                    dialogue_usage.prompt_tokens,
+                    dialogue_usage.completion_tokens,
+                    dialogue_usage.total_tokens,
+                    dialogue_usage.cached_prompt_tokens,
                 )
         except Exception:
             pass
@@ -264,13 +313,13 @@ def generate_reply(
         _log.exception("generate_reply failed: OpenAI authentication error")
         fallback_state = dict(state)
         fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state, None
+        return DialogueReply(_FALLBACK_DIALOGUE_MESSAGE, fallback_state, None)
     except openai_.APIError:
         # Rate limits, timeouts, connection errors from the OpenAI API.
         _log.exception("generate_reply failed: OpenAI API error")
         fallback_state = dict(state)
         fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state, None
+        return DialogueReply(_FALLBACK_DIALOGUE_MESSAGE, fallback_state, None)
     except Exception:
         # Catches malformed JSON, missing model output keys, and other unexpected
         # response-parsing failures. sanitize_state_update (our code) is deliberately
@@ -278,14 +327,14 @@ def generate_reply(
         _log.exception("generate_reply failed")
         fallback_state = dict(state)
         fallback_state["turn_count"] = state.get("turn_count", 0) + 1
-        return _FALLBACK_DIALOGUE_MESSAGE, fallback_state, None
+        return DialogueReply(_FALLBACK_DIALOGUE_MESSAGE, fallback_state, None)
     # sanitize_state_update is our own code — bugs here propagate as 500, not masked
     updated_state = sanitize_state_update(
         state,
         raw_updated_state,
         allowed_topic_ids,
     )
-    return assistant_message, updated_state, private_artifact
+    return DialogueReply(assistant_message, updated_state, private_artifact, dialogue_usage)
 
 
 # ---------------------------------------------------------------------------

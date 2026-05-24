@@ -1,5 +1,6 @@
 import datetime as dt
 import json as j
+import types
 import unittest.mock as mock
 
 import pytest
@@ -66,7 +67,7 @@ VALID_PRIVATE_ARTIFACT = {
 }
 
 
-def _mock_openai_dialogue(reply_text="Test reply."):
+def _mock_openai_dialogue(reply_text="Test reply.", *, usage=None):
     """Patch openai.OpenAI so generate_reply returns a canned JSON response."""
     import json as j
     mock_resp = mock.MagicMock()
@@ -81,6 +82,8 @@ def _mock_openai_dialogue(reply_text="Test reply."):
         },
         "private_artifact": VALID_PRIVATE_ARTIFACT,
     })
+    if usage is not None:
+        mock_resp.usage = usage
     mock_client = mock.MagicMock()
     mock_client.chat.completions.create.return_value = mock_resp
     return mock.patch("openai.OpenAI", return_value=mock_client)
@@ -390,6 +393,37 @@ def test_send_message_writes_dialogue_turn_audit_row(client):
     assert audit_row.dialogue_model
     assert "You are the runtime tutor for an adaptive conceptual lecture review session" in audit_row.rendered_system_prompt
     assert audit_row.user_message == "What counts as data"
+
+
+def test_send_message_writes_dialogue_token_usage_to_audit_row(client):
+    session_id = start_session(client)
+    db = next(app.dependency_overrides[db_module.get_db]())
+    session = db.query(models.SessionModel).filter(models.SessionModel.session_id == session_id).one()
+    session.private_artifact_schema_json = None
+    db.commit()
+    usage = types.SimpleNamespace(
+        prompt_tokens=1234,
+        completion_tokens=56,
+        total_tokens=1290,
+        prompt_tokens_details=types.SimpleNamespace(cached_tokens=1000),
+    )
+
+    with _mock_openai_dialogue("What is one example?", usage=usage):
+        response = client.post(
+            "/send_message",
+            json={"session_id": session_id, "message": "What counts as data"},
+        )
+
+    assert response.status_code == 200
+    audit_row = (
+        db.query(models.DialogueTurnAuditModel)
+        .filter(models.DialogueTurnAuditModel.session_id == session_id)
+        .one()
+    )
+    assert audit_row.prompt_tokens == 1234
+    assert audit_row.completion_tokens == 56
+    assert audit_row.total_tokens == 1290
+    assert audit_row.cached_prompt_tokens == 1000
 
 
 def test_send_message_injects_private_artifact_schema_json(client):
