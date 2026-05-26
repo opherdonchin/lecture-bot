@@ -14,6 +14,8 @@ class Settings(ps.BaseSettings):
     lectures_dir: pathlib_.Path = pd.Field(default=pathlib_.Path("lectures"))
     moodle_submissions_dir: pathlib_.Path = pd.Field(default=pathlib_.Path("data/submissions"))
     moodle_participants_csv: pathlib_.Path = pd.Field(default=pathlib_.Path("data/submissions/courseid_64733_participants.csv"))
+    moodle_deadlines_csv: pathlib_.Path = pd.Field(default=pathlib_.Path("data/submissions/moodle_deadlines.csv"))
+    moodle_deadline_timezone_offset: str = "+03:00"
     moodle_grade_import_csv: pathlib_.Path = pd.Field(default=pathlib_.Path("data/submissions/moodle_grade_import.csv"))
     moodle_grade_import_report_csv: pathlib_.Path = pd.Field(default=pathlib_.Path("data/submissions/moodle_grade_import_report.csv"))
     session_timeout_minutes: int = 30

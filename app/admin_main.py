@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import pathlib
+import csv
 import datetime as dt_module
 import concurrent.futures
+import io
+import re
 import shlex
 import threading
 import uuid
@@ -41,6 +44,7 @@ security = HTTPBasic()
 _GENERATION_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="prompt-generation")
 _GENERATION_JOBS_LOCK = threading.Lock()
 _GENERATION_JOBS: dict[str, dict] = {}
+_TIMEZONE_OFFSET_RE = re.compile(r"^[+-][0-9]{2}:[0-9]{2}$")
 
 
 def require_admin(credentials: HTTPBasicCredentials = fa.Depends(security)) -> str:
@@ -197,6 +201,10 @@ def _grade_context(
 ) -> dict:
     settings = config_module.get_settings()
     submissions_dir = _submissions_dir()
+    try:
+        deadlines = moodle_grade_import.load_deadlines_csv(settings.moodle_deadlines_csv)
+    except ValueError:
+        deadlines = {}
     lecture_rows = []
     archives = {}
     for lecture_dir in workflow.list_lecture_dirs(_lectures_dir()):
@@ -209,6 +217,7 @@ def _grade_context(
                 "lecture_id": lecture_id,
                 "title": config.get("title", lecture_id),
                 "archive": _grade_file_info(archive_path),
+                "deadline_input": _deadline_input_value(deadlines.get(lecture_id)),
             }
         )
 
@@ -218,6 +227,8 @@ def _grade_context(
         "summary": summary,
         "lectures": lecture_rows,
         "participants_file": _grade_file_info(settings.moodle_participants_csv),
+        "deadlines_file": _grade_file_info(settings.moodle_deadlines_csv),
+        "deadline_timezone_offset": settings.moodle_deadline_timezone_offset,
         "upload_file": _grade_file_info(settings.moodle_grade_import_csv),
         "report_file": _grade_file_info(settings.moodle_grade_import_report_csv),
         "has_archives": any(path.exists() for path in archives.values()),
@@ -249,10 +260,12 @@ def _run_grade_import() -> dict[str, int]:
     }
     if not archives:
         raise ValueError("No lecture submission ZIPs have been uploaded yet.")
+    deadlines = moodle_grade_import.load_deadlines_csv(settings.moodle_deadlines_csv)
     result = moodle_grade_import.prepare_moodle_grade_import(
         submission_archives=archives,
         participants_csv_path=settings.moodle_participants_csv,
         db_path=_moodle_database_path(),
+        deadlines=deadlines,
     )
     moodle_grade_import.write_grade_import_outputs(
         result,
@@ -260,6 +273,32 @@ def _run_grade_import() -> dict[str, int]:
         report_csv_path=settings.moodle_grade_import_report_csv,
     )
     return result.summary
+
+
+def _deadline_template_csv() -> str:
+    settings = config_module.get_settings()
+    lecture_ids = [lecture_dir.name for lecture_dir in workflow.list_lecture_dirs(_lectures_dir())]
+    existing_deadlines = moodle_grade_import.load_deadlines_csv(settings.moodle_deadlines_csv)
+    rows = moodle_grade_import.build_deadline_template_rows(lecture_ids, existing_deadlines)
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=["lecture_id", "deadline"])
+    writer.writeheader()
+    writer.writerows(rows)
+    return buffer.getvalue()
+
+
+def _deadline_input_value(value: dt_module.datetime | None) -> str:
+    if value is None:
+        return ""
+    return value.replace(second=0, microsecond=0).isoformat()[:16]
+
+
+def _write_deadlines_csv(path: pathlib.Path, rows: list[dict[str, str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["lecture_id", "deadline"])
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def _session_filters_from_params(
@@ -450,6 +489,87 @@ async def upload_grade_participants(
     except Exception as exc:
         return _render_grades(request, error=str(exc))
     return _render_grades(request, notice="Participants CSV updated.")
+
+
+@app.get("/grades/deadlines/template", dependencies=[fa.Depends(require_admin)], name="download_deadline_template")
+def download_deadline_template():
+    try:
+        content = _deadline_template_csv()
+    except Exception as exc:
+        raise fa.HTTPException(status_code=400, detail=str(exc)) from exc
+    return StreamingResponse(
+        iter([content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=moodle_deadlines_template.csv"},
+    )
+
+
+@app.post("/grades/deadlines", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_grade_deadlines")
+async def upload_grade_deadlines(
+    request: fa.Request,
+    uploaded_file: fa.UploadFile = fa.File(...),
+):
+    if not uploaded_file.filename:
+        return _render_grades(request, error="Choose a deadlines CSV file to upload.")
+    settings = config_module.get_settings()
+    try:
+        workflow.save_uploaded_file(settings.moodle_deadlines_csv, uploaded_file)
+        moodle_grade_import.load_deadlines_csv(settings.moodle_deadlines_csv)
+    except Exception as exc:
+        return _render_grades(request, error=str(exc))
+
+    submissions_dir = _submissions_dir()
+    if any(path.exists() for path in moodle_grade_import.discover_submission_archives(submissions_dir).values()):
+        try:
+            summary = _run_grade_import()
+        except Exception as exc:
+            return _render_grades(
+                request,
+                error=f"Deadlines CSV updated, but grade import preparation failed: {exc}",
+            )
+        return _render_grades(request, notice="Deadlines CSV updated and Moodle import files regenerated.", summary=summary)
+
+    return _render_grades(request, notice="Deadlines CSV updated.")
+
+
+@app.post("/grades/deadlines/edit", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="save_grade_deadlines")
+async def save_grade_deadlines(request: fa.Request):
+    form = await request.form()
+    timezone_offset = str(form.get("timezone_offset") or config_module.get_settings().moodle_deadline_timezone_offset).strip()
+    if not _TIMEZONE_OFFSET_RE.match(timezone_offset):
+        return _render_grades(request, error="Timezone offset must look like +03:00 or +02:00.")
+
+    rows: list[dict[str, str]] = []
+    errors: list[str] = []
+    for lecture_dir in workflow.list_lecture_dirs(_lectures_dir()):
+        lecture_id = lecture_dir.name
+        raw_value = str(form.get(f"deadline_{lecture_id}") or "").strip()
+        if not raw_value:
+            continue
+        deadline = f"{raw_value}:00{timezone_offset}" if len(raw_value) == 16 else f"{raw_value}{timezone_offset}"
+        if moodle_grade_import._parse_datetime(deadline) is None:
+            errors.append(lecture_id)
+            continue
+        rows.append({"lecture_id": lecture_id, "deadline": deadline})
+
+    if errors:
+        return _render_grades(request, error=f"Could not parse deadline value(s) for: {', '.join(errors)}.")
+
+    settings = config_module.get_settings()
+    _write_deadlines_csv(settings.moodle_deadlines_csv, rows)
+
+    submissions_dir = _submissions_dir()
+    if any(path.exists() for path in moodle_grade_import.discover_submission_archives(submissions_dir).values()):
+        try:
+            summary = _run_grade_import()
+        except Exception as exc:
+            return _render_grades(
+                request,
+                error=f"Deadlines saved, but grade import preparation failed: {exc}",
+            )
+        return _render_grades(request, notice="Deadlines saved and Moodle import files regenerated.", summary=summary)
+
+    return _render_grades(request, notice="Deadlines saved.")
 
 
 @app.post("/grades/submissions", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="upload_grade_submissions")

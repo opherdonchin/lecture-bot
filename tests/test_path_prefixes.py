@@ -38,6 +38,7 @@ def _admin_settings(tmp_path):
         lectures_dir=lectures_dir,
         moodle_submissions_dir=submissions_dir,
         moodle_participants_csv=submissions_dir / "participants.csv",
+        moodle_deadlines_csv=submissions_dir / "deadlines.csv",
         moodle_grade_import_csv=submissions_dir / "moodle_grade_import.csv",
         moodle_grade_import_report_csv=submissions_dir / "moodle_grade_import_report.csv",
         admin_username="admin",

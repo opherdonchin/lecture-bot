@@ -20,6 +20,7 @@ def _settings(tmp_path):
         lectures_dir=lectures_dir,
         moodle_submissions_dir=submissions_dir,
         moodle_participants_csv=submissions_dir / "participants.csv",
+        moodle_deadlines_csv=submissions_dir / "deadlines.csv",
         moodle_grade_import_csv=submissions_dir / "moodle_grade_import.csv",
         moodle_grade_import_report_csv=submissions_dir / "moodle_grade_import_report.csv",
         admin_username="admin",
@@ -196,6 +197,47 @@ def test_admin_grades_uploads_submission_zip_and_regenerates_outputs(tmp_path, m
     download = client.get("/grades/files/import", auth=_auth())
     assert download.status_code == 200
     assert "206391179" in download.text
+
+
+def test_admin_grades_deadline_template_and_upload(tmp_path, monkeypatch):
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    lecture_dir = settings.lectures_dir / "lecture_01"
+    lecture_dir.mkdir(parents=True)
+    (lecture_dir / "lecture_config.json").write_text(
+        json.dumps({"lecture_id": "lecture_01", "title": "Lecture 1", "active": True, "files": {}, "topics": []}) + "\n",
+        encoding="utf-8",
+    )
+    client = TestClient(admin_main.app)
+
+    template = client.get("/grades/deadlines/template", auth=_auth())
+    assert template.status_code == 200
+    assert "lecture_id,deadline" in template.text
+    assert "lecture_01," in template.text
+
+    response = client.post(
+        "/grades/deadlines",
+        auth=_auth(),
+        files={"uploaded_file": ("deadlines.csv", b"lecture_id,deadline\nlecture_01,2026-04-14T23:59:00+03:00\n", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert settings.moodle_deadlines_csv.read_text(encoding="utf-8") == (
+        "lecture_id,deadline\nlecture_01,2026-04-14T23:59:00+03:00\n"
+    )
+    assert "Deadlines CSV updated" in response.text
+
+    response = client.post(
+        "/grades/deadlines/edit",
+        auth=_auth(),
+        data={"timezone_offset": "+03:00", "deadline_lecture_01": "2026-04-21T23:59"},
+    )
+
+    assert response.status_code == 200
+    assert settings.moodle_deadlines_csv.read_text(encoding="utf-8") == (
+        "lecture_id,deadline\nlecture_01,2026-04-21T23:59:00+03:00\n"
+    )
+    assert "Deadlines saved" in response.text
 
 
 def test_restart_student_app_uses_configured_system_service_command(tmp_path, monkeypatch):

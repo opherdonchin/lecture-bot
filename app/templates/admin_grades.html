@@ -108,6 +108,50 @@
       </section>
 
       <section class="card admin-card">
+        <div class="section-header">
+          <div>
+            <h2>Deadlines</h2>
+            <p class="muted">Set generated-report deadlines. Lectures without deadlines get no on-time import column.</p>
+          </div>
+          <a href="{{ url_path('download_deadline_template') }}">Download template</a>
+        </div>
+        {% if lectures %}
+        <form method="post" action="{{ url_path('save_grade_deadlines') }}" class="deadline-form">
+          <div class="deadline-timezone">
+            <label for="timezone_offset">Timezone offset</label>
+            <input id="timezone_offset" type="text" name="timezone_offset" value="{{ deadline_timezone_offset }}" pattern="[+-][0-9]{2}:[0-9]{2}" />
+          </div>
+          <div class="file-list">
+            {% for lecture in lectures %}
+            <div class="file-row grade-upload-row">
+              <div>
+                <strong>{{ lecture.lecture_id }}</strong>
+                <p>{{ lecture.title }}</p>
+              </div>
+              <input type="datetime-local" name="deadline_{{ lecture.lecture_id }}" value="{{ lecture.deadline_input }}" />
+            </div>
+            {% endfor %}
+          </div>
+          <button type="submit">Save Deadlines</button>
+        </form>
+        {% endif %}
+        <div class="file-row standalone-row">
+          <div>
+            <strong>{{ deadlines_file.name }}</strong>
+            {% if deadlines_file.exists %}
+            <p>{{ deadlines_file.size_bytes }} bytes. Updated {{ deadlines_file.modified_at }}.</p>
+            {% else %}
+            <p class="muted">No deadlines CSV found.</p>
+            {% endif %}
+          </div>
+        </div>
+        <form method="post" action="{{ url_path('upload_grade_deadlines') }}" enctype="multipart/form-data" class="upload-form">
+          <input type="file" name="uploaded_file" accept=".csv,text/csv" required />
+          <button type="submit">Upload Bulk CSV</button>
+        </form>
+      </section>
+
+      <section class="card admin-card">
         <h2>Submission ZIPs</h2>
         {% if lectures %}
         <form method="post" action="{{ url_path('upload_grade_submissions') }}" enctype="multipart/form-data">
