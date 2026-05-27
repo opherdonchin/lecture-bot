@@ -90,7 +90,7 @@ def test_start_session_snapshots_active_private_artifact_schema(client):
     ).first()
     schema = json.loads(row.private_artifact_schema_json)
     assert schema["type"] == "object"
-    assert "turn_assessment" in schema["required"]
+    assert "turn_classification" in schema["required"]
 
 
 def test_start_session_with_no_schema_leaves_private_artifact_schema_null(client):
@@ -478,8 +478,8 @@ def test_get_grade_returns_session_timing_fields(client):
     response = client.post("/get_grade", json={"session_id": session_id})
     data = response.json()
     assert data["minutes_elapsed"] >= 7
-    assert data["minutes_remaining"] <= 13
-    assert data["session_duration_minutes"] == 20
+    assert data["minutes_remaining"] <= config_module.get_settings().session_timeout_minutes - 7
+    assert data["session_duration_minutes"] == config_module.get_settings().session_timeout_minutes
     assert data["replies_sent"] == 3
     assert data["latest_response"]
 
@@ -516,8 +516,8 @@ def test_generate_report_includes_session_timing_fields(client):
 
     data = response.json()
     assert data["report_json"]["minutes_elapsed"] >= 9
-    assert data["report_json"]["minutes_remaining"] <= 11
-    assert data["report_json"]["session_duration_minutes"] == 20
+    assert data["report_json"]["minutes_remaining"] <= config_module.get_settings().session_timeout_minutes - 9
+    assert data["report_json"]["session_duration_minutes"] == config_module.get_settings().session_timeout_minutes
     assert data["report_json"]["moves_count"] == 4
 
 
