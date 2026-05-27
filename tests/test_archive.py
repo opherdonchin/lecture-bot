@@ -219,6 +219,34 @@ def test_is_activatable_contract_mismatch(db):
     assert any("tutor_spec_contract" in r and "does not match active" in r for r in reasons)
 
 
+def test_is_activatable_generator_contract_mismatch_names_documents(db):
+    spec_contract, backend_contract = _setup_full_active_contracts(db)
+    old_spec_contract = _make_doc(db, "tutor_spec_contract", "2026-04-01")
+    schema_doc = _make_schema_doc(db)
+    spec_doc = _make_doc(db, "tutor_spec", "2026-05-01", active=True, linked={
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+    })
+    gen_doc = _make_doc(db, "tutor_generator_prompt", "2026-05-01", active=True, linked={
+        "tutor_spec_contract": old_spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+    })
+    linked = {
+        "tutor_spec": spec_doc.document_id,
+        "tutor_artifact_schema": schema_doc.document_id,
+        "tutor_generator_prompt": gen_doc.document_id,
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+    }
+    doc = _make_doc(db, "tutor_prompt", "2026-05-01", linked=linked)
+
+    ok, reasons = helpers.is_activatable(doc, db)
+
+    assert not ok
+    assert any(gen_doc.document_id in r for r in reasons)
+    assert any(old_spec_contract.document_id in r and spec_contract.document_id in r for r in reasons)
+
+
 def test_is_activatable_linked_tutor_spec_not_found(db):
     spec_contract, backend_contract = _setup_full_active_contracts(db)
     schema_doc = _make_schema_doc(db)

@@ -167,6 +167,23 @@ def test_bootstrap_sha256_match_skips_even_with_different_id(db, repo_root):
     assert len(summary["skipped"]) == 7
 
 
+def test_bootstrap_updates_links_for_existing_content_when_contract_changes(db, repo_root):
+    bootstrap_archive(db, repo_root, version_key="2026-05-01")
+    (repo_root / "docs" / "backend_tutor_contract.md").write_text(
+        "# Backend Contract\n\nUpdated runtime contract.",
+        encoding="utf-8",
+    )
+
+    summary = bootstrap_archive(db, repo_root, version_key="2026-05-02")
+
+    assert "doc_tutor_generator_prompt_2026-05-01" in summary["skipped"]
+    new_backend_id = "doc_backend_contract_2026-05-02"
+    assert new_backend_id in summary["imported"]
+    generator = db.get(models.ArchiveDocumentModel, "doc_tutor_generator_prompt_2026-05-01")
+    links = helpers.parse_linked_documents(generator.linked_documents_json)
+    assert links["backend_contract"] == new_backend_id
+
+
 def test_bootstrap_same_version_changed_content_uses_suffixed_id_and_real_links(db, repo_root):
     bootstrap_archive(db, repo_root, version_key="2026-05-01")
     (repo_root / "prompts" / "tutor_prompt.md").write_text(

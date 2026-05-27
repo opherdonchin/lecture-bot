@@ -66,16 +66,27 @@ def compatible_with_active_contracts(
     currently active document of that type. Documents with no contract links are
     always compatible (including contracts themselves).
     """
+    return not contract_compatibility_reasons(doc, db)
+
+
+def contract_compatibility_reasons(
+    doc: models.ArchiveDocumentModel,
+    db: sqlalchemy_orm.Session,
+) -> list[str]:
     links = parse_linked_documents(doc.linked_documents_json)
+    reasons: list[str] = []
     for contract_type in CONTRACT_TYPES:
         if contract_type not in links:
             continue
         active_id = get_active_document_id(db, contract_type)
         if active_id is None:
-            return False
-        if links[contract_type] != active_id:
-            return False
-    return True
+            reasons.append(f"no active {contract_type} in archive")
+        elif links[contract_type] != active_id:
+            reasons.append(
+                f"linked {contract_type} ({links[contract_type]!r}) "
+                f"does not match active ({active_id!r})"
+            )
+    return reasons
 
 
 def is_activatable(
@@ -116,16 +127,22 @@ def is_activatable(
         tutor_spec = db.get(models.ArchiveDocumentModel, tutor_spec_id)
         if tutor_spec is None:
             reasons.append(f"linked tutor_spec {tutor_spec_id!r} not found in archive")
-        elif not compatible_with_active_contracts(tutor_spec, db):
-            reasons.append("linked tutor_spec is not compatible with active contracts")
+        else:
+            for reason in contract_compatibility_reasons(tutor_spec, db):
+                reasons.append(
+                    f"linked tutor_spec {tutor_spec_id!r} is not compatible with active contracts: {reason}"
+                )
 
     gen_prompt_id = links.get("tutor_generator_prompt")
     if gen_prompt_id:
         gen_prompt = db.get(models.ArchiveDocumentModel, gen_prompt_id)
         if gen_prompt is None:
             reasons.append(f"linked tutor_generator_prompt {gen_prompt_id!r} not found in archive")
-        elif not compatible_with_active_contracts(gen_prompt, db):
-            reasons.append("linked tutor_generator_prompt is not compatible with active contracts")
+        else:
+            for reason in contract_compatibility_reasons(gen_prompt, db):
+                reasons.append(
+                    f"linked tutor_generator_prompt {gen_prompt_id!r} is not compatible with active contracts: {reason}"
+                )
 
     schema_id = links.get("tutor_artifact_schema")
     if schema_id:
