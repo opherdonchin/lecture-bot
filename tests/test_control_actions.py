@@ -90,7 +90,7 @@ def test_start_session_snapshots_active_private_artifact_schema(client):
     ).first()
     schema = json.loads(row.private_artifact_schema_json)
     assert schema["type"] == "object"
-    assert "turn_assessment" in schema["required"]
+    assert "turn_classification" in schema["required"]
 
 
 def test_start_session_with_no_schema_leaves_private_artifact_schema_null(client):
@@ -346,13 +346,21 @@ def test_get_grade_python_owns_weighting(client):
     assert response.json()["grade"] == 80.0
 
 
-def test_get_grade_zero_padding_fewer_than_5(client):
-    """Fewer than 5 topics scored: remaining slots padded with zero."""
+def test_get_grade_zero_padding_fewer_than_ranked_slots(client):
+    """Fewer topics than ranked grade slots: remaining slots are padded with zero."""
     session_id = start_session(client)
     _set_mastery_state(session_id, best_scores=[100])
     response = client.post("/get_grade", json={"session_id": session_id})
     assert response.status_code == 200
     assert response.json()["grade"] == 55.0
+
+
+def test_get_grade_four_perfect_topics_reaches_100(client):
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[100, 100, 100, 100])
+    response = client.post("/get_grade", json={"session_id": session_id})
+    assert response.status_code == 200
+    assert response.json()["grade"] == 100.0
 
 
 def test_get_grade_returns_labelled_scored_topics(client):
@@ -410,6 +418,11 @@ def test_get_grade_inserts_grade_event(client):
         models.GradeEventModel.event_type == "grade",
     ).all()
     assert len(events) >= 1
+    payload = json.loads(events[-1].payload_json)
+    assert payload["grade_policy"] == {
+        "policy_id": "fixed-four-topic-v1",
+        "ranked_topic_weights": [55, 25, 13, 7],
+    }
 
 
 def test_get_grade_does_not_call_generate_topic_scores(client):
@@ -478,8 +491,8 @@ def test_get_grade_returns_session_timing_fields(client):
     response = client.post("/get_grade", json={"session_id": session_id})
     data = response.json()
     assert data["minutes_elapsed"] >= 7
-    assert data["minutes_remaining"] <= 13
-    assert data["session_duration_minutes"] == 20
+    assert data["minutes_remaining"] <= config_module.get_settings().session_timeout_minutes - 7
+    assert data["session_duration_minutes"] == config_module.get_settings().session_timeout_minutes
     assert data["replies_sent"] == 3
     assert data["latest_response"]
 
@@ -516,8 +529,8 @@ def test_generate_report_includes_session_timing_fields(client):
 
     data = response.json()
     assert data["report_json"]["minutes_elapsed"] >= 9
-    assert data["report_json"]["minutes_remaining"] <= 11
-    assert data["report_json"]["session_duration_minutes"] == 20
+    assert data["report_json"]["minutes_remaining"] <= config_module.get_settings().session_timeout_minutes - 9
+    assert data["report_json"]["session_duration_minutes"] == config_module.get_settings().session_timeout_minutes
     assert data["report_json"]["moves_count"] == 4
 
 
@@ -577,6 +590,11 @@ def test_generate_report_inserts_report_event(client):
         models.GradeEventModel.event_type == "report",
     ).all()
     assert len(events) >= 1
+    payload = json.loads(events[-1].payload_json)
+    assert payload["grade_policy"] == {
+        "policy_id": "fixed-four-topic-v1",
+        "ranked_topic_weights": [55, 25, 13, 7],
+    }
 
 
 def test_generate_report_does_not_call_generate_topic_scores(client):

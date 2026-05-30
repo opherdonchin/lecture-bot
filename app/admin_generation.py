@@ -41,6 +41,14 @@ def _get_required_active_docs(
             docs[doc_type] = doc
     if missing:
         return None, f"No active document(s) in archive: {', '.join(missing)}"
+    generator_reasons = helpers.contract_compatibility_reasons(docs["tutor_generator_prompt"], db)
+    if generator_reasons:
+        return (
+            None,
+            "Active tutor_generator_prompt is not compatible with active contracts: "
+            + "; ".join(generator_reasons)
+            + ". Activate or upload a generator prompt validated against the current contracts.",
+        )
     return docs, None
 
 
@@ -80,12 +88,20 @@ def _spec_validation_system_prompt(generator_prompt_text: str) -> str:
         "Use the authoritative contract rules from the generator instructions below, but perform validation only.\n"
         "Do not generate a private artifact schema. Do not generate a runtime tutor prompt. Do not rewrite the spec.\n\n"
         "Return exactly these Markdown sections, in this order:\n\n"
+        "### Validation status\n"
+        "Write exactly one of these lines: PASS or BLOCKED. Use BLOCKED only when at least one blocking issue exists.\n\n"
         "### Conformance failures\n"
-        "Use bullet points for required tutor-spec contract failures. Use None. if there are no failures.\n\n"
+        "Start with either `Blocking issues: yes` or `Blocking issues: no` on its own line. "
+        "Then use bullet points for required tutor-spec contract failures. Prefix every item with `[blocking]`. "
+        "Use None. if there are no failures.\n\n"
         "### Backend incompatibilities\n"
-        "Use bullet points for conflicts with the backend runtime contract. Use None. if there are no incompatibilities.\n\n"
+        "Start with either `Blocking issues: yes` or `Blocking issues: no` on its own line. "
+        "Then use bullet points for backend runtime contract concerns. Prefix every item with `[blocking]` or `[non-blocking]`. "
+        "Only `[blocking]` backend incompatibilities prevent saving. Use None. if there are no backend incompatibilities or concerns.\n\n"
         "### Recommended omissions\n"
-        "Use bullet points for recommended-but-absent spec material only. Use None. if there are no recommended omissions.\n\n"
+        "Start with `Blocking issues: no` on its own line. "
+        "Then use bullet points for recommended-but-absent spec material only. Prefix every item with `[non-blocking]`. "
+        "Use None. if there are no recommended omissions.\n\n"
         "Generator instructions to apply as validation criteria:\n\n"
         f"{generator_prompt_text}"
     )
@@ -186,7 +202,24 @@ def _section_text(raw_output: str, heading: str) -> str:
 
 def _is_none_section(section: str) -> bool:
     cleaned = section.strip()
-    return cleaned in {"", "None", "None."}
+    if cleaned == "":
+        return True
+    return all(_is_none_marker(line.strip()) for line in cleaned.splitlines() if line.strip())
+
+
+def _is_none_marker(text: str) -> bool:
+    cleaned = text.strip().strip("*_`").strip()
+    return cleaned.lower() in {"none", "none."}
+
+
+def _is_section_status_line(text: str) -> bool:
+    cleaned = text.strip().strip("*_`").strip().lower()
+    return cleaned in {
+        "blocking issues: yes",
+        "blocking issues: no",
+        "blocking: yes",
+        "blocking: no",
+    }
 
 
 def _bullet_items(section: str) -> list[str]:
@@ -196,10 +229,66 @@ def _bullet_items(section: str) -> list[str]:
     for line in section.splitlines():
         stripped = line.strip()
         if stripped.startswith(("- ", "* ")):
-            items.append(stripped[2:].strip())
+            item = stripped[2:].strip()
+            if not _is_none_marker(item) and not _is_section_status_line(item):
+                items.append(item)
         elif stripped:
-            items.append(stripped)
+            if not _is_none_marker(stripped) and not _is_section_status_line(stripped):
+                items.append(stripped)
     return items
+
+
+def _item_label(item: str) -> str | None:
+    match = re.match(r"^\s*\[([^\]]+)\]\s*", item, re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1).strip().lower()
+
+
+def _strip_item_label(item: str) -> str:
+    return re.sub(r"^\s*\[[^\]]+\]\s*", "", item).strip()
+
+
+def _is_blocking_item(item: str) -> bool:
+    label = _item_label(item)
+    if label is None:
+        return True
+    return label == "blocking"
+
+
+def _is_non_blocking_backend_item(item: str) -> bool:
+    label = _item_label(item)
+    if label is not None:
+        return label != "blocking"
+    cleaned = re.sub(r"[*_`]+", "", item).lower()
+    return any(
+        phrase in cleaned
+        for phrase in (
+            "not a blocking incompatibility",
+            "not a blocking backend incompatibility",
+            "not blocking",
+            "non-blocking",
+            "not fatal",
+            "does not block",
+            "do not block",
+        )
+    )
+
+
+def _blocking_backend_incompatibilities(section: str) -> list[str]:
+    return [
+        _strip_item_label(item)
+        for item in _bullet_items(section)
+        if not _is_non_blocking_backend_item(item)
+    ]
+
+
+def _blocking_items(section: str) -> list[str]:
+    return [_strip_item_label(item) for item in _bullet_items(section) if _is_blocking_item(item)]
+
+
+def _display_items(section: str) -> list[str]:
+    return [_strip_item_label(item) for item in _bullet_items(section)]
 
 
 def _first_fenced_block(section: str, language: str | None = None) -> str:
@@ -215,9 +304,9 @@ def _first_fenced_block(section: str, language: str | None = None) -> str:
 
 
 def parse_generator_output(raw_output: str) -> dict:
-    conformance_failures = _bullet_items(_section_text(raw_output, "Conformance failures"))
-    backend_incompatibilities = _bullet_items(_section_text(raw_output, "Backend incompatibilities"))
-    recommended_omissions = _bullet_items(_section_text(raw_output, "Recommended omissions"))
+    conformance_failures = _blocking_items(_section_text(raw_output, "Conformance failures"))
+    backend_incompatibilities = _blocking_backend_incompatibilities(_section_text(raw_output, "Backend incompatibilities"))
+    recommended_omissions = _display_items(_section_text(raw_output, "Recommended omissions"))
 
     if conformance_failures or backend_incompatibilities:
         return {
@@ -247,9 +336,9 @@ def parse_generator_output(raw_output: str) -> dict:
 
 
 def parse_validation_output(raw_output: str) -> dict:
-    conformance_failures = _bullet_items(_section_text(raw_output, "Conformance failures"))
-    backend_incompatibilities = _bullet_items(_section_text(raw_output, "Backend incompatibilities"))
-    recommended_omissions = _bullet_items(_section_text(raw_output, "Recommended omissions"))
+    conformance_failures = _blocking_items(_section_text(raw_output, "Conformance failures"))
+    backend_incompatibilities = _blocking_backend_incompatibilities(_section_text(raw_output, "Backend incompatibilities"))
+    recommended_omissions = _display_items(_section_text(raw_output, "Recommended omissions"))
     return {
         "ok": not conformance_failures and not backend_incompatibilities,
         "conformance_failures": conformance_failures,

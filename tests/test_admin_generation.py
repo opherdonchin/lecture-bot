@@ -101,6 +101,114 @@ None.
     assert parsed["tutor_prompt"] is None
 
 
+def test_parse_validation_output_accepts_bold_none_markers():
+    raw = """### Conformance failures
+**None.**
+
+### Backend incompatibilities
+**None.**
+
+### Recommended omissions
+**None.**
+"""
+
+    parsed = admin_generation.parse_validation_output(raw)
+
+    assert parsed["ok"] is True
+    assert parsed["conformance_failures"] == []
+    assert parsed["backend_incompatibilities"] == []
+    assert parsed["recommended_omissions"] == []
+
+
+def test_parse_validation_output_does_not_block_explicitly_non_blocking_backend_notes():
+    raw = """### Conformance failures
+**None.**
+
+### Backend incompatibilities
+**Backend runtime input assumptions exceed the contract:** the specification repeatedly relies on `grade_impact_deltas` being available via `current_tutoring_state`, but the backend contract defines `grade_impact_deltas` as a backend-computed field inside `current_tutoring_state` and also lists the current injected runtime inputs without naming it separately. This is not fatal by itself; however, the specification also frames graded-mode behavior around “available runtime state provides no positive grade-impact opportunity through `grade_impact_deltas`,” making that field operationally central. Because the backend contract does provide it inside `current_tutoring_state`, this is **not** a blocking incompatibility.
+**None.**
+
+### Recommended omissions
+**None.**
+"""
+
+    parsed = admin_generation.parse_validation_output(raw)
+
+    assert parsed["ok"] is True
+    assert parsed["backend_incompatibilities"] == []
+
+
+def test_parse_validation_output_still_blocks_backend_incompatibilities():
+    raw = """### Conformance failures
+None.
+
+### Backend incompatibilities
+- The specification requires an unsupported runtime input named `foo`.
+
+### Recommended omissions
+None.
+"""
+
+    parsed = admin_generation.parse_validation_output(raw)
+
+    assert parsed["ok"] is False
+    assert parsed["backend_incompatibilities"] == [
+        "The specification requires an unsupported runtime input named `foo`."
+    ]
+
+
+def test_parse_validation_output_accepts_explicit_blocking_labels():
+    raw = """### Validation status
+BLOCKED
+
+### Conformance failures
+Blocking issues: yes
+- [blocking] Missing required specification section A3.
+
+### Backend incompatibilities
+Blocking issues: yes
+- [non-blocking] The spec mentions `grade_impact_deltas`, but the backend provides it inside `current_tutoring_state`.
+- [blocking] The specification requires a separate runtime input named `foo`.
+
+### Recommended omissions
+Blocking issues: no
+- [non-blocking] Add more examples.
+"""
+
+    parsed = admin_generation.parse_validation_output(raw)
+
+    assert parsed["ok"] is False
+    assert parsed["conformance_failures"] == ["Missing required specification section A3."]
+    assert parsed["backend_incompatibilities"] == [
+        "The specification requires a separate runtime input named `foo`."
+    ]
+    assert parsed["recommended_omissions"] == ["Add more examples."]
+
+
+def test_parse_validation_output_passes_with_only_explicit_non_blocking_items():
+    raw = """### Validation status
+PASS
+
+### Conformance failures
+Blocking issues: no
+None.
+
+### Backend incompatibilities
+Blocking issues: no
+- [non-blocking] The spec mentions `grade_impact_deltas`, but the backend provides it inside `current_tutoring_state`.
+
+### Recommended omissions
+Blocking issues: no
+- [non-blocking] Add more examples.
+"""
+
+    parsed = admin_generation.parse_validation_output(raw)
+
+    assert parsed["ok"] is True
+    assert parsed["backend_incompatibilities"] == []
+    assert parsed["recommended_omissions"] == ["Add more examples."]
+
+
 def test_spec_validation_prompt_is_validation_only_and_uses_contract_sections():
     prompt = admin_generation._spec_validation_system_prompt("generator rules")
     user_message = admin_generation._build_user_message(
@@ -111,13 +219,43 @@ def test_spec_validation_prompt_is_validation_only_and_uses_contract_sections():
 
     assert "validation only" in prompt.lower()
     assert "Do not generate a private artifact schema" in prompt
+    assert "### Validation status" in prompt
+    assert "PASS or BLOCKED" in prompt
     assert "### Conformance failures" in prompt
     assert "### Backend incompatibilities" in prompt
+    assert "[blocking]" in prompt
+    assert "[non-blocking]" in prompt
     assert "### Recommended omissions" in prompt
     assert "generator rules" in prompt
     assert "spec contract text" in user_message
     assert "backend contract text" in user_message
     assert "candidate spec text" in user_message
+
+
+def test_validate_spec_rejects_stale_active_generator_prompt(monkeypatch):
+    db = _session()
+    spec_contract = _make_doc(db, "tutor_spec_contract", "2026-05-11", active=True, content="spec contract")
+    backend_contract = _make_doc(db, "backend_contract", "2026-05-11", active=True, content="backend contract")
+    old_spec_contract = _make_doc(db, "tutor_spec_contract", "2026-04-01", content="old spec contract")
+    _make_doc(
+        db,
+        "tutor_generator_prompt",
+        "2026-05-11",
+        active=True,
+        linked={
+            "tutor_spec_contract": old_spec_contract.document_id,
+            "backend_contract": backend_contract.document_id,
+        },
+        content="generator prompt",
+    )
+    monkeypatch.setattr(admin_generation, "_call_openai", lambda _system, _user: "should not be called")
+
+    result = admin_generation.validate_spec_against_contracts(db, "candidate spec")
+
+    assert result["ok"] is False
+    assert "Active tutor_generator_prompt is not compatible" in result["error"]
+    assert old_spec_contract.document_id in result["error"]
+    assert spec_contract.document_id in result["error"]
 
 
 def test_prompt_generation_prompt_requires_schema_and_prompt_sections():

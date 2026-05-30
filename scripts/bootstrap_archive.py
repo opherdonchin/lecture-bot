@@ -235,9 +235,12 @@ def bootstrap_archive(
         if existing_doc_id:
             skipped.append(existing_doc_id)
             existing_by_id = db.get(models.ArchiveDocumentModel, existing_doc_id)
-            if not dry_run and existing_by_id is not None and not existing_by_id.active:
-                _deactivate_type(db, document_type)
-                existing_by_id.active = True
+            if not dry_run and existing_by_id is not None:
+                if existing_by_id.linked_documents_json != item["linked_documents_json"]:
+                    existing_by_id.linked_documents_json = item["linked_documents_json"]
+                if not existing_by_id.active:
+                    _deactivate_type(db, document_type)
+                    existing_by_id.active = True
             continue
 
         if dry_run:

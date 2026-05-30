@@ -244,6 +244,8 @@ SAMPLED_TOPIC_COUNT=5
 OPENING_TOPIC_CHOICE_COUNT=3
 ```
 
+`SAMPLED_TOPIC_COUNT` defines the candidate topic space for a session. It can remain `5` even when the ranked grading policy uses four scoring slots.
+
 Important consequence of this simple layout:
 
 - the `.env` lives in the repo root for simplicity

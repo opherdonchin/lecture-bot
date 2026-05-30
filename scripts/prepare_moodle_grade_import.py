@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         metavar="LECTURE_ID=ISO_DATETIME",
-        help="Reject reports generated after this deadline. Repeat as needed.",
+        help="Add an on-time column by comparing reports generated for this lecture with this deadline. Repeat as needed.",
     )
     parser.add_argument(
         "--upload-output",

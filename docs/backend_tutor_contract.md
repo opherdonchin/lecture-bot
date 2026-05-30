@@ -39,7 +39,7 @@ For each ordinary tutoring turn, the backend injects runtime data into the tutor
 - `rubric_text`
 - `lecture_context`
 
-`current_tutoring_state` includes a backend-computed `grade_impact_deltas` field: a JSON object mapping each sampled topic ID to the integer ΔGrade the tutor would gain if the next probe on that topic succeeds. The backend computes this using the same grading formula and calibration tiers used by `compute_weighted_grade`. The tutor reads these values for move selection and must not recompute or modify them.
+`current_tutoring_state` includes a backend-computed `grade_impact_deltas` field: a JSON object mapping each sampled topic ID to the integer ΔGrade the tutor would gain if the next probe on that topic succeeds. The backend computes this using the same fixed ranked-topic grading formula and calibration tiers used by `compute_weighted_grade`. The tutor reads these values for move selection and must not recompute or modify them. The tutor must not infer a required number of completed sampled topics from these deltas or expose ranked-slot arithmetic to the student.
 
 The backend provides recent conversation history as prior chat messages and the latest student message as the current user message. These are not duplicated inside the injected runtime JSON.
 

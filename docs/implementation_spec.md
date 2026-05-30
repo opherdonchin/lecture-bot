@@ -159,8 +159,10 @@ The backend computes grades by:
 
 1. maintaining best demonstrated mastery per topic,
 2. ranking topic mastery scores from highest to lowest,
-3. applying fixed weights `[55, 25, 13, 4, 3]`,
+3. applying fixed ranked-topic weights `[55, 25, 13, 7]` to the top four ranked scoring slots,
 4. flooring the weighted sum.
+
+The sampled topic count can be larger than the number of scoring slots. Sampling defines the candidate opportunity space for the session; it is not a requirement that every sampled topic be completed for full credit.
 
 `grade_events` store accepted grade/report snapshots. The authoritative payload helper checks accepted `grade` and `report` events so both endpoints see the same best demonstrated grade.
 

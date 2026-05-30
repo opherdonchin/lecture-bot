@@ -35,34 +35,31 @@ def test_send_message_invalid_session(client):
 
 
 VALID_PRIVATE_ARTIFACT = {
-    "turn_assessment": {
-        "latest_message_type": "content_answer",
+    "turn_classification": {
+        "student_move_type": "content_answer",
+        "has_evidence_of_understanding": True,
         "engaged_topic_id": "T1",
-        "evidence_strength": "moderate",
+    },
+    "evidence_assessment": {
+        "evidence_strength": "solid",
         "independence_level": "independent",
-        "demonstrated_dimensions": ["distinction"],
-        "remaining_uncertainties": ["Needs a concrete example."],
-        "substantive_target_already_addressed": False,
+        "evidence_basis": ["distinction"],
+        "brief_rationale": "student gave a real distinction",
     },
-    "next_move": {
-        "mode": "basic_probe",
-        "question_substance": "substantive_question",
-        "materiality_rationale": "A focused example would test independent use.",
-        "breadth_depth_choice": "depth",
-        "closing_pressure_considered": False,
-        "student_signals_considered": ["none"],
-        "coverage_transparency_considered": False,
+    "next_move_arbitration": {
+        "selected_next_topic_id": "T1",
+        "selected_move_type": "ordinary_probe",
+        "strongest_alternative_direction": {
+            "topic_id": "T1",
+            "source": "pedagogical_fallback",
+        },
+        "followed_backend_guidance": "not_applicable",
+        "override_reason": None,
     },
-    "self_verification": {
-        "content_evidence_gate_passed": True,
-        "repetition_check_passed": True,
-        "materiality_check_passed": True,
-        "breadth_vs_depth_check_passed": True,
-        "time_feasibility_check_passed": True,
-        "high_mastery_evidence_check_passed": True,
-        "student_signal_honoring_check_passed": True,
-        "prose_consistency_check_passed": True,
-        "plateau_coverage_check_passed": True,
+    "self_check": {
+        "assistant_message_matches_move": True,
+        "avoids_completion_claim": True,
+        "keeps_private_content_out_of_student_text": True,
     },
 }
 
@@ -163,7 +160,7 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
     artifact_row = db.query(models.PrivateArtifactLogModel).filter(
         models.PrivateArtifactLogModel.session_id == session_id
     ).one()
-    assert j.loads(artifact_row.artifact_json)["next_move"]["mode"] == "basic_probe"
+    assert j.loads(artifact_row.artifact_json)["next_move_arbitration"]["selected_move_type"] == "ordinary_probe"
     assert artifact_row.validation_error is None
 
 
@@ -217,8 +214,8 @@ def test_session_timeout_returns_final_report_and_closes_session(client):
     session_row = db.query(models.SessionModel).filter(
         models.SessionModel.session_id == session_id
     ).first()
-    # Set started_at to 25 minutes ago to simulate timeout
-    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=25)
+    timeout_minutes = 30
+    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=timeout_minutes + 5)
     db.commit()
 
     _set_mastery_state(session_id, best_scores=[100, 100])
@@ -233,7 +230,7 @@ def test_session_timeout_returns_final_report_and_closes_session(client):
     assert "session has ended" in data["message"].lower()
     assert data["final_report"]["report_json"]["final_grade"] == 80.0
     assert data["final_report"]["report_json"]["minutes_remaining"] == 0
-    assert data["final_report"]["report_json"]["session_duration_minutes"] == 20
+    assert data["final_report"]["report_json"]["session_duration_minutes"] == timeout_minutes
 
 
 def test_session_timeout_ends_session(client):
@@ -242,7 +239,8 @@ def test_session_timeout_ends_session(client):
     session_row = db.query(models.SessionModel).filter(
         models.SessionModel.session_id == session_id
     ).first()
-    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=25)
+    timeout_minutes = 30
+    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=timeout_minutes + 5)
     db.commit()
     _set_mastery_state(session_id, best_scores=[80])
 
@@ -262,7 +260,8 @@ def test_session_timeout_warning_added_in_last_five_minutes(client):
     session_row = db.query(models.SessionModel).filter(
         models.SessionModel.session_id == session_id
     ).first()
-    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=16)
+    timeout_minutes = 30
+    session_row.started_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=timeout_minutes - 4)
     db.commit()
 
     with _mock_openai_dialogue(reply_text="Let's finish one last idea."):
@@ -391,7 +390,7 @@ def test_send_message_writes_dialogue_turn_audit_row(client):
     assert audit_row.turn_index == 1
     assert audit_row.prompt_template_name == "tutor_prompt.md"
     assert audit_row.dialogue_model
-    assert "You are the runtime tutor for an adaptive conceptual lecture review session" in audit_row.rendered_system_prompt
+    assert "You are a focused, lecture-grounded, Socratic-but-pragmatic tutor" in audit_row.rendered_system_prompt
     assert audit_row.user_message == "What counts as data"
 
 
@@ -443,7 +442,7 @@ def test_send_message_injects_private_artifact_schema_json(client):
     assert response.status_code == 200
     system_prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][0]["content"]
     assert '"private_artifact_schema_json":' in system_prompt
-    assert "turn_assessment" in system_prompt
+    assert "turn_classification" in system_prompt
 
 
 def test_send_message_missing_private_artifact_retries_and_logs_repaired_artifact(client):

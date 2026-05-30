@@ -428,11 +428,13 @@ def _record_grade_event(
     grade: float,
     payload: dict,
 ) -> None:
+    event_payload = dict(payload)
+    event_payload.setdefault("grade_policy", bot_engine.grade_policy_snapshot())
     db.add(models.GradeEventModel(
         session_id=session_id,
         event_type=event_type,
         grade=float(grade),
-        payload_json=j_.dumps(payload, ensure_ascii=False),
+        payload_json=j_.dumps(event_payload, ensure_ascii=False),
     ))    
 
 

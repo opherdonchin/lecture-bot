@@ -199,6 +199,23 @@ body {
   margin-bottom: 14px;
 }
 
+.deadline-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.deadline-timezone {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.deadline-timezone input {
+  max-width: 110px;
+}
+
 .columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));

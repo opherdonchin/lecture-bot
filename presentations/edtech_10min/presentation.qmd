@@ -190,8 +190,7 @@ The tutor is designed to ask for criteria, distinctions, explanations, transfer,
 <div><strong>55%</strong><span>Best</span></div>
 <div><strong>25%</strong><span>Second</span></div>
 <div><strong>13%</strong><span>Third</span></div>
-<div><strong>4%</strong><span>Fourth</span></div>
-<div><strong>3%</strong><span>Fifth</span></div>
+<div><strong>7%</strong><span>Fourth</span></div>
 </div>
 </div>
 </div>
@@ -201,7 +200,7 @@ The tutor is designed to ask for criteria, distinctions, explanations, transfer,
 ::: {.notes}
 Timing: 1:05.
 
-This is implemented behavior, not just a design intention. `app.bot_engine.compute_weighted_grade()` uses `[55, 25, 13, 4, 3]`, and `/get_grade` and `/generate_report` do not ask the model to compute the final numeric grade.
+This is implemented behavior, not just a design intention. `app.bot_engine.compute_weighted_grade()` uses `[55, 25, 13, 7]`, and `/get_grade` and `/generate_report` do not ask the model to compute the final numeric grade.
 
 The tutor can propose per-topic `mastery` and `evidence_notes` in a sparse state update. The backend filters to canonical topic IDs, clamps mastery to 0-100, maintains `best_mastery`, ranks topics by best demonstrated score, floors the weighted sum, and records grade/report snapshots in `grade_events`.
 

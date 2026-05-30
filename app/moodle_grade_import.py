@@ -67,7 +67,7 @@ class SubmissionRecord:
 class GradeImportResult:
     upload_rows: list[dict[str, str]]
     report_rows: list[dict[str, str]]
-    grade_columns: list[str]
+    upload_columns: list[str]
     summary: dict[str, int]
 
 
@@ -112,6 +112,55 @@ def load_participants_csv(path: pathlib.Path = DEFAULT_PARTICIPANTS_CSV) -> dict
             if participant.idnumber:
                 participants[participant.idnumber] = participant
     return participants
+
+
+def load_deadlines_csv(path: pathlib.Path) -> dict[str, dt.datetime]:
+    if not path.exists():
+        return {}
+
+    deadlines: dict[str, dt.datetime] = {}
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            return {}
+        normalized_fieldnames = {field.strip().lower() for field in reader.fieldnames}
+        required_fields = {"lecture_id", "deadline"}
+        missing_fields = required_fields - normalized_fieldnames
+        if missing_fields:
+            missing = ", ".join(sorted(missing_fields))
+            raise ValueError(f"Deadline CSV is missing required column(s): {missing}.")
+
+        for row_number, row in enumerate(reader, start=2):
+            normalized_row = {
+                key.strip().lower(): value
+                for key, value in row.items()
+                if key is not None
+            }
+            lecture_id = (normalized_row.get("lecture_id") or "").strip()
+            raw_deadline = (normalized_row.get("deadline") or "").strip()
+            if not lecture_id and not raw_deadline:
+                continue
+            if not lecture_id or not raw_deadline:
+                raise ValueError(f"Deadline CSV row {row_number} must include both lecture_id and deadline.")
+            deadline = _parse_datetime(raw_deadline)
+            if deadline is None:
+                raise ValueError(f"Deadline CSV row {row_number} has invalid ISO datetime {raw_deadline!r}.")
+            deadlines[lecture_id] = deadline
+    return deadlines
+
+
+def build_deadline_template_rows(
+    lecture_ids: Sequence[str],
+    existing_deadlines: Mapping[str, dt.datetime] | None = None,
+) -> list[dict[str, str]]:
+    existing_deadlines = existing_deadlines or {}
+    return [
+        {
+            "lecture_id": lecture_id,
+            "deadline": _format_datetime(existing_deadlines[lecture_id]) if lecture_id in existing_deadlines else "",
+        }
+        for lecture_id in sorted(lecture_ids)
+    ]
 
 
 def parse_report_text(text: str) -> dict[str, str] | None:
@@ -252,12 +301,17 @@ def prepare_moodle_grade_import(
             row["detail"] = "Another accepted submission for the same student and lecture was newer."
 
     lecture_ids = sorted(submission_archives)
-    grade_columns = [grade_item_names.get(lecture_id, lecture_id) for lecture_id in lecture_ids]
+    upload_columns = _build_upload_columns(
+        lecture_ids=lecture_ids,
+        grade_item_names=grade_item_names,
+        deadline_lecture_ids=set(deadlines),
+    )
     upload_rows = _build_upload_rows(
         chosen_records=chosen_records,
         participants=participants,
         lecture_ids=lecture_ids,
         grade_item_names=grade_item_names,
+        deadlines=deadlines,
     )
     summary = {
         "participants": len(participants),
@@ -272,7 +326,7 @@ def prepare_moodle_grade_import(
     return GradeImportResult(
         upload_rows=upload_rows,
         report_rows=report_rows,
-        grade_columns=grade_columns,
+        upload_columns=upload_columns,
         summary=summary,
     )
 
@@ -286,7 +340,7 @@ def write_grade_import_outputs(
     upload_csv_path.parent.mkdir(parents=True, exist_ok=True)
     report_csv_path.parent.mkdir(parents=True, exist_ok=True)
 
-    upload_fields = ["ID number", *result.grade_columns]
+    upload_fields = ["ID number", *result.upload_columns]
     with upload_csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=upload_fields)
         writer.writeheader()
@@ -304,6 +358,10 @@ def write_grade_import_outputs(
         "session_id",
         "submitted_grade",
         "db_grade",
+        "deadline",
+        "report_generated_at",
+        "on_time",
+        "timing_status",
         "source_zip",
         "source_file",
     ]
@@ -333,6 +391,10 @@ def _difficulty_row(
         "session_id": "",
         "submitted_grade": "",
         "db_grade": "",
+        "deadline": "",
+        "report_generated_at": "",
+        "on_time": "",
+        "timing_status": "",
         "source_zip": source_zip,
         "source_file": source_file,
     }
@@ -365,6 +427,10 @@ def _validate_record(
         "session_id": record.session_id,
         "submitted_grade": "" if record.submitted_grade is None else _format_grade(record.submitted_grade),
         "db_grade": "",
+        "deadline": _format_datetime(deadline) if deadline is not None else "",
+        "report_generated_at": record.report_fields.get("report generated", ""),
+        "on_time": "",
+        "timing_status": "deadline_missing" if deadline is None else "",
         "source_zip": record.source_zip,
         "source_file": record.source_file,
     }
@@ -425,12 +491,13 @@ def _validate_record(
     if start_check:
         return _reject(base, "started_at_mismatch", start_check)
 
-    generated_check = _check_report_generated_at(
+    timing_fields, generated_check = _check_report_generated_at(
         record,
         conn=conn,
         deadline=deadline,
         tolerance_seconds=report_event_tolerance_seconds,
     )
+    base.update(timing_fields)
     if generated_check:
         return _reject(base, generated_check[0], generated_check[1])
 
@@ -460,17 +527,25 @@ def _check_report_generated_at(
     conn: sqlite3.Connection,
     deadline: dt.datetime | None,
     tolerance_seconds: float,
-) -> tuple[str, str] | None:
+) -> tuple[dict[str, str], tuple[str, str] | None]:
     generated_raw = record.report_fields.get("report generated", "")
+    timing_fields = {
+        "deadline": _format_datetime(deadline) if deadline is not None else "",
+        "report_generated_at": generated_raw,
+        "on_time": "",
+        "timing_status": "deadline_missing" if deadline is None else "",
+    }
     generated_at = _parse_datetime(generated_raw)
     if generated_at is None:
-        return ("report_generated_unparseable", f"Could not parse Report generated timestamp {generated_raw!r}.")
-
-    if deadline is not None and _to_utc_naive(generated_at) > _to_utc_naive(deadline):
-        return (
-            "deadline_missed",
-            f"Report generated at {generated_raw!r} is after deadline {deadline.isoformat()}.",
+        return timing_fields, (
+            "report_generated_unparseable",
+            f"Could not parse Report generated timestamp {generated_raw!r}.",
         )
+
+    if deadline is not None:
+        on_time = _to_utc_naive(generated_at) <= _to_utc_naive(deadline)
+        timing_fields["on_time"] = "1" if on_time else "0"
+        timing_fields["timing_status"] = "on_time" if on_time else "late"
 
     event_rows = conn.execute(
         """
@@ -486,18 +561,33 @@ def _check_report_generated_at(
     ]
     event_times = [event_time for event_time in event_times if event_time is not None]
     if not event_times:
-        return ("report_event_missing", "No report grade event was found for this session.")
+        return timing_fields, ("report_event_missing", "No report grade event was found for this session.")
 
     best_delta = min(
         abs((_to_utc_naive(event_time) - _to_utc_naive(generated_at)).total_seconds())
         for event_time in event_times
     )
     if best_delta > tolerance_seconds:
-        return (
+        return timing_fields, (
             "report_event_time_mismatch",
             f"Nearest database report event is {best_delta:.1f} seconds from Report generated.",
         )
-    return None
+    return timing_fields, None
+
+
+def _build_upload_columns(
+    *,
+    lecture_ids: Sequence[str],
+    grade_item_names: Mapping[str, str],
+    deadline_lecture_ids: set[str],
+) -> list[str]:
+    columns: list[str] = []
+    for lecture_id in lecture_ids:
+        grade_column = grade_item_names.get(lecture_id, lecture_id)
+        columns.append(grade_column)
+        if lecture_id in deadline_lecture_ids:
+            columns.append(_on_time_column_name(grade_column))
+    return columns
 
 
 def _choose_records_for_upload(
@@ -528,6 +618,7 @@ def _build_upload_rows(
     participants: Mapping[str, Participant],
     lecture_ids: Sequence[str],
     grade_item_names: Mapping[str, str],
+    deadlines: Mapping[str, dt.datetime],
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     student_ids = sorted({student_id for student_id, _lecture_id in chosen_records})
@@ -539,8 +630,21 @@ def _build_upload_rows(
             column = grade_item_names.get(lecture_id, lecture_id)
             record = chosen_records.get((student_id, lecture_id))
             row[column] = "" if record is None or record.submitted_grade is None else _format_grade(record.submitted_grade)
+            if lecture_id in deadlines:
+                row[_on_time_column_name(column)] = "" if record is None else _on_time_value(record, deadlines[lecture_id])
         rows.append(row)
     return rows
+
+
+def _on_time_column_name(grade_column: str) -> str:
+    return f"{grade_column}_on_time"
+
+
+def _on_time_value(record: SubmissionRecord, deadline: dt.datetime) -> str:
+    generated_at = _parse_datetime(record.report_fields.get("report generated", ""))
+    if generated_at is None:
+        return ""
+    return "1" if _to_utc_naive(generated_at) <= _to_utc_naive(deadline) else "0"
 
 
 def _parse_datetime(value: str) -> dt.datetime | None:
@@ -565,3 +669,7 @@ def _format_grade(grade: float) -> str:
     if grade.is_integer():
         return str(int(grade))
     return f"{grade:.2f}".rstrip("0").rstrip(".")
+
+
+def _format_datetime(value: dt.datetime) -> str:
+    return value.isoformat()

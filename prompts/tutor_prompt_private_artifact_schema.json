@@ -1,12 +1,34 @@
 {
   "type": "object",
   "additionalProperties": false,
+  "required": [
+    "turn_classification",
+    "evidence_assessment",
+    "next_move_arbitration",
+    "self_check"
+  ],
   "properties": {
-    "turn_focus": {
+    "turn_classification": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "student_move_type",
+        "has_evidence_of_understanding"
+      ],
       "properties": {
-        "latest_message_has_content_evidence": {
+        "student_move_type": {
+          "type": "string",
+          "enum": [
+            "content_answer",
+            "content_question",
+            "procedural_request",
+            "hidden_internals_or_answer_request",
+            "off_task",
+            "desire_to_stop",
+            "other"
+          ]
+        },
+        "has_evidence_of_understanding": {
           "type": "boolean"
         },
         "engaged_topic_id": {
@@ -14,68 +36,19 @@
             "string",
             "null"
           ],
-          "description": "Canonical backend-provided topic ID when identifiable; null when no clear topic is engaged."
-        },
-        "engaged_target_summary": {
-          "type": "string",
-          "description": "Short plain-text description of the conceptual target engaged on this turn."
-        },
-        "student_signal_summary": {
-          "type": "string",
-          "description": "Brief plain-text summary of relevant student signals such as confidence, frustration, fatigue, move-on requests, disagreement, or recurring low-value requests."
+          "description": "Canonical topic ID if the student message provides evidence about a backend-supplied topic; otherwise null."
         }
-      },
-      "required": [
-        "latest_message_has_content_evidence",
-        "engaged_topic_id",
-        "engaged_target_summary",
-        "student_signal_summary"
-      ]
+      }
     },
     "evidence_assessment": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "evidence_strength",
+        "independence_level",
+        "evidence_basis"
+      ],
       "properties": {
-        "evidence_independence": {
-          "type": "string",
-          "enum": [
-            "independent",
-            "assisted",
-            "copied_or_echoed",
-            "generic_or_weakly_adapted",
-            "procedural_or_non_answer",
-            "mixed_or_unclear"
-          ]
-        },
-        "local_adaptation": {
-          "type": "string",
-          "enum": [
-            "strong",
-            "moderate",
-            "weak",
-            "none",
-            "unclear"
-          ]
-        },
-        "cognitive_operations": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "defining",
-              "distinguishing",
-              "explaining",
-              "applying",
-              "interpreting",
-              "critiquing",
-              "repairing",
-              "compressing",
-              "synthesizing",
-              "procedural"
-            ]
-          },
-          "uniqueItems": true
-        },
         "evidence_strength": {
           "type": "string",
           "enum": [
@@ -87,181 +60,136 @@
             "robust"
           ]
         },
-        "strength_basis": {
+        "independence_level": {
+          "type": "string",
+          "enum": [
+            "independent",
+            "assisted",
+            "mixed",
+            "unclear",
+            "not_applicable"
+          ]
+        },
+        "evidence_basis": {
           "type": "array",
           "items": {
             "type": "string",
             "enum": [
               "criterion",
               "distinction",
-              "explanation_of_why",
+              "explanation",
               "application",
               "interpretation",
-              "critique",
-              "independent_correction",
-              "compression",
+              "repair",
+              "ownership",
               "synthesis",
-              "transfer",
-              "local_adaptation",
-              "transformed_verification",
+              "generic_or_copied",
+              "post_hint_repetition",
+              "nonresponsive_correctness",
               "other"
             ]
           },
           "uniqueItems": true
         },
-        "limitations_or_downgraders": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "vague_relevance",
-              "isolated_terminology",
-              "generic_prose",
-              "agreement_only",
-              "copied_tutor_wording",
-              "repeated_question",
-              "post_scaffold_repetition",
-              "correct_but_nonresponsive",
-              "fluent_without_local_adaptation",
-              "substantial_scaffolding",
-              "unclear_topic_alignment",
-              "other"
-            ]
-          },
-          "uniqueItems": true
+        "brief_rationale": {
+          "type": "string"
         }
-      },
-      "required": [
-        "evidence_independence",
-        "local_adaptation",
-        "cognitive_operations",
-        "evidence_strength",
-        "strength_basis",
-        "limitations_or_downgraders"
-      ]
+      }
     },
-    "self_verification": {
+    "next_move_arbitration": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {
-        "target_not_already_substantively_addressed": {
-          "type": "boolean"
-        },
-        "next_probe_materially_improves_characterization": {
-          "type": "boolean"
-        },
-        "chosen_move_beats_main_alternative": {
-          "type": "boolean"
-        },
-        "timing_allows_answer_feedback_cycle": {
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "description": "Null when timing metadata is absent or unreliable enough that no timing judgment should be made."
-        },
-        "student_signals_honored": {
-          "type": "boolean"
-        },
-        "output_consistent_with_intended_move": {
-          "type": "boolean"
-        },
-        "coverage_transparency_considered": {
-          "type": "boolean"
-        },
-        "assistant_message_free_of_grading_internals": {
-          "type": "boolean",
-          "description": "C5.10: assistant_message does not mention topic weighting, predicted grade impact, or grading policy, even implicitly."
-        },
-        "all_deltas_zero_if_consolidating": {
-          "type": "boolean",
-          "description": "C5.11: true if the move is not consolidation, OR if the move is consolidation and all grade_impact_deltas in the injected state are 0. False means consolidating with a positive delta remaining — a violation."
-        }
-      },
       "required": [
-        "target_not_already_substantively_addressed",
-        "next_probe_materially_improves_characterization",
-        "chosen_move_beats_main_alternative",
-        "timing_allows_answer_feedback_cycle",
-        "student_signals_honored",
-        "output_consistent_with_intended_move",
-        "coverage_transparency_considered",
-        "assistant_message_free_of_grading_internals",
-        "all_deltas_zero_if_consolidating"
-      ]
-    },
-    "decision": {
-      "type": "object",
-      "additionalProperties": false,
+        "selected_next_topic_id",
+        "selected_move_type",
+        "strongest_alternative_direction",
+        "followed_backend_guidance",
+        "override_reason"
+      ],
       "properties": {
-        "selected_mode": {
-          "type": "string",
-          "enum": [
-            "basic_probe",
-            "evidence_feedback",
-            "scaffolded_support",
-            "adaptive_challenge",
-            "breadth_transition",
-            "depth_probe_on_strong_topic",
-            "coverage_transparency",
-            "procedural_support",
-            "interaction_repair",
-            "redirection",
-            "grade_or_report_handoff",
-            "consolidation",
-            "terminal_closure_under_recurring_request_pressure",
-            "plateau_cause_disclosure"
-          ]
-        },
-        "decision_rationale": {
-          "type": "string",
-          "description": "Brief plain-text rationale for why this move best serves evidence-based characterization and learning on this turn."
-        },
-        "main_alternative_considered": {
-          "type": "string",
-          "enum": [
-            "stay_current_topic",
-            "switch_to_breadth",
-            "go_deeper_current_topic",
-            "scaffold",
-            "repair",
-            "consolidate",
-            "close",
-            "no_substantive_alternative"
-          ]
-        },
-        "ask_substantive_question": {
-          "type": "boolean"
-        },
-        "grade_impact_topic_selected": {
+        "selected_next_topic_id": {
           "type": [
             "string",
             "null"
           ],
-          "description": "Canonical topic ID with highest ΔGrade per C1.2 calculation; null when all deltas are 0 or negligible, or when sampled topics have no mastery state available."
+          "description": "Canonical topic ID selected for the next substantive content move, if any."
         },
-        "grade_impact_top_delta": {
+        "selected_move_type": {
+          "type": "string",
+          "enum": [
+            "ordinary_probe",
+            "evidence_feedback",
+            "scaffolded_support",
+            "adaptive_challenge",
+            "topic_transition",
+            "procedural_support",
+            "redirection",
+            "lifecycle_closing",
+            "other"
+          ]
+        },
+        "strongest_alternative_direction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "topic_id",
+            "source"
+          ],
+          "properties": {
+            "topic_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Canonical topic ID for the strongest alternative considered, if identifiable from backend guidance."
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "explicit_topic_or_move_guidance",
+                "grade_impact_deltas_or_backend_strategic_guidance",
+                "pedagogical_fallback",
+                "not_applicable"
+              ]
+            }
+          }
+        },
+        "followed_backend_guidance": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "not_applicable"
+          ]
+        },
+        "override_reason": {
           "type": [
-            "number",
+            "string",
             "null"
           ],
-          "description": "ΔGrade for the selected topic; null when the calculation yields no actionable signal."
+          "description": "Short bounded reason when deviating from the strongest available backend-indicated direction; otherwise null."
         }
-      },
+      }
+    },
+    "self_check": {
+      "type": "object",
+      "additionalProperties": false,
       "required": [
-        "selected_mode",
-        "decision_rationale",
-        "main_alternative_considered",
-        "ask_substantive_question",
-        "grade_impact_topic_selected",
-        "grade_impact_top_delta"
-      ]
+        "assistant_message_matches_move",
+        "avoids_completion_claim",
+        "keeps_private_content_out_of_student_text"
+      ],
+      "properties": {
+        "assistant_message_matches_move": {
+          "type": "boolean"
+        },
+        "avoids_completion_claim": {
+          "type": "boolean"
+        },
+        "keeps_private_content_out_of_student_text": {
+          "type": "boolean"
+        }
+      }
     }
-  },
-  "required": [
-    "turn_focus",
-    "evidence_assessment",
-    "self_verification",
-    "decision"
-  ]
+  }
 }
