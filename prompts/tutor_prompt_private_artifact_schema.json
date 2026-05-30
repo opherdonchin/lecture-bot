@@ -1,101 +1,54 @@
 {
   "type": "object",
   "additionalProperties": false,
+  "required": [
+    "turn_classification",
+    "evidence_assessment",
+    "next_move_arbitration",
+    "self_check"
+  ],
   "properties": {
     "turn_classification": {
-      "type": "string",
-      "enum": [
-        "content_answer",
-        "content_question",
-        "procedural_request",
-        "hidden_internals_request",
-        "off_task",
-        "student_wants_to_stop"
-      ]
-    },
-    "response_mode": {
-      "type": "string",
-      "enum": [
-        "ordinary_probe",
-        "evidence_feedback",
-        "scaffolded_support",
-        "adaptive_challenge",
-        "topic_transition",
-        "procedural_support",
-        "redirection",
-        "lifecycle_closing"
-      ]
-    },
-    "student_signal_summary": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "student_move_type",
+        "has_evidence_of_understanding"
+      ],
       "properties": {
-        "lecture_relevant_conceptual_work": {
+        "student_move_type": {
           "type": "string",
           "enum": [
-            "yes",
-            "partial",
-            "no"
+            "content_answer",
+            "content_question",
+            "procedural_request",
+            "hidden_internals_or_answer_request",
+            "off_task",
+            "desire_to_stop",
+            "other"
           ]
         },
-        "locally_responsive": {
-          "type": "string",
-          "enum": [
-            "yes",
-            "partial",
-            "no",
-            "not_applicable"
-          ]
-        },
-        "apparent_answer_source": {
-          "type": "string",
-          "enum": [
-            "independent",
-            "scaffolded",
-            "generic",
-            "copied",
-            "transformed",
-            "mixed",
-            "unclear",
-            "not_applicable"
-          ]
-        },
-        "recent_tutor_support_limits_strength": {
+        "has_evidence_of_understanding": {
           "type": "boolean"
         },
-        "student_affect_or_intent": {
-          "type": "string",
-          "enum": [
-            "frustrated",
-            "fatigued",
-            "confident",
-            "uncertain",
-            "wants_to_stop",
-            "none_clear"
-          ]
+        "engaged_topic_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Canonical topic ID if the student message provides evidence about a backend-supplied topic; otherwise null."
         }
-      },
-      "required": [
-        "lecture_relevant_conceptual_work",
-        "locally_responsive",
-        "apparent_answer_source",
-        "recent_tutor_support_limits_strength",
-        "student_affect_or_intent"
-      ]
+      }
     },
     "evidence_assessment": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "evidence_strength",
+        "independence_level",
+        "evidence_basis"
+      ],
       "properties": {
-        "has_evidence_of_understanding": {
-          "type": "boolean"
-        },
-        "engaged_topic_ids": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "evidence_strength": {
           "type": "string",
           "enum": [
@@ -110,13 +63,14 @@
         "independence_level": {
           "type": "string",
           "enum": [
-            "not_applicable",
+            "independent",
             "assisted",
             "mixed",
-            "independent"
+            "unclear",
+            "not_applicable"
           ]
         },
-        "criteria_observed": {
+        "evidence_basis": {
           "type": "array",
           "items": {
             "type": "string",
@@ -128,50 +82,79 @@
               "interpretation",
               "repair",
               "ownership",
-              "synthesis"
-            ]
-          },
-          "uniqueItems": true
-        },
-        "weaker_evidence_flags": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "vague_relevance",
-              "isolated_terminology",
-              "agreement_only",
-              "generic_prose",
-              "copied_wording",
+              "synthesis",
+              "generic_or_copied",
               "post_hint_repetition",
-              "correct_but_nonresponsive",
-              "fluent_without_local_adaptation"
+              "nonresponsive_correctness",
+              "other"
             ]
           },
           "uniqueItems": true
         },
-        "needs_transformed_verification": {
-          "type": "boolean"
+        "brief_rationale": {
+          "type": "string"
         }
-      },
-      "required": [
-        "has_evidence_of_understanding",
-        "engaged_topic_ids",
-        "evidence_strength",
-        "independence_level",
-        "criteria_observed",
-        "weaker_evidence_flags",
-        "needs_transformed_verification"
-      ]
+      }
     },
-    "guidance_following": {
+    "next_move_arbitration": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "selected_next_topic_id",
+        "selected_move_type",
+        "strongest_alternative_direction",
+        "followed_backend_guidance",
+        "override_reason"
+      ],
       "properties": {
-        "explicit_topic_or_move_guidance_present": {
-          "type": "boolean"
+        "selected_next_topic_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Canonical topic ID selected for the next substantive content move, if any."
         },
-        "followed_guidance": {
+        "selected_move_type": {
+          "type": "string",
+          "enum": [
+            "ordinary_probe",
+            "evidence_feedback",
+            "scaffolded_support",
+            "adaptive_challenge",
+            "topic_transition",
+            "procedural_support",
+            "redirection",
+            "lifecycle_closing",
+            "other"
+          ]
+        },
+        "strongest_alternative_direction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "topic_id",
+            "source"
+          ],
+          "properties": {
+            "topic_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Canonical topic ID for the strongest alternative considered, if identifiable from backend guidance."
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "explicit_topic_or_move_guidance",
+                "grade_impact_deltas_or_backend_strategic_guidance",
+                "pedagogical_fallback",
+                "not_applicable"
+              ]
+            }
+          }
+        },
+        "followed_backend_guidance": {
           "type": "string",
           "enum": [
             "yes",
@@ -179,110 +162,34 @@
             "not_applicable"
           ]
         },
-        "selected_next_topic_id": {
+        "override_reason": {
           "type": [
             "string",
             "null"
-          ]
-        },
-        "selection_basis": {
-          "type": "string",
-          "enum": [
-            "explicit_guidance",
-            "important_weak_or_untested_area",
-            "adaptive_challenge_after_strong_evidence",
-            "repair_after_error",
-            "student_question_or_need",
-            "lifecycle_closing",
-            "redirection",
-            "procedural_pivot"
-          ]
+          ],
+          "description": "Short bounded reason when deviating from the strongest available backend-indicated direction; otherwise null."
         }
-      },
-      "required": [
-        "explicit_topic_or_move_guidance_present",
-        "followed_guidance",
-        "selected_next_topic_id",
-        "selection_basis"
-      ]
-    },
-    "message_plan": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "feedback_intent": {
-          "type": "string"
-        },
-        "next_question_intent": {
-          "type": "string"
-        },
-        "question_type": {
-          "type": "string",
-          "enum": [
-            "criterion",
-            "distinction",
-            "explanation",
-            "application",
-            "interpretation",
-            "repair",
-            "compression",
-            "critique",
-            "boundary_case",
-            "synthesis",
-            "none"
-          ]
-        },
-        "closing_language_used": {
-          "type": "boolean"
-        },
-        "new_substantive_question_included": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "feedback_intent",
-        "next_question_intent",
-        "question_type",
-        "closing_language_used",
-        "new_substantive_question_included"
-      ]
+      }
     },
     "self_check": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "assistant_message_matches_move",
+        "avoids_completion_claim",
+        "keeps_private_content_out_of_student_text"
+      ],
       "properties": {
-        "assistant_message_matches_mode": {
+        "assistant_message_matches_move": {
           "type": "boolean"
         },
-        "avoids_hidden_internals_or_answer_keys": {
+        "avoids_completion_claim": {
           "type": "boolean"
         },
-        "avoids_unsupported_completion_claims": {
-          "type": "boolean"
-        },
-        "avoids_fabricated_timing_or_lifecycle_claims": {
-          "type": "boolean"
-        },
-        "keeps_private_content_out_of_student_message": {
+        "keeps_private_content_out_of_student_text": {
           "type": "boolean"
         }
-      },
-      "required": [
-        "assistant_message_matches_mode",
-        "avoids_hidden_internals_or_answer_keys",
-        "avoids_unsupported_completion_claims",
-        "avoids_fabricated_timing_or_lifecycle_claims",
-        "keeps_private_content_out_of_student_message"
-      ]
+      }
     }
-  },
-  "required": [
-    "turn_classification",
-    "response_mode",
-    "student_signal_summary",
-    "evidence_assessment",
-    "guidance_following",
-    "message_plan",
-    "self_check"
-  ]
+  }
 }

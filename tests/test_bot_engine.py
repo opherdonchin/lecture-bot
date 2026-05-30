@@ -242,7 +242,7 @@ def test_generate_report_fallback_uses_scannable_bullets(monkeypatch):
     assert "Next steps:" in result["report_text"]
     assert "Coverage:" in result["report_text"]
     assert "- Reality–Data–Model distinction, Purpose of statistics." in result["report_text"]
-    assert "- Not yet covered: Definition and structure of data." in result["report_text"]
+    assert "- Not yet evidenced: Definition and structure of data." in result["report_text"]
 
 
 def test_rewrite_opening_topic_selection_rewrites_prefix_match():
@@ -298,12 +298,29 @@ def test_rewrite_opening_topic_selection_leaves_nonopening_turn_alone():
 # ---------------------------------------------------------------------------
 
 def test_compute_weighted_grade_all_100():
-    scores = [{"topic_id": f"T{i}", "score": 100} for i in range(1, 6)]
+    scores = [{"topic_id": f"T{i}", "score": 100} for i in range(1, 5)]
     assert bot_engine.compute_weighted_grade(scores) == 100
 
 
+def test_compute_weighted_grade_four_perfect_topics_reach_100():
+    assert bot_engine.compute_weighted_grade([
+        {"topic_id": "T1", "score": 100},
+        {"topic_id": "T2", "score": 100},
+        {"topic_id": "T3", "score": 100},
+        {"topic_id": "T4", "score": 100},
+    ]) == 100
+
+
+def test_compute_weighted_grade_cumulative_perfect_topic_geometry():
+    perfect_scores = [{"topic_id": f"T{i}", "score": 100} for i in range(1, 5)]
+    assert bot_engine.compute_weighted_grade(perfect_scores[:1]) == 55
+    assert bot_engine.compute_weighted_grade(perfect_scores[:2]) == 80
+    assert bot_engine.compute_weighted_grade(perfect_scores[:3]) == 93
+    assert bot_engine.compute_weighted_grade(perfect_scores[:4]) == 100
+
+
 def test_compute_weighted_grade_all_zero():
-    scores = [{"topic_id": f"T{i}", "score": 0} for i in range(1, 6)]
+    scores = [{"topic_id": f"T{i}", "score": 0} for i in range(1, 5)]
     assert bot_engine.compute_weighted_grade(scores) == 0
 
 
@@ -326,25 +343,49 @@ def test_compute_weighted_grade_weighted_order():
 
 
 def test_compute_weighted_grade_floor():
-    # score=1 for 5 topics: floor(55*1/100 + 25*1/100 + 13*1/100 + 4*1/100 + 3*1/100)
-    # = floor(0.55 + 0.25 + 0.13 + 0.04 + 0.03) = floor(1.0) = 1
-    scores = [{"topic_id": f"T{i}", "score": 1} for i in range(1, 6)]
+    # score=1 for 4 ranked slots: floor(55*1/100 + 25*1/100 + 13*1/100 + 7*1/100)
+    # = floor(0.55 + 0.25 + 0.13 + 0.07) = floor(1.0) = 1
+    scores = [{"topic_id": f"T{i}", "score": 1} for i in range(1, 5)]
     assert bot_engine.compute_weighted_grade(scores) == 1
 
 
-def test_compute_weighted_grade_takes_top_5():
-    # 6 topics, lowest should be ignored
+def test_compute_weighted_grade_takes_top_4():
+    # Five scored inputs, lowest should be ignored
     scores = [
         {"topic_id": "T1", "score": 80},
         {"topic_id": "T2", "score": 60},
         {"topic_id": "T3", "score": 40},
         {"topic_id": "T4", "score": 20},
         {"topic_id": "T5", "score": 10},
-        {"topic_id": "T6", "score": 1},  # should be ignored
     ]
-    # top 5: 80, 60, 40, 20, 10 → floor(55*80/100 + 25*60/100 + 13*40/100 + 4*20/100 + 3*10/100)
-    # = floor(44 + 15 + 5.2 + 0.8 + 0.3) = floor(65.3) = 65
+    # top 4: 80, 60, 40, 20 → floor(55*80/100 + 25*60/100 + 13*40/100 + 7*20/100)
+    # = floor(44 + 15 + 5.2 + 1.4) = floor(65.6) = 65
     assert bot_engine.compute_weighted_grade(scores) == 65
+
+
+def test_compute_weighted_grade_ignores_fifth_rank_even_when_touched():
+    scores = [
+        {"topic_id": "T1", "score": 100},
+        {"topic_id": "T2", "score": 100},
+        {"topic_id": "T3", "score": 100},
+        {"topic_id": "T4", "score": 0},
+        {"topic_id": "T5", "score": 100},
+    ]
+    assert bot_engine.compute_weighted_grade(scores) == 100
+
+
+def test_grade_impact_deltas_use_four_ranked_slots():
+    sampled_topic_ids = ["T1", "T2", "T3", "T4", "T5"]
+    best_mastery = {"T1": 100, "T2": 100, "T3": 100, "T4": 100, "T5": 0}
+
+    assert bot_engine.compute_grade_impact_deltas(sampled_topic_ids, best_mastery)["T5"] == 0
+
+
+def test_grade_policy_snapshot_names_fixed_four_topic_policy():
+    assert bot_engine.grade_policy_snapshot() == {
+        "policy_id": "fixed-four-topic-v1",
+        "ranked_topic_weights": [55, 25, 13, 7],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -546,6 +587,17 @@ def test_sanitize_assistant_message_replaces_bare_topic_ids():
     assert "T4" not in result
     assert "Posterior draws" in result
     assert "Posterior plots" in result
+
+
+def test_sanitize_assistant_message_repairs_bell_math_artifacts():
+    message = (
+        "One change score per subject: \x07change_i = y_{i,last} - y_{i,first}\x07. "
+        "Use $ \x07lpha = 0.06 $ as the threshold."
+    )
+    result = bot_engine.sanitize_assistant_message(message, topic_defs=[], timing_context=None)
+    assert "\x07" not in result
+    assert r"\(change_i = y_{i,last} - y_{i,first}\)" in result
+    assert r"\alpha = 0.06" in result
 
 
 def test_language_policy_accepts_short_english_topic_pick():
@@ -926,10 +978,10 @@ def test_tutor_prompt_describes_backend_owned_lifecycle_boundaries():
 
 def test_tutor_prompt_keeps_private_artifacts_out_of_state_and_message():
     loaded = prompt_loader.load_prompt_template("tutor_prompt.md")
-    assert "If private_artifact_schema_json is present for the session:" in loaded
-    assert "private_artifact must not appear inside assistant_message" in loaded
-    assert "private_artifact must conform exactly to the injected private_artifact_schema_json" in loaded
-    assert "updated_state is a sparse delta" in loaded
+    assert "If private_artifact_schema_json is present, return exactly" in loaded
+    assert "Do not place private_artifact content inside assistant_message" in loaded
+    assert "must conform to that injected schema" in loaded
+    assert "updated_state is conservative and sparse" in loaded
 
 
 def test_tutor_generator_prompt_validates_contracts_and_sparse_delta():

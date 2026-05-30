@@ -23,6 +23,13 @@ function renderMath(el) {
   }
 }
 
+function normalizeMalformedMathText(content) {
+  return String(content ?? "")
+    .replace(/\u0007lpha/g, "\\alpha")
+    .replace(/\u0007([^\u0007\r\n]{1,200})\u0007/g, "\\($1\\)")
+    .replace(/\u0007/g, "");
+}
+
 const studentIdInput = document.getElementById("studentId");
 const lectureIdInput = document.getElementById("lectureId");
 
@@ -106,7 +113,7 @@ function appendMessage(role, content) {
   who.textContent = role === "user" ? "You" : "Assistant";
 
   const text = document.createElement("span");
-  text.textContent = ": " + content;
+  text.textContent = ": " + normalizeMalformedMathText(content);
 
   row.appendChild(who);
   row.appendChild(text);
@@ -370,7 +377,7 @@ function appendGradeMessage(data) {
   if (data.explanation) {
     const exp = document.createElement("p");
     exp.className = "grade-explanation";
-    exp.textContent = data.explanation;
+    exp.textContent = normalizeMalformedMathText(data.explanation);
     row.appendChild(exp);
   }
 
@@ -382,9 +389,9 @@ function appendGradeMessage(data) {
   );
   appendInfoList(
     row,
-    "Still to cover",
+    "Not yet evidenced",
     data.missing_topics || [],
-    "All sampled topics have some coverage."
+    "No unevidenced lecture topics listed."
   );
 
   transcript.appendChild(row);
@@ -406,14 +413,14 @@ function appendInfoList(container, label, items, emptyText) {
     list.className = "info-list";
     for (const item of items) {
       const li = document.createElement("li");
-      li.textContent = item;
+      li.textContent = normalizeMalformedMathText(item);
       list.appendChild(li);
     }
     block.appendChild(list);
   } else {
     const empty = document.createElement("p");
     empty.className = "info-empty";
-    empty.textContent = emptyText;
+    empty.textContent = normalizeMalformedMathText(emptyText);
     block.appendChild(empty);
   }
 
@@ -421,7 +428,7 @@ function appendInfoList(container, label, items, emptyText) {
 }
 
 function appendStructuredReportText(container, reportText) {
-  const lines = reportText.split(/\r?\n/);
+  const lines = normalizeMalformedMathText(reportText).split(/\r?\n/);
   let currentList = null;
 
   function closeList() {

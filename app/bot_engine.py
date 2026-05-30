@@ -14,13 +14,16 @@ import app.prompt_loader as prompt_loader
 
 _log = logging_.getLogger(__name__)
 
-_GRADE_WEIGHTS = [55, 25, 13, 4, 3]
+_GRADE_POLICY_ID = "fixed-four-topic-v1"
+_GRADE_WEIGHTS = [55, 25, 13, 7]
 _RUNTIME_CONTEXT_KEYS = ("bot_notes", "slides", "handout", "minutes")
 _TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)(?:\.|\s+[—-])\s+(.+)$', re_.MULTILINE)
 _IMPORTANCE_RE = re_.compile(r'\*\*Importance:\*\*\s+(\w+)')
 _BARE_TOPIC_ID_RE = re_.compile(r"\b(T\d+)\b")
 _TIME_CLAIM_RE = re_.compile(r"\b\d+\s+minutes?\s+left\b", re_.IGNORECASE)
 _NON_ALNUM_RE = re_.compile(r"[^a-z0-9]+")
+_BELL_CHAR = "\x07"
+_BELL_WRAPPED_INLINE_MATH_RE = re_.compile(r"\x07([^\x07\r\n]{1,200})\x07")
 
 _FALLBACK_DIALOGUE_MESSAGE = (
     "The app cannot connect to the backend AI. "
@@ -495,6 +498,13 @@ def build_dialogue_context(lecture_package: dict, max_chars: int) -> str:
     return "\n\n".join(parts)
 
 
+def _normalize_malformed_math_text(text: str) -> str:
+    """Repair common malformed LaTeX artifacts before showing text to students."""
+    normalized = text.replace(f"{_BELL_CHAR}lpha", r"\alpha")
+    normalized = _BELL_WRAPPED_INLINE_MATH_RE.sub(r"\\(\1\\)", normalized)
+    return normalized.replace(_BELL_CHAR, "")
+
+
 def sanitize_assistant_message(
     assistant_message: str,
     *,
@@ -508,7 +518,8 @@ def sanitize_assistant_message(
         topic_id = match.group(1)
         return topic_id_to_label.get(topic_id, "this topic")
 
-    sanitized = _BARE_TOPIC_ID_RE.sub(replace_topic_id, assistant_message).strip()
+    sanitized = _normalize_malformed_math_text(assistant_message)
+    sanitized = _BARE_TOPIC_ID_RE.sub(replace_topic_id, sanitized).strip()
     if not timing_context or not timing_context.get("timing_reliable", False):
         sanitized = _TIME_CLAIM_RE.sub("time left", sanitized)
     return language_policy.ensure_english_text(
@@ -528,11 +539,23 @@ _SCORE_IF_SUCCESS = [
 ]
 
 
+def grade_policy_snapshot() -> dict:
+    """Return the fixed grade policy metadata stored with future grade events."""
+    return {
+        "policy_id": _GRADE_POLICY_ID,
+        "ranked_topic_weights": list(_GRADE_WEIGHTS),
+    }
+
+
+def _weighted_grade_from_scores(scores: list[int]) -> int:
+    ranked = sorted(scores, reverse=True)[:len(_GRADE_WEIGHTS)]
+    padded = (ranked + [0] * len(_GRADE_WEIGHTS))[:len(_GRADE_WEIGHTS)]
+    return math_.floor(sum(w * s / 100 for w, s in zip(_GRADE_WEIGHTS, padded)))
+
+
 def _grade_from_scores(scores: dict[str, int]) -> int:
     """Compute weighted grade from a {topic_id: score} dict."""
-    top5 = sorted(scores.values(), reverse=True)[:5]
-    padded = (top5 + [0, 0, 0, 0, 0])[:5]
-    return math_.floor(sum(w * s / 100 for w, s in zip(_GRADE_WEIGHTS, padded)))
+    return _weighted_grade_from_scores(list(scores.values()))
 
 
 def compute_grade_impact_deltas(
@@ -564,12 +587,10 @@ def compute_grade_impact_deltas(
 def compute_weighted_grade(topic_scores: list[dict]) -> int:
     """Compute the weighted student-facing grade from per-topic scores.
 
-    Sorts scores descending, pads to 5 slots with zeros, applies weights
-    [55, 25, 13, 4, 3], returns floor of the weighted sum.
+    Sorts scores descending, pads to the ranked grade slots with zeros,
+    applies weights [55, 25, 13, 7], and returns floor of the weighted sum.
     """
-    scores = sorted((ts["score"] for ts in topic_scores), reverse=True)
-    padded = (scores + [0, 0, 0, 0, 0])[:5]
-    return math_.floor(sum(w * s / 100 for w, s in zip(_GRADE_WEIGHTS, padded)))
+    return _weighted_grade_from_scores([ts["score"] for ts in topic_scores])
 
 
 def sanitize_state_update(
@@ -873,7 +894,7 @@ def generate_report(
         f"Topic scores: {topic_summary}\n"
         f"Assessment: {explanation}\n"
         f"Stronger areas so far: {scored_summary}\n"
-        f"Topics not covered: {missing_summary}\n\n"
+        f"Topics not yet evidenced: {missing_summary}\n\n"
         "Rubric for reference:\n"
         f"{rubric_text}\n\n"
         "Return `report_text` as plain text with exactly these section headings:\n"
@@ -892,7 +913,7 @@ def generate_report(
     )
 
     fallback_next_step = (
-        f"Strengthen coverage in {missing_topics[0]}."
+        f"Strengthen evidence in {missing_topics[0]}."
         if missing_topics else
         "Keep pushing for one more clean distinction, explanation, or application."
     )
@@ -905,7 +926,7 @@ def generate_report(
         f"- {fallback_next_step}\n"
         "Coverage:\n"
         f"- Covered: {scored_summary}.\n"
-        f"- Not yet covered: {missing_summary}."
+        f"- Not yet evidenced: {missing_summary}."
     )
 
     try:

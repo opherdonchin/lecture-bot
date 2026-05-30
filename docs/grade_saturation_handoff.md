@@ -1,14 +1,16 @@
 # Grade Saturation Fix — Handoff Document
 
+Historical note: this handoff predates the four-slot perfect-score grading change. The live backend policy is now the fixed four-slot ranked-topic geometry in `app.bot_engine`, and live policy documentation is in `docs/grading_policy.md`.
+
 ## Context
 
 This project is a lecture tutoring bot at `/srv/lecture-bot`. The tutor uses OpenAI to run
 conversations with students, then records mastery evidence that the backend uses to compute
-a grade. The grading formula is in `app/bot_engine.py` lines 16 and 467–475:
+a grade. The current grading formula is in `app/bot_engine.py`:
 
 ```python
-_GRADE_WEIGHTS = [55, 25, 13, 4, 3]
-# Sort all topic mastery scores descending, take top 5 (pad with 0s), apply weights, floor
+_GRADE_WEIGHTS = [55, 25, 13, 7]
+# Sort topic mastery scores descending, take the ranked scoring slots, pad with 0s, apply weights, floor
 ```
 
 ## The problem
@@ -42,10 +44,10 @@ probing each sampled topic. This is an entirely internal calculation — it does
 `assistant_message` and must not influence tone or word choice in ways that signal topic
 priority to the student.
 
-**Grading formula (internal use only):** Sort all sampled topic mastery scores descending.
-Take the top five, padding unscored topics with 0. Apply weights [55, 25, 13, 4, 3] to
-positions 1–5. Floor the result. Topics ranked 6th or below contribute nothing to the grade
-regardless of their scores.
+**Grading formula (internal use only):** Sort sampled topic mastery scores descending.
+Take the ranked scoring slots, padding unscored topics with 0. Apply the fixed backend
+weights to those ranked positions. Floor the result. Topics below the ranked scoring slots
+do not directly contribute to the grade at that moment regardless of their scores.
 
 **Calculation — for every sampled topic:**
 

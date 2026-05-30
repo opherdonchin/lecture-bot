@@ -346,13 +346,21 @@ def test_get_grade_python_owns_weighting(client):
     assert response.json()["grade"] == 80.0
 
 
-def test_get_grade_zero_padding_fewer_than_5(client):
-    """Fewer than 5 topics scored: remaining slots padded with zero."""
+def test_get_grade_zero_padding_fewer_than_ranked_slots(client):
+    """Fewer topics than ranked grade slots: remaining slots are padded with zero."""
     session_id = start_session(client)
     _set_mastery_state(session_id, best_scores=[100])
     response = client.post("/get_grade", json={"session_id": session_id})
     assert response.status_code == 200
     assert response.json()["grade"] == 55.0
+
+
+def test_get_grade_four_perfect_topics_reaches_100(client):
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[100, 100, 100, 100])
+    response = client.post("/get_grade", json={"session_id": session_id})
+    assert response.status_code == 200
+    assert response.json()["grade"] == 100.0
 
 
 def test_get_grade_returns_labelled_scored_topics(client):
@@ -410,6 +418,11 @@ def test_get_grade_inserts_grade_event(client):
         models.GradeEventModel.event_type == "grade",
     ).all()
     assert len(events) >= 1
+    payload = json.loads(events[-1].payload_json)
+    assert payload["grade_policy"] == {
+        "policy_id": "fixed-four-topic-v1",
+        "ranked_topic_weights": [55, 25, 13, 7],
+    }
 
 
 def test_get_grade_does_not_call_generate_topic_scores(client):
@@ -577,6 +590,11 @@ def test_generate_report_inserts_report_event(client):
         models.GradeEventModel.event_type == "report",
     ).all()
     assert len(events) >= 1
+    payload = json.loads(events[-1].payload_json)
+    assert payload["grade_policy"] == {
+        "policy_id": "fixed-four-topic-v1",
+        "ranked_topic_weights": [55, 25, 13, 7],
+    }
 
 
 def test_generate_report_does_not_call_generate_topic_scores(client):

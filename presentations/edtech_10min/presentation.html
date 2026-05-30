@@ -448,10 +448,7 @@ Breadth Weighting Across Ranked Topics
 <strong>13%</strong><span>Third</span>
 </div>
 <div>
-<strong>4%</strong><span>Fourth</span>
-</div>
-<div>
-<strong>3%</strong><span>Fifth</span>
+<strong>7%</strong><span>Fourth</span>
 </div>
 </div>
 </div>
@@ -460,7 +457,7 @@ Breadth Weighting Across Ranked Topics
 </div>
 <aside class="notes">
 <p>Timing: 1:05.</p>
-<p>This is implemented behavior, not just a design intention. <code>app.bot_engine.compute_weighted_grade()</code> uses <code>[55, 25, 13, 4, 3]</code>, and <code>/get_grade</code> and <code>/generate_report</code> do not ask the model to compute the final numeric grade.</p>
+<p>This is implemented behavior, not just a design intention. <code>app.bot_engine.compute_weighted_grade()</code> uses <code>[55, 25, 13, 7]</code>, and <code>/get_grade</code> and <code>/generate_report</code> do not ask the model to compute the final numeric grade.</p>
 <p>The tutor can propose per-topic <code>mastery</code> and <code>evidence_notes</code> in a sparse state update. The backend filters to canonical topic IDs, clamps mastery to 0-100, maintains <code>best_mastery</code>, ranks topics by best demonstrated score, floors the weighted sum, and records grade/report snapshots in <code>grade_events</code>.</p>
 <p>The report text is OpenAI-backed, but the report prose receives an authoritative backend grade snapshot. If report generation fails, the backend uses local fallback prose and preserves the grade.</p>
 <p>The student-facing UI adds a <strong>Download report</strong> button and tells the student to upload that file to Moodle. <code>scripts/grade_moodle.py</code> parses the Moodle ZIP, checks the report header and fields, validates <code>session_id</code>, <code>student_id</code>, lecture, grade, and deadline against the session database, and emits the Moodle grade CSV. <code>grade_events</code> preserves backend grade/report snapshots for inspection and export.</p>

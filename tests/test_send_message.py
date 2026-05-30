@@ -35,43 +35,31 @@ def test_send_message_invalid_session(client):
 
 
 VALID_PRIVATE_ARTIFACT = {
-    "turn_classification": "content_answer",
-    "response_mode": "ordinary_probe",
-    "student_signal_summary": {
-        "lecture_relevant_conceptual_work": "yes",
-        "locally_responsive": "yes",
-        "apparent_answer_source": "independent",
-        "recent_tutor_support_limits_strength": False,
-        "student_affect_or_intent": "none_clear",
+    "turn_classification": {
+        "student_move_type": "content_answer",
+        "has_evidence_of_understanding": True,
+        "engaged_topic_id": "T1",
     },
     "evidence_assessment": {
-        "has_evidence_of_understanding": True,
-        "engaged_topic_ids": ["T1"],
         "evidence_strength": "solid",
         "independence_level": "independent",
-        "criteria_observed": ["distinction"],
-        "weaker_evidence_flags": [],
-        "needs_transformed_verification": False,
+        "evidence_basis": ["distinction"],
+        "brief_rationale": "student gave a real distinction",
     },
-    "guidance_following": {
-        "explicit_topic_or_move_guidance_present": False,
-        "followed_guidance": "not_applicable",
+    "next_move_arbitration": {
         "selected_next_topic_id": "T1",
-        "selection_basis": "important_weak_or_untested_area",
-    },
-    "message_plan": {
-        "feedback_intent": "Name the useful distinction.",
-        "next_question_intent": "Ask for a focused example.",
-        "question_type": "application",
-        "closing_language_used": False,
-        "new_substantive_question_included": True,
+        "selected_move_type": "ordinary_probe",
+        "strongest_alternative_direction": {
+            "topic_id": "T1",
+            "source": "pedagogical_fallback",
+        },
+        "followed_backend_guidance": "not_applicable",
+        "override_reason": None,
     },
     "self_check": {
-        "assistant_message_matches_mode": True,
-        "avoids_hidden_internals_or_answer_keys": True,
-        "avoids_unsupported_completion_claims": True,
-        "avoids_fabricated_timing_or_lifecycle_claims": True,
-        "keeps_private_content_out_of_student_message": True,
+        "assistant_message_matches_move": True,
+        "avoids_completion_claim": True,
+        "keeps_private_content_out_of_student_text": True,
     },
 }
 
@@ -172,7 +160,7 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
     artifact_row = db.query(models.PrivateArtifactLogModel).filter(
         models.PrivateArtifactLogModel.session_id == session_id
     ).one()
-    assert j.loads(artifact_row.artifact_json)["response_mode"] == "ordinary_probe"
+    assert j.loads(artifact_row.artifact_json)["next_move_arbitration"]["selected_move_type"] == "ordinary_probe"
     assert artifact_row.validation_error is None
 
 
