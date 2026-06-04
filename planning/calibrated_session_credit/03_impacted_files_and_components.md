@@ -20,10 +20,13 @@ Each entry lists path, current responsibility, proposed change, and rationale.
     `_calibrated_grade_from_scores` and route `compute_weighted_grade` to it —
     see `05_backend_implementation_plan.md` for naming).
   - Extend `grade_policy_snapshot()` to include `ranked_full_credit_targets`.
-  - Rework `compute_grade_impact_deltas` to compute **calibrated** deltas and
-    return `0` for target-satisfied slots; add a structured strategic-guidance
-    builder that also reports `credit_completion`, `credit_contribution`,
-    `status` per ranked topic and a top-level `session_credit_status`.
+  - Rework `compute_grade_impact_deltas` to compute **calibrated** deltas as the
+    true trial difference with full re-ranking (not forced to `0` for satisfied
+    slots — a satisfied slot can show a positive delta when re-ranking raises the
+    grade); add a structured strategic-guidance builder that also reports
+    `credit_completion`, `credit_contribution`,
+    `raw_mastery_gap_to_rank_target`, and `status` per ranked topic plus a
+    top-level `session_credit_status`.
 - **Why**: this is where the grade and the strategic guidance are computed.
 
 ### `app/main.py` — **code**
@@ -83,8 +86,9 @@ Each entry lists path, current responsibility, proposed change, and rationale.
 ### `docs/backend_tutor_contract.md` — **contract** (normative change)
 - §2 describes `grade_impact_deltas` as "ΔGrade if the next probe succeeds … same
   fixed ranked-topic grading formula." Must change to describe **calibrated**
-  ΔGrade, the target-saturation rule (delta 0 once a slot is satisfied), and the
-  new `session_credit_status` / `grade_relevant_next_move` semantics.
+  ΔGrade as the true calibrated trial difference (with full re-ranking; not
+  forced to 0 for satisfied slots), and the new `session_credit_status` /
+  `grade_relevant_next_move` semantics.
 - §4 backend-owned field list stays (`best_mastery`, `current_grade`,
   `grade_impact_deltas`); add the new strategic-guidance fields as backend-owned.
 

@@ -84,7 +84,9 @@ def compute_ranked_credit_state(best_mastery: dict[str, int]) -> dict:
             "target_for_full_credit": target,
             "credit_completion": round(completion, 4),
             "credit_contribution": round(weight * completion, 4),
-            "grade_delta_to_target": max(0, target - raw),
+            # NOTE: this is a RAW MASTERY gap, not a grade delta. Named accordingly
+            # to avoid confusion with grade_impact_deltas (the calibrated grade delta).
+            "raw_mastery_gap_to_rank_target": max(0, target - raw),
             "status": "full_credit_satisfied" if raw >= target else "below_target",
         })
     grade = math_.floor(sum(r["credit_contribution"] for r in rows))
@@ -113,8 +115,11 @@ def compute_grade_impact_deltas(
 ) -> dict[str, int]:
     """Calibrated ΔGrade per sampled topic if its next probe succeeds.
 
-    A topic whose ranked slot is already at/above target yields 0, even if raw
-    mastery could still rise. Topics at raw 100 also yield 0.
+    The delta is the ACTUAL calibrated trial difference with full re-ranking:
+    calibrated grade after the projected successful probe, minus the current
+    calibrated grade. Do NOT manually force target-satisfied topics to 0 — if
+    re-ranking would raise the grade, the delta is reported truthfully.
+    Topics at raw 100 yield 0 (no projection available).
     """
     base_scores = {tid: best_mastery.get(tid, 0) for tid in sampled_topic_ids}
     current = _grade_from_scores(base_scores)
@@ -131,28 +136,40 @@ def compute_grade_impact_deltas(
     return deltas
 ```
 
-Because `_grade_from_scores` is now calibrated, a topic already past its ranked
-target contributes nothing extra to the calibrated grade when projected upward,
-so its delta is naturally 0 — no special-casing of targets is required beyond the
-`max(0, …)` guard. (Add a test asserting this.)
+`_grade_from_scores` re-sorts on every call, so the trial difference already
+accounts for re-ranking. A target-satisfied topic is usually 0, but **not
+always**: e.g. current raw `[89, 82, 74, 62]` (grade 99) — projecting the rank-2
+topic 82 → 92 makes it rank-1 and yields grade 100, a true delta of +1. Do not
+zero this out. The `max(0, …)` guard is harmless (projection can only raise raw
+mastery, and the calibrated grade is monotone under a pointwise score increase,
+so the difference is never negative). The anti-nitpicking behavior lives in the
+tutor prompt, not in zeroing real backend deltas. (Add a re-ranking test — see
+`07` §C.)
 
 New helper for the next-move signal:
 
 ```python
+def _topic_sort_key(topic_id: str) -> int:
+    """Numeric order for canonical topic IDs (T1, T2, …, T10). Robust to T10+."""
+    if topic_id.startswith("T") and topic_id[1:].isdigit():
+        return int(topic_id[1:])
+    return 10**9  # non-canonical IDs sort last
+
 def grade_relevant_next_move(
     sampled_topic_ids: list[str],
     best_mastery: dict[str, int],
 ) -> str | None:
     deltas = compute_grade_impact_deltas(sampled_topic_ids, best_mastery)
-    best = max(deltas.items(), key=lambda kv: (kv[1], -ord(kv[0][1:2] or "0")), default=None)
-    if best is None or best[1] <= 0:
+    positive = [(tid, d) for tid, d in deltas.items() if d > 0]
+    if not positive:
         return None
-    return best[0]
+    # highest delta first; tie-break on numeric topic order (T2 before T10).
+    return sorted(positive, key=lambda x: (-x[1], _topic_sort_key(x[0])))[0][0]
 ```
 
-> Keep the tie-break simple and deterministic (highest delta, then lowest topic
-> id). Implementation can refine the tie-break; the contract only requires
-> `null` when no positive delta exists.
+> Deterministic: highest positive delta, then lowest numeric topic id. Returns
+> `null` when no positive delta exists. Do **not** parse topic IDs with string
+> slicing (`kv[0][1:2]`) — it mis-orders `T10` and beyond.
 
 ## 6. Prompt injection (`build_dialogue_system_prompt`)
 

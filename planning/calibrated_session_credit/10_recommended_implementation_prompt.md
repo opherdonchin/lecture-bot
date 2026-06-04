@@ -13,6 +13,30 @@ Create a branch from `main`:
 
 `feat/calibrated-session-credit-grading`
 
+# Amendments (reviewer-approved — apply these exactly)
+
+1. **Do not force a topic's `grade_impact_delta` to zero** merely because it
+   already satisfies its current ranked target. Compute deltas as the actual
+   calibrated trial difference: current calibrated grade vs. calibrated grade
+   after the projected successful probe, **with full re-ranking**. It is correct
+   for a currently target-satisfied topic to have a small positive delta when
+   improving it would change the ranking and raise the session grade (e.g. raw
+   `[89,82,74,62]` grade 99 → project the rank-2 topic 82→92 → `[92,89,74,62]`
+   grade 100 → delta +1). The anti-nitpicking behavior lives in the tutor prompt,
+   not in the backend.
+2. **Rename** the `ranked_credit_state` field `grade_delta_to_target` to
+   `raw_mastery_gap_to_rank_target` — it is a raw mastery gap, not a grade delta.
+   Keep `grade_impact_deltas` as the only "grade delta" name.
+3. **Deterministic topic-id tie-breaking** must use a real parser
+   (`int(topic_id[1:])` for `T<n>`), not string slicing that mis-orders `T10`.
+
+# Policy is a global constant (not per-lecture, yet)
+
+Use `weights=[55,25,13,7]`, `targets=[90,82,74,62]` as **global** module
+constants. Parameterize the helpers internally (accept `targets` as an argument
+with the global as default) so per-lecture calibration is an easy later drop-in,
+but **do not** add lecture-level config in this implementation.
+
 # Goal
 
 Change the student-facing grade from raw weighted mastery to **calibrated
@@ -38,10 +62,12 @@ rule and report/grade consistency.
    - `grade_policy_snapshot()` adds `ranked_full_credit_targets`.
    - Add `compute_ranked_credit_state(best_mastery)` returning per-ranked-slot
      `{topic_id, raw_mastery, rank, target_for_full_credit, credit_completion,
-     credit_contribution, grade_delta_to_target, status}`, plus `grade_policy`
-     and `session_credit_status` (`in_progress` | `full_credit_reached`).
-   - Rework `compute_grade_impact_deltas` to use the calibrated grade (deltas are
-     0 for target-satisfied or raw-100 slots; never negative).
+     credit_contribution, raw_mastery_gap_to_rank_target, status}`, plus
+     `grade_policy` and `session_credit_status` (`in_progress` |
+     `full_credit_reached`).
+   - Rework `compute_grade_impact_deltas` to use the calibrated grade as the
+     actual trial difference with full re-ranking (never negative; **not** forced
+     to 0 for satisfied slots — see Amendment 1).
    - Add `grade_relevant_next_move(sampled_topic_ids, best_mastery) -> str|None`.
    - In `build_dialogue_system_prompt`, inject into `current_tutoring_state`
      (dynamic suffix, cache-safe): calibrated `grade_impact_deltas`,

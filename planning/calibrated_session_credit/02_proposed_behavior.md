@@ -46,9 +46,12 @@ grade                 = floor( Σ credit_contribution_i ) # 0..100
   - The session grade is the floor of the sum, capped at 100 (the weights sum to
     exactly 100, so the cap is automatic).
 - **Raw mastery above target**: allowed and preserved. Raw mastery may exceed its
-  ranked target and may reach 100. Once a slot's raw mastery ≥ its target,
-  **additional raw mastery does not increase the student-facing grade.** Extra
-  mastery still matters for diagnosis, evidence notes, and reports.
+  ranked target and may reach 100. Holding the ranking fixed, once a slot's raw
+  mastery ≥ its target, additional raw mastery on that slot does not increase the
+  student-facing grade. (Edge case: raising a topic can still lift the grade if it
+  *changes the ranking* such that a previously below-target slot becomes
+  satisfied — see the re-ranking counterexample under "Calibrated grade deltas".)
+  Extra mastery always matters for diagnosis, evidence notes, and reports.
 - **Full-credit session state**: when `grade == 100` (every occupied ranked slot
   has reached its target), the session is at **full calibrated credit**.
   Backend strategic guidance reports `session_credit_status =
@@ -75,16 +78,26 @@ The tutor's move-selection signal changes from "raw weighted grade gain" to
 - For each sampled topic, project its raw mastery to the value it would reach if
   the next probe succeeds (reuse the existing concave projection ladder), then
   compute the **calibrated** grade with that topic improved, holding other
-  topics fixed. The delta is the calibrated-grade increase.
-- A topic whose ranked slot is **already at or above its target** yields delta
-  `0` — it is grade-satisfied even if raw mastery could still rise.
-- When all occupied ranked slots are satisfied (grade 100), every grade-relevant
-  delta is 0 and the session is `full_credit_reached`.
+  topics fixed. The delta is `max(0, calibrated_grade(trial) − calibrated_grade(current))`.
+- **The delta is always the actual calibrated trial difference. Do NOT force a
+  target-satisfied topic's delta to zero.** In most ordinary cases a topic that
+  already meets its current ranked target will have delta 0, but if a successful
+  probe would change the ranking, the delta can be a small positive number and
+  must be reported truthfully.
+  - Re-ranking counterexample (verified): current raw `[89, 82, 74, 62]`,
+    targets `[90, 82, 74, 62]` → grade **99**. The rank-2 topic (raw 82) already
+    satisfies the rank-2 target, but projecting it to 92 makes it the new rank-1
+    topic: raw set `[92, 89, 74, 62]` → grade **100**, so its delta is **+1**.
+- When all occupied ranked slots are satisfied **and no re-ranking can raise the
+  grade** (grade 100), every grade-relevant delta is 0 and the session is
+  `full_credit_reached`.
 
 Because a topic's rank depends on the *other* topics' raw scores, the delta
 computation must rank-and-evaluate the full calibrated grade for each trial
-projection (same structure as today, just with the calibrated grade function and
-target-aware saturation).
+projection (same structure as today, just with the calibrated grade function).
+The anti-nitpicking goal is achieved in the *tutor prompt* (discourage polishing
+a satisfied topic unless the backend still reports a positive calibrated delta),
+not by zeroing real deltas in the backend.
 
 ## Post-full-credit tutor behavior
 

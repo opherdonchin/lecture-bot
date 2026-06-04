@@ -1,6 +1,21 @@
 # 09 — Open questions and risks
 
-## Open questions (need a human/instructor decision)
+## Resolved decisions (reviewer, this revision)
+
+| Question | Decision |
+|---|---|
+| Initial targets `[90,82,74,62]`? | **Yes**, adopt now; validate against the next export. |
+| Per-lecture configurable? | **Not yet.** Parameterize helpers internally; keep a single global policy constant. |
+| Students see "full credit reached"? | Tutor may say it naturally; **no UI badge yet**. |
+| Reports mention raw mastery below 100? | **Yes, only as optional enrichment**, never as a grade deficit. |
+| Tutor continue after full credit? | Offer enrichment or report generation; **do not push** compulsory questions. |
+| Recompute historical grades? | **No** — new policy applies to new grade events only. |
+| Database migration? | **No** — JSON payload additions suffice. |
+| `grade_impact_deltas` for satisfied slots? | **Always the true calibrated trial difference; never force to 0.** Discourage nitpicking in the prompt, not the backend. (See Amendment 1 in `10`.) |
+
+The questions below are retained for context; the table above is authoritative.
+
+## Open questions (resolved above; retained for rationale)
 
 **Q1. Is `[90, 82, 74, 62]` the right calibration?**
 These targets make the teacher session (`[90,82,78,74]`) land exactly at 100.
@@ -90,3 +105,15 @@ is an int via `floor`.
 `current_grade` within a tolerance; both now derive from the same calibrated
 computation, so they should match exactly — but verify the float/int formatting
 path doesn't introduce a sub-tolerance mismatch.
+
+**R10. Untruthful deltas from a "force-to-zero" shortcut.** A tempting but wrong
+optimization is to zero a topic's `grade_impact_delta` whenever it already meets
+its ranked target. This hides real positive deltas created by re-ranking (raw
+`[89,82,74,62]` → project rank-2 82→92 → grade 99→100, delta +1). Mitigation:
+compute deltas only as the true calibrated trial difference; the dedicated test
+`reranking_satisfied_slot_can_be_positive` (`07` §C) guards against regressions.
+
+**R11. `T10+` tie-break ordering.** String-slice topic-id parsing
+(`topic_id[1:2]`) mis-orders `T10` and beyond, making `grade_relevant_next_move`
+non-deterministic across lectures with ≥10 topics. Mitigation: parse with
+`int(topic_id[1:])`; cover with a deterministic tie-break test.

@@ -81,10 +81,15 @@ weighted-grade gain from a successful next probe. Under the new model:
 
 - Opportunity-cost / "what to probe next" decisions must be based on the
   **calibrated** grade impact, not raw mastery.
-- Once a ranked slot has reached its full-credit target, **its grade-relevant
-  delta is zero**, even though raw mastery could still climb toward 100.
-- Once the whole session has reached full calibrated credit (grade 100), the
-  backend signals `session_credit_status = "full_credit_reached"` and
+- `grade_impact_deltas` is the **actual calibrated trial difference** (with full
+  re-ranking). A topic that already satisfies its current ranked target will
+  *usually* have delta 0 — but not always: if improving it would change the
+  ranking and raise the session grade, the delta is a real positive number and
+  must be reported truthfully. The backend never zeroes a real delta; the
+  *tutor prompt* is where polishing already-satisfied topics is discouraged.
+- Once the whole session has reached full calibrated credit (grade 100) and no
+  re-ranking can raise it, the backend signals
+  `session_credit_status = "full_credit_reached"` and
   `grade_relevant_next_move = null`.
 
 ## Optional enrichment after full credit

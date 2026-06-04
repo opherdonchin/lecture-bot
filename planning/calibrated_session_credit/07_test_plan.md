@@ -36,7 +36,7 @@ Add an explicit cross-check test:
   `credit_contribution == 55`, `raw_mastery == 95` (raw preserved).
 - `below_target_status`: `best_mastery={"T1":50}` → rank-1
   `status == "below_target"`, `credit_completion ≈ 0.5556`,
-  `grade_delta_to_target == 40`.
+  `raw_mastery_gap_to_rank_target == 40`.
 - `padding`: `best_mastery={"T1":90}` → rows 2–4 have `topic_id is None`,
   `credit_contribution == 0`, `session_credit_status == "in_progress"`.
 - `full_credit_status`: `best_mastery={"T6":90,"T3":82,"T7":78,"T1":74}` →
@@ -46,17 +46,28 @@ Add an explicit cross-check test:
 
 ## C. Grade-impact deltas — `compute_grade_impact_deltas`
 
-- `zero_delta_for_target_satisfied_slot`: a topic whose ranked slot is already at
-  or above target returns delta `0` even though raw mastery < 100. E.g.
-  `best_mastery={"T1":92,"T2":85,"T3":80,"T4":70}` (all at/over target after
-  ranking) → all sampled deltas `0`.
+Deltas are the **actual calibrated trial difference** (with full re-ranking); the
+backend must never manually force a target-satisfied topic's delta to 0.
+
+- `usually_zero_for_target_satisfied_slot`: a topic comfortably at/above target
+  whose improvement does not change the ranking returns delta `0`. E.g.
+  `best_mastery={"T1":92,"T2":85,"T3":80,"T4":70}` (all clear of their targets
+  after ranking, grade already 100) → all sampled deltas `0`.
+- **`reranking_satisfied_slot_can_be_positive`** (the key correctness test):
+  `best_mastery={"T1":89,"T2":82,"T3":74,"T4":62}` → current grade `99`. The
+  rank-2 topic `T2` (raw 82) already satisfies the rank-2 target, but its
+  projected probe (82 → 92 via `_SCORE_IF_SUCCESS`) makes it rank-1 and lifts the
+  grade to `100`. Assert `delta["T2"] == 1` — **not** 0. This guards against
+  re-introducing a "force satisfied slots to zero" shortcut.
 - `zero_delta_at_raw_100`: topic at 100 → delta `0` (projection `None`).
 - `positive_delta_below_target`: a below-target topic returns a positive
   calibrated delta equal to the calibrated-grade increase when projected up.
 - `delta_never_negative`: projecting can only raise raw mastery; assert all
   deltas ≥ 0.
-- `full_credit_all_zero`: when `session_credit_status == "full_credit_reached"`,
-  every sampled delta is `0`.
+- `full_credit_no_positive_delta`: when the session is at full credit and no
+  re-ranking can raise the grade (e.g. all four ranked slots at/above target with
+  no below-target slot to promote into), every sampled delta is `0` and
+  `session_credit_status == "full_credit_reached"`.
 
 ## D. Next-move signal — `grade_relevant_next_move`
 

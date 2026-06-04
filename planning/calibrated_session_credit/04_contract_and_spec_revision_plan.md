@@ -21,15 +21,26 @@ required for consistency.
   succeeds. The backend computes this using the same fixed ranked-topic grading
   formula and calibration tiers used by `compute_weighted_grade`."
 - **Proposed change (normative)**: redefine ΔGrade as the **calibrated**
-  student-facing grade gain under policy `ranked-target-saturation-v1`. Add:
-  > Once a ranked slot has reached its full-credit target, its grade-relevant
-  > delta is 0 even if raw mastery could still increase. The backend also
-  > supplies `session_credit_status` (`"in_progress"` | `"full_credit_reached"`)
-  > and `grade_relevant_next_move` (a topic id or `null`). When
-  > `session_credit_status == "full_credit_reached"`, all deltas are 0 and
+  student-facing grade gain under policy `ranked-target-saturation-v1`,
+  computed as the actual trial difference (current calibrated grade vs.
+  calibrated grade after a projected successful probe, with full re-ranking).
+  Add:
+  > A topic that already satisfies its current ranked target usually has a
+  > grade-relevant delta of 0, but the delta is always the true calibrated trial
+  > difference and may be a small positive number when a successful probe would
+  > change the ranking and raise the session grade. The backend does not zero
+  > real deltas. The backend also supplies `session_credit_status`
+  > (`"in_progress"` | `"full_credit_reached"`) and `grade_relevant_next_move`
+  > (a topic id or `null`). When `session_credit_status == "full_credit_reached"`
+  > and no re-ranking can raise the grade, all deltas are 0 and
   > `grade_relevant_next_move` is `null`.
-- **Why**: the tutor's opportunity-cost baseline must be calibrated, or it will
-  keep probing satisfied topics for no grade benefit.
+- **Recommended tutor-facing wording** (for `tutor_prompt.md` /
+  `tutor_specification.md`): "A topic already satisfying its current ranked
+  credit target should usually not be polished unless the backend still reports
+  positive calibrated grade impact or there is a clear pedagogical reason."
+- **Why**: the tutor's opportunity-cost baseline must be a truthful calibrated
+  signal. Discouraging nitpicking belongs in the prompt; the backend must not
+  hide a real positive grade delta that exists because of re-ranking.
 
 ### §2 — new strategic-guidance fields
 - **Proposed addition (normative)**: document the optional
@@ -153,7 +164,7 @@ required for consistency.
 | Concept | Owner doc (normative) | Restated in |
 |---|---|---|
 | weights `[55,25,13,7]`, targets `[90,82,74,62]`, formula | `grading_policy.md` | `backend_tutor_contract.md` §2 |
-| calibrated ΔGrade + saturation rule | `backend_tutor_contract.md` §2 | `tutor_prompt.md`, `tutor_specification.md` |
+| calibrated ΔGrade (true trial diff; not zeroed for satisfied slots) | `backend_tutor_contract.md` §2 | `tutor_prompt.md`, `tutor_specification.md` |
 | `session_credit_status` / `grade_relevant_next_move` | `backend_tutor_contract.md` §2/§4 | `tutor_prompt.md`, `tutor_specification.md` |
 | post-full-credit tutor behavior | `tutor_specification.md` | `tutor_prompt.md` |
 | raw mastery retained for diagnosis | `grading_policy.md` | `backend_tutor_contract.md` §4 |

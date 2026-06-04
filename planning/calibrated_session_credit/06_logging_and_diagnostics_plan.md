@@ -32,7 +32,7 @@ snapshot; readers branch on `policy_id`.
       "target_for_full_credit": 90,
       "credit_completion": 1.0,
       "credit_contribution": 55,
-      "grade_delta_to_target": 0,
+      "raw_mastery_gap_to_rank_target": 0,
       "status": "full_credit_satisfied"
     },
     {
@@ -42,7 +42,7 @@ snapshot; readers branch on `policy_id`.
       "target_for_full_credit": 82,
       "credit_completion": 1.0,
       "credit_contribution": 25,
-      "grade_delta_to_target": 0,
+      "raw_mastery_gap_to_rank_target": 0,
       "status": "full_credit_satisfied"
     },
     {
@@ -52,7 +52,7 @@ snapshot; readers branch on `policy_id`.
       "target_for_full_credit": 74,
       "credit_completion": 1.0,
       "credit_contribution": 13,
-      "grade_delta_to_target": 0,
+      "raw_mastery_gap_to_rank_target": 0,
       "status": "full_credit_satisfied"
     },
     {
@@ -62,7 +62,7 @@ snapshot; readers branch on `policy_id`.
       "target_for_full_credit": 62,
       "credit_completion": 1.0,
       "credit_contribution": 7,
-      "grade_delta_to_target": 0,
+      "raw_mastery_gap_to_rank_target": 0,
       "status": "full_credit_satisfied"
     }
   ],
@@ -82,7 +82,7 @@ A below-target row looks like:
   "target_for_full_credit": 74,
   "credit_completion": 0.6757,
   "credit_contribution": 8.78,
-  "grade_delta_to_target": 24,
+  "raw_mastery_gap_to_rank_target": 24,
   "status": "below_target"
 }
 ```
@@ -92,7 +92,7 @@ A padded (unfilled) slot:
 ```json
 { "topic_id": null, "raw_mastery": 0, "rank": 4,
   "target_for_full_credit": 62, "credit_completion": 0.0,
-  "credit_contribution": 0.0, "grade_delta_to_target": 62, "status": "below_target" }
+  "credit_contribution": 0.0, "raw_mastery_gap_to_rank_target": 62, "status": "below_target" }
 ```
 
 ## 3. Strategic guidance injected into the tutor prompt (per turn)
@@ -119,10 +119,13 @@ When full credit is reached:
 ```
 
 Representation rules:
-- `grade_impact_deltas` values are **calibrated** integer ΔGrade. Target-satisfied
-  / raw-100 topics are `0`.
+- `grade_impact_deltas` values are the **actual calibrated** integer ΔGrade
+  (current calibrated grade vs. calibrated grade after the projected probe, with
+  full re-ranking). A target-satisfied or raw-100 topic is *usually* `0`, but may
+  be a small positive number when re-ranking would raise the grade — report it
+  truthfully; do not zero it.
 - `grade_relevant_next_move` is the topic id with the largest positive delta, or
-  `null` when none remain.
+  `null` when no positive delta exists.
 - `session_credit_status ∈ {"in_progress", "full_credit_reached"}`.
 
 ## 4. How specific situations are represented in logs
@@ -133,7 +136,7 @@ Representation rules:
 | calibrated grade | `grade` on the grade event + `current_grade`; equals `floor(Σ credit_contribution)` |
 | grade deltas | `grade_impact_deltas` (calibrated) in the dialogue prompt + dialogue audit `state_before` |
 | topics past target | `ranked_credit_state[*].status == "full_credit_satisfied"` while `raw_mastery > target` |
-| full credit reached | `session_credit_status == "full_credit_reached"`, all deltas 0, `grade == 100` |
+| full credit reached | `session_credit_status == "full_credit_reached"`, no positive deltas remain, `grade == 100` |
 | optional enrichment mode | tutor private artifact: `grade_relevant == false` / source `optional_enrichment_after_full_credit` (if schema extended); plus `grade_relevant_next_move == null` in the turn's `state_before` audit |
 
 ## 5. Private artifact log (`private_artifact_logs`)
