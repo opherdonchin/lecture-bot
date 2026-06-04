@@ -73,6 +73,10 @@ input, select, button {
   white-space: pre-wrap;
 }
 
+.msg .katex {
+  white-space: normal;
+}
+
 .chat-input-row {
   display: flex;
   gap: 8px;
