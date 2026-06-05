@@ -246,6 +246,8 @@ This package was assembled for a handoff to another agent investigating tutoring
 - `artifacts/`: evaluation JSON outputs produced during this investigation
 - `manifest.json`: package manifest
 
+Grade event payloads are self-describing by `grade_policy.policy_id`. New calibrated events may include `ranked_full_credit_targets`, `ranked_credit_state`, and `session_credit_status`; older events may omit those fields.
+
 ## Prompt Generator Files
 
 - `prompt_generators/app/bot_engine.py`

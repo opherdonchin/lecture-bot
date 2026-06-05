@@ -687,6 +687,7 @@ def _build_grade_snapshot_from_state(
         float(state.get("current_grade", 0.0) or 0.0),
         float(session.current_grade or 0.0),
     )
+    credit_state = bot_engine.compute_ranked_credit_state(best_mastery)
     payload = {
         "candidate_grade": grade,
         "accepted_as_current": True,
@@ -694,6 +695,8 @@ def _build_grade_snapshot_from_state(
         "explanation": explanation,
         "scored_topics": scored_topics,
         "missing_topics": missing_topics,
+        "ranked_credit_state": credit_state["ranked_credit_state"],
+        "session_credit_status": credit_state["session_credit_status"],
     }
     return {
         "lecture_package": lecture_package,
@@ -706,6 +709,8 @@ def _build_grade_snapshot_from_state(
         "scored_topics": scored_topics,
         "missing_topics": missing_topics,
         "topic_scores": topic_scores,
+        "ranked_credit_state": credit_state["ranked_credit_state"],
+        "session_credit_status": credit_state["session_credit_status"],
     }
 
 
@@ -750,6 +755,8 @@ def _generate_authoritative_report_result(
         "scored_topics": grade_snapshot["scored_topics"],
         "missing_topics": grade_snapshot["missing_topics"],
         "accepted_as_current": grade_snapshot["accepted_as_current"],
+        "ranked_credit_state": grade_snapshot["ranked_credit_state"],
+        "session_credit_status": grade_snapshot["session_credit_status"],
     }
 
     report_result = bot_engine.generate_report(
@@ -770,6 +777,8 @@ def _generate_authoritative_report_result(
         "scored_topics": grade_snapshot["scored_topics"],
         "missing_topics": grade_snapshot["missing_topics"],
         "report_text": report_result["report_text"],
+        "ranked_credit_state": grade_snapshot["ranked_credit_state"],
+        "session_credit_status": grade_snapshot["session_credit_status"],
     }
     _record_grade_event(
         db,
@@ -833,6 +842,7 @@ def get_grade(request: schema.SessionIdRequest, db: sqlalchemy_orm.Session = fa.
         explanation=grade_snapshot["explanation"],
         scored_topics=grade_snapshot["scored_topics"],
         missing_topics=grade_snapshot["missing_topics"],
+        session_credit_status=grade_snapshot["session_credit_status"],
         minutes_elapsed=timing["minutes_elapsed"],
         minutes_remaining=timing["minutes_remaining"],
         session_duration_minutes=timing["session_duration_minutes"],

@@ -56,6 +56,7 @@ class GradeResponse(pd.BaseModel):
     explanation: str
     scored_topics: list[str]
     missing_topics: list[str]
+    session_credit_status: str | None = None
     minutes_elapsed: int
     minutes_remaining: int
     session_duration_minutes: int

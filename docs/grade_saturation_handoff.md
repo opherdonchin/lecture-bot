@@ -1,6 +1,6 @@
 # Grade Saturation Fix — Handoff Document
 
-Historical note: this handoff predates the four-slot perfect-score grading change. The live backend policy is now the fixed four-slot ranked-topic geometry in `app.bot_engine`, and live policy documentation is in `docs/grading_policy.md`.
+Historical note: this handoff predates calibrated session-credit grading. The live backend policy is now `ranked-target-saturation-v1`: ranked weights `[55, 25, 13, 7]`, full-credit targets `[90, 82, 74, 62]`, and `grade = floor(sum(weight * min(raw / target, 1)))`. Live policy documentation is in `docs/grading_policy.md`.
 
 ## Context
 
@@ -15,7 +15,7 @@ _GRADE_WEIGHTS = [55, 25, 13, 7]
 
 ## The problem
 
-The tutor has a grade saturation bug: it treats a strong student answer as a reason to close
+The historical tutor had a grade saturation bug: it treated a strong student answer as a reason to close
 a topic and move on, rather than as a reason to ask something harder. In session 64eb8bc1,
 a 10-stage analysis confirmed this is an **arbitration failure** — the tutor recognises strong
 performance but its stopping criterion is "evidence is adequate at current difficulty," not
@@ -24,6 +24,10 @@ performance but its stopping criterion is "evidence is adequate at current diffi
 Full analysis: `/srv/lecture-bot/exports/investigation_export_lecture_06_20260521T171829/analysis_outputs/`
 
 ## The fix (agreed, not yet implemented)
+
+This section records the historical fix proposal. Under the current calibrated policy,
+"grade saturation" should be read as reaching full calibrated session credit; after that
+point, further work is optional enrichment, not compulsory grade-driven probing.
 
 Add two things to `/srv/lecture-bot/docs/tutor_specification.md`:
 

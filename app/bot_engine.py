@@ -14,8 +14,9 @@ import app.prompt_loader as prompt_loader
 
 _log = logging_.getLogger(__name__)
 
-_GRADE_POLICY_ID = "fixed-four-topic-v1"
+_GRADE_POLICY_ID = "ranked-target-saturation-v1"
 _GRADE_WEIGHTS = [55, 25, 13, 7]
+_GRADE_FULL_CREDIT_TARGETS = [90, 82, 74, 62]
 _RUNTIME_CONTEXT_KEYS = ("bot_notes", "slides", "handout", "minutes")
 _TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)(?:\.|\s+[—-])\s+(.+)$', re_.MULTILINE)
 _IMPORTANCE_RE = re_.compile(r'\*\*Importance:\*\*\s+(\w+)')
@@ -438,6 +439,10 @@ def build_dialogue_system_prompt(
         for tid in sampled_topic_ids
     ]
     best_mastery = dict(state.get("best_mastery", {}))
+    ranked_credit = compute_ranked_credit_state(best_mastery)
+    grade_impact_deltas = compute_grade_impact_deltas(
+        list(sampled_topic_ids), best_mastery
+    )
     current_state = {
         "topics_sampled": list(sampled_topic_ids),
         "topics_covered": list(state.get("topics_covered", [])),
@@ -447,9 +452,12 @@ def build_dialogue_system_prompt(
         "current_topic_id": state.get("current_topic_id"),
         "tutor_comment": state.get("tutor_comment", ""),
         "turn_count": state.get("turn_count", 0) + 1,
-        "grade_impact_deltas": compute_grade_impact_deltas(
+        "grade_impact_deltas": grade_impact_deltas,
+        "session_credit_status": ranked_credit["session_credit_status"],
+        "grade_relevant_next_move": grade_relevant_next_move(
             list(sampled_topic_ids), best_mastery
         ),
+        "ranked_credit_state": ranked_credit["ranked_credit_state"],
     }
     prefix = _build_static_dialogue_prompt_prefix(
         prompt_body=prompt_body,
@@ -544,32 +552,102 @@ def grade_policy_snapshot() -> dict:
     return {
         "policy_id": _GRADE_POLICY_ID,
         "ranked_topic_weights": list(_GRADE_WEIGHTS),
+        "ranked_full_credit_targets": list(_GRADE_FULL_CREDIT_TARGETS),
     }
 
 
-def _weighted_grade_from_scores(scores: list[int]) -> int:
-    ranked = sorted(scores, reverse=True)[:len(_GRADE_WEIGHTS)]
-    padded = (ranked + [0] * len(_GRADE_WEIGHTS))[:len(_GRADE_WEIGHTS)]
-    return math_.floor(sum(w * s / 100 for w, s in zip(_GRADE_WEIGHTS, padded)))
+def _topic_sort_key(topic_id: str | None) -> tuple[int, int | str]:
+    """Sort canonical topic IDs by numeric order, with stable fallback."""
+    if isinstance(topic_id, str) and topic_id.startswith("T") and topic_id[1:].isdigit():
+        return (0, int(topic_id[1:]))
+    return (1, topic_id or "")
+
+
+def _ranked_positive_scores(scores: dict[str, int]) -> list[tuple[str, int]]:
+    return sorted(
+        ((topic_id, int(score)) for topic_id, score in scores.items() if int(score) > 0),
+        key=lambda item: (-item[1], _topic_sort_key(item[0])),
+    )
+
+
+def _calibrated_grade_from_scores(
+    scores: list[int],
+    *,
+    weights: list[int] | None = None,
+    targets: list[int] | None = None,
+) -> int:
+    weights = weights or _GRADE_WEIGHTS
+    targets = targets or _GRADE_FULL_CREDIT_TARGETS
+    ranked = sorted(scores, reverse=True)[:len(weights)]
+    padded = (ranked + [0] * len(weights))[:len(weights)]
+    total = 0.0
+    for weight, raw, target in zip(weights, padded, targets):
+        completion = min(raw / target, 1.0) if target > 0 else 0.0
+        total += weight * completion
+    return math_.floor(total)
 
 
 def _grade_from_scores(scores: dict[str, int]) -> int:
-    """Compute weighted grade from a {topic_id: score} dict."""
-    return _weighted_grade_from_scores(list(scores.values()))
+    """Compute calibrated grade from a {topic_id: score} dict."""
+    return _calibrated_grade_from_scores(list(scores.values()))
+
+
+def compute_ranked_credit_state(
+    best_mastery: dict[str, int],
+    *,
+    weights: list[int] | None = None,
+    targets: list[int] | None = None,
+) -> dict:
+    """Return calibrated credit-state diagnostics for the ranked topic slots."""
+    weights = weights or _GRADE_WEIGHTS
+    targets = targets or _GRADE_FULL_CREDIT_TARGETS
+    ranked = _ranked_positive_scores(best_mastery)
+    rows = []
+    for index, (weight, target) in enumerate(zip(weights, targets)):
+        if index < len(ranked):
+            topic_id, raw = ranked[index]
+        else:
+            topic_id, raw = None, 0
+        completion = min(raw / target, 1.0) if target > 0 else 0.0
+        rows.append({
+            "topic_id": topic_id,
+            "raw_mastery": raw,
+            "rank": index + 1,
+            "target_for_full_credit": target,
+            "credit_completion": round(completion, 4),
+            "credit_contribution": round(weight * completion, 4),
+            "raw_mastery_gap_to_rank_target": max(0, target - raw),
+            "status": "full_credit_satisfied" if raw >= target else "below_target",
+        })
+    grade = _calibrated_grade_from_scores([raw for _, raw in ranked], weights=weights, targets=targets)
+    full_credit = grade == sum(weights) and all(
+        row["topic_id"] is not None and row["status"] == "full_credit_satisfied"
+        for row in rows
+    )
+    return {
+        "grade_policy": grade_policy_snapshot(),
+        "grade": grade,
+        "ranked_credit_state": rows,
+        "session_credit_status": "full_credit_reached" if full_credit else "in_progress",
+    }
 
 
 def compute_grade_impact_deltas(
     sampled_topic_ids: list[str],
     best_mastery: dict[str, int],
 ) -> dict[str, int]:
-    """Return {topic_id: delta_grade} for each sampled topic.
+    """Return calibrated ΔGrade for each sampled topic if its next probe succeeds.
 
-    delta_grade is the projected grade improvement if the next probe on that
-    topic succeeds. Only topics at perfect mastery (100) return delta=0;
-    all others have a positive delta representing the gain if the student
-    advances toward the next tier or to perfect mastery.
+    The delta is the actual trial difference under the calibrated policy, with
+    full re-ranking. It is not forced to zero for target-satisfied topics.
     """
-    base_scores = {tid: best_mastery.get(tid, 0) for tid in sampled_topic_ids}
+    base_scores = {
+        str(tid): int(score)
+        for tid, score in (best_mastery or {}).items()
+        if int(score) > 0
+    }
+    for tid in sampled_topic_ids:
+        base_scores.setdefault(tid, 0)
     current = _grade_from_scores(base_scores)
     deltas: dict[str, int] = {}
     for tid in sampled_topic_ids:
@@ -580,17 +658,30 @@ def compute_grade_impact_deltas(
         else:
             trial = dict(base_scores)
             trial[tid] = sif
-            deltas[tid] = _grade_from_scores(trial) - current
+            deltas[tid] = max(0, _grade_from_scores(trial) - current)
     return deltas
 
 
+def grade_relevant_next_move(
+    sampled_topic_ids: list[str],
+    best_mastery: dict[str, int],
+) -> str | None:
+    """Return the sampled topic with the largest positive calibrated delta."""
+    deltas = compute_grade_impact_deltas(sampled_topic_ids, best_mastery)
+    positive = [(topic_id, delta) for topic_id, delta in deltas.items() if delta > 0]
+    if not positive:
+        return None
+    return sorted(positive, key=lambda item: (-item[1], _topic_sort_key(item[0])))[0][0]
+
+
 def compute_weighted_grade(topic_scores: list[dict]) -> int:
-    """Compute the weighted student-facing grade from per-topic scores.
+    """Compute the calibrated student-facing grade from per-topic scores.
 
     Sorts scores descending, pads to the ranked grade slots with zeros,
-    applies weights [55, 25, 13, 7], and returns floor of the weighted sum.
+    applies ranked weights and full-credit targets, and returns floor of the
+    saturated contribution sum for policy ranked-target-saturation-v1.
     """
-    return _weighted_grade_from_scores([ts["score"] for ts in topic_scores])
+    return _calibrated_grade_from_scores([ts["score"] for ts in topic_scores])
 
 
 def sanitize_state_update(
@@ -877,6 +968,7 @@ def generate_report(
     scored_topics = grading_result.get("scored_topics", [])
     missing_topics = grading_result.get("missing_topics", [])
     topic_scores = grading_result.get("topic_scores", [])
+    session_credit_status = grading_result.get("session_credit_status")
 
     topic_summary = ", ".join(
         f"{ts['topic_id']}={ts['score']}" for ts in topic_scores
@@ -891,10 +983,14 @@ def generate_report(
         "Keep it brief and easy to scan.\n"
         "Do not include a grade number — the backend will add that separately.\n\n"
         f"Final grade earned: {final_grade}/100\n"
+        f"Session credit status: {session_credit_status or 'in_progress'}\n"
         f"Topic scores: {topic_summary}\n"
         f"Assessment: {explanation}\n"
         f"Stronger areas so far: {scored_summary}\n"
         f"Topics not yet evidenced: {missing_summary}\n\n"
+        "Raw topic scores are diagnostic depth from 0 to 100, not grade gaps.\n"
+        "If the student reached full session credit, frame remaining headroom as optional enrichment, "
+        "not as work required for the grade.\n\n"
         "Rubric for reference:\n"
         f"{rubric_text}\n\n"
         "Return `report_text` as plain text with exactly these section headings:\n"
@@ -912,11 +1008,14 @@ def generate_report(
         f"[{msg['role'].upper()}]: {msg['content']}" for msg in messages
     )
 
-    fallback_next_step = (
-        f"Strengthen evidence in {missing_topics[0]}."
-        if missing_topics else
-        "Keep pushing for one more clean distinction, explanation, or application."
-    )
+    if session_credit_status == "full_credit_reached":
+        fallback_next_step = "Full session credit was reached; any next work is optional enrichment."
+    else:
+        fallback_next_step = (
+            f"Strengthen evidence in {missing_topics[0]}."
+            if missing_topics else
+            "Keep pushing for one more clean distinction, explanation, or application."
+        )
     fallback_report_text = (
         "Summary:\n"
         f"- {explanation or 'This session produced some usable evidence, but the picture is still incomplete.'}\n"

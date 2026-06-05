@@ -420,9 +420,13 @@ def test_get_grade_inserts_grade_event(client):
     assert len(events) >= 1
     payload = json.loads(events[-1].payload_json)
     assert payload["grade_policy"] == {
-        "policy_id": "fixed-four-topic-v1",
+        "policy_id": "ranked-target-saturation-v1",
         "ranked_topic_weights": [55, 25, 13, 7],
+        "ranked_full_credit_targets": [90, 82, 74, 62],
     }
+    assert payload["session_credit_status"] == "in_progress"
+    assert payload["ranked_credit_state"][0]["raw_mastery"] == 80
+    assert payload["ranked_credit_state"][0]["raw_mastery_gap_to_rank_target"] == 10
 
 
 def test_get_grade_does_not_call_generate_topic_scores(client):
@@ -592,9 +596,12 @@ def test_generate_report_inserts_report_event(client):
     assert len(events) >= 1
     payload = json.loads(events[-1].payload_json)
     assert payload["grade_policy"] == {
-        "policy_id": "fixed-four-topic-v1",
+        "policy_id": "ranked-target-saturation-v1",
         "ranked_topic_weights": [55, 25, 13, 7],
+        "ranked_full_credit_targets": [90, 82, 74, 62],
     }
+    assert payload["session_credit_status"] == "in_progress"
+    assert "ranked_credit_state" in payload
 
 
 def test_generate_report_does_not_call_generate_topic_scores(client):

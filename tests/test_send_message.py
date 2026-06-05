@@ -154,7 +154,7 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
     state = j.loads(row.state_json)
     assert state["mastery"]["T1"] == 70
     assert state["best_mastery"]["T1"] == 70
-    assert state["current_grade"] == 38.0
+    assert state["current_grade"] == 42.0
     assert "private_artifact" not in state
     assert "private_decision_trace" not in state
     artifact_row = db.query(models.PrivateArtifactLogModel).filter(

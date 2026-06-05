@@ -393,6 +393,11 @@ def build_manifest(
         "source_lecture_dir": str(lecture_dir),
         "prompt_template_name": template_name,
         "zip_path": str(zip_path),
+        "grade_event_payload_note": (
+            "Grade event payloads are self-describing by grade_policy.policy_id. "
+            "New calibrated events may include ranked_full_credit_targets, "
+            "ranked_credit_state, and session_credit_status; older events may omit them."
+        ),
         "included_files": included_files,
     }
 

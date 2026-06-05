@@ -148,6 +148,7 @@
               "enum": [
                 "explicit_topic_or_move_guidance",
                 "grade_impact_deltas_or_backend_strategic_guidance",
+                "optional_enrichment_after_full_credit",
                 "pedagogical_fallback",
                 "not_applicable"
               ]
@@ -168,6 +169,13 @@
             "null"
           ],
           "description": "Short bounded reason when deviating from the strongest available backend-indicated direction; otherwise null."
+        },
+        "grade_relevant": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Optional marker for whether the selected move is still grade-driven; false may be used for optional enrichment after full session credit."
         }
       }
     },

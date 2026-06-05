@@ -39,7 +39,9 @@ For each ordinary tutoring turn, the backend injects runtime data into the tutor
 - `rubric_text`
 - `lecture_context`
 
-`current_tutoring_state` includes a backend-computed `grade_impact_deltas` field: a JSON object mapping each sampled topic ID to the integer ΔGrade the tutor would gain if the next probe on that topic succeeds. The backend computes this using the same fixed ranked-topic grading formula and calibration tiers used by `compute_weighted_grade`. The tutor reads these values for move selection and must not recompute or modify them. The tutor must not infer a required number of completed sampled topics from these deltas or expose ranked-slot arithmetic to the student.
+`current_tutoring_state` includes backend-computed strategic guidance. `grade_impact_deltas` is a JSON object mapping each sampled topic ID to the integer calibrated ΔGrade the student-facing session credit would gain if the next probe on that topic succeeds. The backend computes this under policy `ranked-target-saturation-v1` as the actual trial difference between the current calibrated grade and the calibrated grade after a projected successful probe, with full re-ranking. The backend does not force a topic's delta to zero merely because it already satisfies its current ranked target; a target-satisfied topic may still have a small positive delta when re-ranking would raise the grade.
+
+The same state may include `session_credit_status` (`"in_progress"` or `"full_credit_reached"`), `grade_relevant_next_move` (the sampled topic ID with the largest positive calibrated delta, or `null`), and `ranked_credit_state` (a per-ranked-slot diagnostic breakdown of raw mastery, full-credit target, credit completion, credit contribution, and raw mastery gap). When `session_credit_status == "full_credit_reached"` and no re-ranking can raise the grade, `grade_relevant_next_move` is `null` and all grade-relevant deltas are zero. The tutor reads these values for move selection and must not recompute or modify them. The tutor must not infer a required number of completed sampled topics from these deltas or expose ranked-slot arithmetic to the student.
 
 The backend provides recent conversation history as prior chat messages and the latest student message as the current user message. These are not duplicated inside the injected runtime JSON.
 
@@ -108,6 +110,9 @@ Backend-owned and read-only state includes:
 - `timeout_warning_sent`
 - `turn_count`
 - `grade_impact_deltas`
+- `session_credit_status`
+- `ranked_credit_state`
+- `grade_relevant_next_move`
 
 Tutor-updatable tutoring fields include:
 

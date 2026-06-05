@@ -311,6 +311,25 @@ def test_compute_weighted_grade_four_perfect_topics_reach_100():
     ]) == 100
 
 
+def test_compute_weighted_grade_targets_exact_full_credit():
+    assert bot_engine.compute_weighted_grade([
+        {"topic_id": "T1", "score": 90},
+        {"topic_id": "T2", "score": 82},
+        {"topic_id": "T3", "score": 74},
+        {"topic_id": "T4", "score": 62},
+    ]) == 100
+
+
+def test_compute_weighted_grade_teacher_session_reaches_full_credit():
+    assert bot_engine.compute_weighted_grade([
+        {"topic_id": "T6", "score": 90},
+        {"topic_id": "T3", "score": 82},
+        {"topic_id": "T7", "score": 78},
+        {"topic_id": "T1", "score": 74},
+        {"topic_id": "T4", "score": 68},
+    ]) == 100
+
+
 def test_compute_weighted_grade_cumulative_perfect_topic_geometry():
     perfect_scores = [{"topic_id": f"T{i}", "score": 100} for i in range(1, 5)]
     assert bot_engine.compute_weighted_grade(perfect_scores[:1]) == 55
@@ -325,8 +344,8 @@ def test_compute_weighted_grade_all_zero():
 
 
 def test_compute_weighted_grade_zero_padding():
-    # Only 2 topics scored at 100 each: best 2 get top weights 55+25=80
-    scores = [{"topic_id": "T1", "score": 100}, {"topic_id": "T2", "score": 100}]
+    # Only 2 target-satisfied topics: slots 3 and 4 contribute 0.
+    scores = [{"topic_id": "T1", "score": 90}, {"topic_id": "T2", "score": 82}]
     result = bot_engine.compute_weighted_grade(scores)
     assert result == 80
 
@@ -343,10 +362,28 @@ def test_compute_weighted_grade_weighted_order():
 
 
 def test_compute_weighted_grade_floor():
-    # score=1 for 4 ranked slots: floor(55*1/100 + 25*1/100 + 13*1/100 + 7*1/100)
-    # = floor(0.55 + 0.25 + 0.13 + 0.07) = floor(1.0) = 1
     scores = [{"topic_id": f"T{i}", "score": 1} for i in range(1, 5)]
     assert bot_engine.compute_weighted_grade(scores) == 1
+
+
+def test_compute_weighted_grade_below_target_partial():
+    scores = [{"topic_id": f"T{i}", "score": 45} for i in range(1, 5)]
+    assert bot_engine.compute_weighted_grade(scores) == 54
+
+
+def test_compute_weighted_grade_at_lowest_target_band():
+    scores = [{"topic_id": f"T{i}", "score": 62} for i in range(1, 5)]
+    assert bot_engine.compute_weighted_grade(scores) == 74
+
+
+def test_compute_weighted_grade_raw_above_target_does_not_exceed_weight():
+    scores = [
+        {"topic_id": "T1", "score": 95},
+        {"topic_id": "T2", "score": 90},
+        {"topic_id": "T3", "score": 80},
+        {"topic_id": "T4", "score": 70},
+    ]
+    assert bot_engine.compute_weighted_grade(scores) == 100
 
 
 def test_compute_weighted_grade_takes_top_4():
@@ -358,9 +395,7 @@ def test_compute_weighted_grade_takes_top_4():
         {"topic_id": "T4", "score": 20},
         {"topic_id": "T5", "score": 10},
     ]
-    # top 4: 80, 60, 40, 20 → floor(55*80/100 + 25*60/100 + 13*40/100 + 7*20/100)
-    # = floor(44 + 15 + 5.2 + 1.4) = floor(65.6) = 65
-    assert bot_engine.compute_weighted_grade(scores) == 65
+    assert bot_engine.compute_weighted_grade(scores) == 76
 
 
 def test_compute_weighted_grade_ignores_fifth_rank_even_when_touched():
@@ -381,10 +416,96 @@ def test_grade_impact_deltas_use_four_ranked_slots():
     assert bot_engine.compute_grade_impact_deltas(sampled_topic_ids, best_mastery)["T5"] == 0
 
 
-def test_grade_policy_snapshot_names_fixed_four_topic_policy():
+def test_compute_ranked_credit_state_matches_grade():
+    best_mastery = {"T1": 80, "T2": 60, "T3": 40, "T4": 20}
+    credit_state = bot_engine.compute_ranked_credit_state(best_mastery)
+    contribution_grade = math.floor(
+        sum(row["credit_contribution"] for row in credit_state["ranked_credit_state"])
+    )
+    assert credit_state["grade"] == contribution_grade
+    assert credit_state["grade"] == bot_engine.compute_weighted_grade([
+        {"topic_id": topic_id, "score": score}
+        for topic_id, score in best_mastery.items()
+    ])
+
+
+def test_compute_ranked_credit_state_raw_above_target_status():
+    credit_state = bot_engine.compute_ranked_credit_state({"T1": 95})
+    row = credit_state["ranked_credit_state"][0]
+    assert row["status"] == "full_credit_satisfied"
+    assert row["credit_completion"] == 1.0
+    assert row["credit_contribution"] == 55
+    assert row["raw_mastery"] == 95
+    assert credit_state["session_credit_status"] == "in_progress"
+
+
+def test_compute_ranked_credit_state_below_target_status():
+    credit_state = bot_engine.compute_ranked_credit_state({"T1": 50})
+    row = credit_state["ranked_credit_state"][0]
+    assert row["status"] == "below_target"
+    assert row["credit_completion"] == 0.5556
+    assert row["raw_mastery_gap_to_rank_target"] == 40
+
+
+def test_compute_ranked_credit_state_padding_and_full_credit_status():
+    padded = bot_engine.compute_ranked_credit_state({"T1": 90})
+    assert [row["topic_id"] for row in padded["ranked_credit_state"][1:]] == [None, None, None]
+    assert padded["session_credit_status"] == "in_progress"
+
+    full = bot_engine.compute_ranked_credit_state({"T6": 90, "T3": 82, "T7": 78, "T1": 74})
+    assert full["session_credit_status"] == "full_credit_reached"
+    assert {row["status"] for row in full["ranked_credit_state"]} == {"full_credit_satisfied"}
+
+
+def test_compute_ranked_credit_state_ranks_by_raw_mastery():
+    credit_state = bot_engine.compute_ranked_credit_state({"T1": 50, "T2": 90})
+    assert credit_state["ranked_credit_state"][0]["topic_id"] == "T2"
+
+
+def test_grade_impact_delta_reranking_satisfied_slot_can_be_positive():
+    best_mastery = {"T1": 89, "T2": 82, "T3": 74, "T4": 62}
+    assert bot_engine.compute_weighted_grade([
+        {"topic_id": topic_id, "score": score}
+        for topic_id, score in best_mastery.items()
+    ]) == 99
+    deltas = bot_engine.compute_grade_impact_deltas(["T1", "T2", "T3", "T4"], best_mastery)
+    assert deltas["T2"] == 1
+
+
+def test_grade_impact_deltas_full_credit_no_positive_delta():
+    sampled_topic_ids = ["T1", "T2", "T3", "T4"]
+    best_mastery = {"T1": 92, "T2": 85, "T3": 80, "T4": 70}
+    deltas = bot_engine.compute_grade_impact_deltas(sampled_topic_ids, best_mastery)
+    assert set(deltas.values()) == {0}
+    assert bot_engine.compute_ranked_credit_state(best_mastery)["session_credit_status"] == "full_credit_reached"
+
+
+def test_grade_impact_delta_zero_at_raw_100_and_never_negative():
+    deltas = bot_engine.compute_grade_impact_deltas(
+        ["T1", "T2"],
+        {"T1": 100, "T2": 45},
+    )
+    assert deltas["T1"] == 0
+    assert all(delta >= 0 for delta in deltas.values())
+
+
+def test_grade_relevant_next_move_largest_delta_and_numeric_tie_break():
+    best_mastery = {"T2": 0, "T10": 0}
+    assert bot_engine.grade_relevant_next_move(["T10", "T2"], best_mastery) == "T2"
+
+
+def test_grade_relevant_next_move_none_without_positive_delta():
+    assert bot_engine.grade_relevant_next_move(
+        ["T1", "T2", "T3", "T4"],
+        {"T1": 100, "T2": 100, "T3": 100, "T4": 100},
+    ) is None
+
+
+def test_grade_policy_snapshot_names_calibrated_policy():
     assert bot_engine.grade_policy_snapshot() == {
-        "policy_id": "fixed-four-topic-v1",
+        "policy_id": "ranked-target-saturation-v1",
         "ranked_topic_weights": [55, 25, 13, 7],
+        "ranked_full_credit_targets": [90, 82, 74, 62],
     }
 
 
@@ -840,6 +961,11 @@ def test_build_dialogue_system_prompt_dynamic_section_includes_state_fields():
     assert '"turn_count": 3' in dynamic_part
     assert '"current_topic_id"' in dynamic_part
     assert '"topics_covered"' in dynamic_part
+    assert '"grade_impact_deltas"' in dynamic_part
+    assert '"session_credit_status": "in_progress"' in dynamic_part
+    assert '"grade_relevant_next_move"' in dynamic_part
+    assert '"ranked_credit_state"' in dynamic_part
+    assert '"ranked_credit_state"' not in prompt[: prompt.index(_DYNAMIC_SECTION_HEADER)]
 
 
 def test_build_dialogue_system_prompt_static_content_precedes_dynamic_state():

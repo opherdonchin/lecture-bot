@@ -2,6 +2,8 @@ GRADE SATURATION ANALYSIS PROMPT
 
 You are being asked to investigate a single tutoring session in which the student performed well and received moderately high feedback from the tutor, but the final grade was lower than the quality of the conversation warranted. The specific failure mode under investigation is **grade saturation**: the tutor stops escalating challenge after a student demonstrates solid understanding, treating good-enough evidence as a reason to close or consolidate rather than as a platform for harder questions.
 
+Calibration note: under live policy `ranked-target-saturation-v1`, "grade saturation" can also mean legitimate full calibrated session credit (`session_credit_status = "full_credit_reached"`). In that state, additional work is optional enrichment rather than required grade work. This investigation prompt is for diagnosing premature challenge ceilings before full calibrated credit has been reached.
+
 The working hypothesis is that the tutor has an implicit ceiling in its challenge escalation — it is willing to ask follow-up questions to clarify weak understanding, but is not willing to ask genuinely harder questions when understanding appears solid. This means strong students cannot earn higher grades because the tutor consolidates instead of probing deeper or broader.
 
 Your task is to diagnose whether and where this ceiling occurs, trace it to prompt language or specification gaps, and produce a specification revision that removes the ceiling.

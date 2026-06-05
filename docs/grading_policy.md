@@ -34,6 +34,43 @@ This creates the desired grading geometry without requiring the tutor to expose 
 
 ---
 
+## Calibrated session-credit grading
+
+The student-facing grade uses policy `ranked-target-saturation-v1`.
+
+Python ranks raw topic-mastery scores from highest to lowest, takes the top four,
+and applies:
+
+```
+weights = [55, 25, 13, 7]
+targets = [90, 82, 74, 62]
+grade = floor(sum(weight_i * min(raw_i / target_i, 1.0)))
+```
+
+The four quantities are intentionally distinct:
+
+| Quantity | Range | Meaning |
+| --- | ---: | --- |
+| raw topic mastery | 0-100 | diagnostic depth of understanding for a topic |
+| credit completion | 0-1 | completion toward the ranked full-credit target |
+| credit contribution | 0-rank weight | the ranked topic's contribution to session credit |
+| student-facing grade | 0-100 | floored sum of calibrated credit contributions |
+
+Raw mastery is still preserved on the 0-100 ladder for diagnosis, evidence
+tracking, feedback, and reports. A topic may exceed its ranked full-credit target
+and may reach 100. Once a ranked slot has reached its target, additional raw
+mastery in that slot usually does not increase the student-facing grade, though
+it can still matter diagnostically and can matter numerically if it changes the
+ranking. No topic-level "grade out of 100" is created by this calibration.
+
+When the top four ranked occupied slots satisfy their targets, the session has
+reached full calibrated session credit. The backend may report
+`session_credit_status = "full_credit_reached"` and no grade-relevant next move;
+that releases the tutor from compulsory grade-driven probing but does not make
+lifecycle closure a tutor-owned decision.
+
+---
+
 ## Core grading geometry
 
 The grading policy combines:
@@ -57,25 +94,27 @@ Which increase matters more depends on the current ranked mastery profile and th
 
 ## Cross-topic weighting and lecture-wide interpretation
 
-Python computes the final grade by ranking topics by current mastery and applying the fixed cross-topic weights below.
+Python computes the final grade by ranking topics by current raw mastery and
+applying the fixed cross-topic weights and ranked full-credit targets below.
 
 These weights are fixed by policy.
 
-| Rank | Weight | Max cumulative | Interpretation |
-| ---: | -----: | --------: | -------------- |
-| 1 | 0.55 | 55  | Strong foothold in one central lecture idea |
-| 2 | 0.25 | 80  | Meaningful early coverage across the lecture |
-| 3 | 0.13 | 93  | Solid grounding across the core lecture terrain |
-| 4 | 0.07 | 100 | Full lecture mastery for session purposes |
+| Rank | Weight | Full-credit target | Max cumulative | Interpretation |
+| ---: | -----: | -----------------: | --------: | -------------- |
+| 1 | 55 | 90 | 55  | Strong foothold in one central lecture idea |
+| 2 | 25 | 82 | 80  | Meaningful early coverage across the lecture |
+| 3 | 13 | 74 | 93  | Solid grounding across the core lecture terrain |
+| 4 | 7 | 62 | 100 | Full lecture mastery for session purposes |
 
 Notes:
 
 * **Rank** = topic rank after sorting topics by current mastery, highest first.
-* **Weight** = fixed cross-topic weight applied by Python to the mastery of the topic at that rank.
-* **Max cumulative** = maximum cumulative grade available if the top *n* ranked topics had full mastery.
+* **Weight** = fixed maximum credit contribution for the topic at that rank.
+* **Full-credit target** = raw mastery needed to receive that rank's full credit contribution.
+* **Max cumulative** = maximum cumulative grade available if the top *n* ranked topics meet their full-credit targets.
 * **Interpretation** = a readable lecture-wide description of what that cumulative ceiling means.
 * The weights apply to ranked topic mastery values, not to fixed topic identities.
-* The current backend implementation uses exactly these four ranked scoring slots: `[55, 25, 13, 7]`.
+* The current backend implementation uses exactly these four ranked scoring slots: `[55, 25, 13, 7]`, with full-credit targets `[90, 82, 74, 62]`.
 * The previous fifth-topic requirement made sessions longer than desired. The old fourth and fifth tail weights have been folded into the new fourth slot so a serious, cooperative student can reach full session success with four substantial topic engagements.
 * Lecture rubrics may contain more than four topics. Topics below the top four ranked mastery scores do not directly add to the numeric grade at that moment, but they can still matter pedagogically and can enter the top four if their demonstrated mastery becomes strong enough.
 * The sampled topic count may exceed the number of ranked scoring slots; sampled topics define candidate opportunity space, not a requirement to complete every sampled topic.
@@ -155,12 +194,12 @@ The tutor maintains a current mastery estimate for each topic.
 The backend then:
 
 1. ranks topics by current mastery
-2. applies the fixed cross-topic weights to the top four ranked mastery values
-3. computes the current grade from that weighted combination
+2. applies the fixed cross-topic weights and full-credit targets to the top four ranked mastery values
+3. computes the current grade from the saturated calibrated contribution sum
 
 This means:
 
-- every increase in a topic’s mastery can matter
+- every increase in a topic’s mastery can matter until ranked full credit is reached
 - the effect of an increase depends on that topic’s current rank
 - breadth and depth are not separate phases
 - there is no threshold a topic must cross before it “starts counting”
@@ -184,5 +223,5 @@ They do **not** mean:
 They **do** mean:
 
 - tutor-side mastery assessments should be interpretable against this ladder
-- Python-side grade computation should follow the fixed cross-topic weighting
+- Python-side grade computation should follow the calibrated ranked-target policy
 - later prompt or policy work should remain consistent with this grading geometry

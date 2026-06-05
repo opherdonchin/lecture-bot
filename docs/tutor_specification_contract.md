@@ -22,6 +22,8 @@ The tutor specification is authored for human readers and read by the prompt gen
 
 The specification is the governing source of truth for pedagogical matters. The runtime prompt and backend/runtime contract are the governing sources of truth for runtime behavior, transport, validation, storage, persistence, visibility, lifecycle control, and backend-owned state.
 
+Raw mastery evaluation remains part of the tutor/specification shape. Student-facing grade calibration, ranked full-credit targets, and session-credit status are backend-owned runtime mechanics; a specification may describe how to respond pedagogically to backend-provided full-credit guidance, but must not redefine the grading arithmetic.
+
 ---
 
 ## 2. Required top-level structure

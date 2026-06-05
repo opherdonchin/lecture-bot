@@ -188,6 +188,10 @@ The generated runtime tutor prompt must treat these as backend-owned and read-on
 - `turn_count`
 - `lecture_title`
 - timing metadata
+- `grade_impact_deltas`
+- `session_credit_status`
+- `ranked_credit_state`
+- `grade_relevant_next_move`
 - grading authority
 - report authority
 - persistence
@@ -201,6 +205,8 @@ The generated runtime tutor prompt must allow sparse-delta updates only for exac
 - `tutor_comment`
 
 The generated runtime tutor prompt must specify the concrete format of `mastery` as defined in the backend contract: a JSON object mapping canonical topic IDs to integer scores 0–100, with the calibration table from the backend contract included verbatim. The prompt must make clear that this is an evidence summary required when understanding has been demonstrated, not a grade computation. Example: `{"T5": 75, "T3": 60}`.
+
+The generated runtime tutor prompt must describe `grade_impact_deltas` as calibrated student-facing session-credit deltas computed by the backend under the ranked-target saturation policy. It must tell the tutor to read, not recompute, those values; to avoid polishing target-satisfied topics unless positive calibrated impact or a clear pedagogical reason remains; and to treat `session_credit_status = "full_credit_reached"` or `grade_relevant_next_move = null` as release from compulsory grade-driven probing, not as lifecycle completion.
 
 The backend derives or sanitizes `topics_covered`; do not allow the tutor to return it as a tutor-updatable field.
 Do not drift into full-state replacement language.

@@ -159,8 +159,8 @@ The backend computes grades by:
 
 1. maintaining best demonstrated mastery per topic,
 2. ranking topic mastery scores from highest to lowest,
-3. applying fixed ranked-topic weights `[55, 25, 13, 7]` to the top four ranked scoring slots,
-4. flooring the weighted sum.
+3. applying fixed ranked-topic weights `[55, 25, 13, 7]` and full-credit targets `[90, 82, 74, 62]` to the top four ranked scoring slots,
+4. flooring the calibrated saturated sum `weight * min(raw / target, 1)`.
 
 The sampled topic count can be larger than the number of scoring slots. Sampling defines the candidate opportunity space for the session; it is not a requirement that every sampled topic be completed for full credit.
 
