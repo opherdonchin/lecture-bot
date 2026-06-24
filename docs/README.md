@@ -7,6 +7,7 @@ This directory now keeps only current operating and design references. The older
 - [`../README.md`](../README.md) - current project overview, commands, routes, environment variables, lecture-package flow, runtime files, and test coverage.
 - [`implementation_spec.md`](implementation_spec.md) - current architecture and behavior spec.
 - [`deployment_ubuntu.md`](deployment_ubuntu.md) - Ubuntu deployment runbook for the `/stats` and `/stats-admin` production shape.
+- [`remote_dev_workflow.md`](remote_dev_workflow.md) - local-development sync and explicit publish workflow for working off the server machine.
 - [`admin_session_exports_plan.md`](admin_session_exports_plan.md) - implementation plan for admin-side session filtering and multi-session exports.
 
 ## Tutor And Grading Design

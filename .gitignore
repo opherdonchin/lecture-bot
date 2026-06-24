@@ -26,17 +26,21 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+.local/
 
 # Environment variables
 .env
 .env.*
 !.env.example
+deploy/remote.env
 
 # Data and logs
 data/*.db
 data/*.db.bak*
 data/*.sqlite
 data/*.sqlite3
+data/server_logs/
+data/dev_sync_backups/
 exports/
 logs/
 

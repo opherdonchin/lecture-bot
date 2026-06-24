@@ -47,6 +47,12 @@ For real tutoring behavior, set `OPENAI_API_KEY` in `.env` or the process enviro
 | `pixi run admin-stop` | Stop a process listening on port `8001`. |
 | `pixi run test` | Run the pytest suite. |
 | `pixi run init-db` | Create the configured database tables. |
+| `pixi run sync-dev` | Pull the current server `.env`, prompts, docs, lectures, submissions, database, and service logs into a local development snapshot and generate `.env.dev-sync`. |
+| `pixi run sync-dev-dry-run` | Preview the development sync without changing local files. |
+| `pixi run dev-synced` | Start the student app against the generated local development snapshot from `.env.dev-sync`. |
+| `pixi run admin-dev-synced` | Start the admin app against the generated local development snapshot from `.env.dev-sync`. |
+| `pixi run publish-prod` | Rsync the local repo to the server, run `pixi install`, repair shared `.pixi` permissions, restart services, and verify health. |
+| `pixi run publish-prod-dry-run` | Preview the production publish without changing remote files. |
 | `pixi run python scripts/build_lecture_package.py <lecture_id> --force` | Build or rebuild a lecture package from source files. |
 | `pixi run python scripts/grade_moodle.py ...` | Run the Moodle grading helper script. |
 
@@ -60,6 +66,8 @@ pixi run admin-serve
 Use the admin process only when the admin UI is needed. The production-style serve scripts read host, port, and root path from exported environment variables or repo-root `.env` defaults and pass the matching Uvicorn `--root-path` internally. The local dev tasks force `/bot` and `/bot-admin` so they work consistently on a plain machine without matching the production prefix. Prefix configuration is summarized below in "Path Prefix Status"; see [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md) for Ubuntu, systemd, and Nginx notes.
 
 For a map of the docs directory, see [docs/README.md](docs/README.md).
+
+For a machine-independent local-development workflow that syncs from the server and publishes back explicitly, see [docs/remote_dev_workflow.md](docs/remote_dev_workflow.md).
 
 ## Student Routes
 

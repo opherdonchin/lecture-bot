@@ -38,8 +38,14 @@ dev-bg = "bash -lc 'python scripts/init_db.py && nohup env LECTURE_BOT_STUDENT_R
 admin-dev = "bash -lc 'python scripts/init_db.py && LECTURE_BOT_ADMIN_ROOT_PATH=/bot-admin LECTURE_BOT_ADMIN_HOST=0.0.0.0 LECTURE_BOT_ADMIN_RELOAD=1 scripts/serve_admin.sh'"
 stats-dev = "bash -lc 'python scripts/init_db.py && LECTURE_BOT_STUDENT_ROOT_PATH=/stats LECTURE_BOT_STUDENT_HOST=0.0.0.0 LECTURE_BOT_STUDENT_RELOAD=1 scripts/serve_student.sh'"
 stats-admin-dev = "bash -lc 'python scripts/init_db.py && LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin LECTURE_BOT_ADMIN_HOST=0.0.0.0 LECTURE_BOT_ADMIN_RELOAD=1 scripts/serve_admin.sh'"
+dev-synced = "bash -lc 'set -a && source .env.dev-sync && set +a && python scripts/init_db.py && LECTURE_BOT_STUDENT_ROOT_PATH=/bot LECTURE_BOT_STUDENT_HOST=0.0.0.0 LECTURE_BOT_STUDENT_RELOAD=1 scripts/serve_student.sh'"
+admin-dev-synced = "bash -lc 'set -a && source .env.dev-sync && set +a && python scripts/init_db.py && LECTURE_BOT_ADMIN_ROOT_PATH=/bot-admin LECTURE_BOT_ADMIN_HOST=0.0.0.0 LECTURE_BOT_ADMIN_RELOAD=1 scripts/serve_admin.sh'"
 serve = "scripts/serve_student.sh"
 admin-serve = "scripts/serve_admin.sh"
+sync-dev = "bash scripts/sync_dev_environment.sh"
+sync-dev-dry-run = "bash scripts/sync_dev_environment.sh --dry-run"
+publish-prod = "bash scripts/publish_production.sh"
+publish-prod-dry-run = "bash scripts/publish_production.sh --dry-run"
 admin-stop = '''bash -lc '
 pids=$(lsof -tiTCP:8001 -sTCP:LISTEN 2>/dev/null || true)
 
