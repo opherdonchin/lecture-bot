@@ -9,7 +9,7 @@ A lecture-specific tutoring bot for university courses. Students choose a lectur
 - OpenAI-backed tutoring turns in `app/bot_engine.py`.
 - Backend-owned session state, weighted grade computation, grade events, dialogue-turn audit rows, private artifact logs, and separate student note logs stored through SQLAlchemy.
 - Current-grade and final-report endpoints compute from the best demonstrated topic mastery stored in backend state. Final report text is OpenAI-backed with a local fallback.
-- Separate admin FastAPI app in `app/admin_main.py` for lecture setup and upload workflow.
+- Separate admin FastAPI app in `app/admin_main.py` for lecture setup, session review/export, and Moodle grade-import preparation.
 
 ## Stack
 
@@ -54,7 +54,8 @@ For real tutoring behavior, set `OPENAI_API_KEY` in `.env` or the process enviro
 | `pixi run publish-prod` | Rsync the local repo to the server, run `pixi install`, repair shared `.pixi` permissions, restart services, and verify health. |
 | `pixi run publish-prod-dry-run` | Preview the production publish without changing remote files. |
 | `pixi run python scripts/build_lecture_package.py <lecture_id> --force` | Build or rebuild a lecture package from source files. |
-| `pixi run python scripts/grade_moodle.py ...` | Run the Moodle grading helper script. |
+| `pixi run python scripts/prepare_moodle_grade_import.py ...` | Validate Moodle submission ZIPs and generate the multi-lecture Moodle grade-import CSV. |
+| `pixi run python scripts/grade_moodle.py ...` | Run the older single-ZIP Moodle grading helper script. Prefer `prepare_moodle_grade_import.py` for the current workflow. |
 
 Production startup should use the committed Pixi tasks or their underlying scripts:
 
@@ -107,6 +108,14 @@ Admin routes include:
 | `/` | GET | Admin index. |
 | `/sessions` | GET | Review/filter tutoring sessions by student, lecture, date, user turns, and grade. |
 | `/sessions/export` | POST | Download a ZIP containing one top-level folder per selected exported session. |
+| `/grades` | GET | Upload Moodle participants/submission files, manage deadlines, regenerate import files, and download grade CSVs. |
+| `/grades/participants` | POST | Upload or replace the Moodle participants CSV. |
+| `/grades/deadlines/template` | GET | Download a per-lecture deadline CSV template. |
+| `/grades/deadlines` | POST | Upload a bulk deadline CSV. |
+| `/grades/deadlines/edit` | POST | Save deadline values entered in the admin UI. |
+| `/grades/submissions` | POST | Upload one or more Moodle submission ZIPs and regenerate grade import outputs. |
+| `/grades/prepare` | POST | Regenerate grade import outputs from already uploaded files. |
+| `/grades/files/{kind}` | GET | Download the generated import or validation report CSV. |
 | `/lectures` | GET/POST | List lecture folders or create a lecture folder. |
 | `/lectures/{lecture_id}` | GET | Lecture setup page. |
 | `/lectures/{lecture_id}/metadata` | POST | Update title, course, and active flag. |
@@ -119,6 +128,8 @@ Admin routes include:
 | `/lectures/{lecture_id}/generated/{kind}` | POST | Upload generated `minutes.json` or `rubric.md`; rubric upload refreshes `topics`. |
 
 Admin uploads write directly under the configured `LECTURES_DIR`. With the default configuration, that means repo-relative `lectures/<lecture_id>/`.
+
+For the step-by-step Moodle grade workflow, use [docs/moodle_grade_upload_runbook.md](docs/moodle_grade_upload_runbook.md).
 
 ## Environment Variables
 
@@ -134,9 +145,15 @@ Use [.env.example](.env.example) as the committed starting point for local or de
 | `LECTURE_BOT_ADMIN_ROOT_PATH` | No | Public root path for generated admin URLs. Defaults to `/bot-admin`; production can use `/stats-admin`. |
 | `DATABASE_URL` | No | SQLAlchemy URL. Defaults to `sqlite:///data/lecture_bot.db`. |
 | `LECTURES_DIR` | No | Directory for lecture packages. Defaults to `lectures`. |
+| `MOODLE_SUBMISSIONS_DIR` | No | Directory for Moodle participants, deadline, submission ZIP, import, and report files. Defaults to `data/submissions`. |
+| `MOODLE_PARTICIPANTS_CSV` | No | Moodle participants CSV path. Defaults to `data/submissions/courseid_64733_participants.csv`. |
+| `MOODLE_DEADLINES_CSV` | No | Optional Moodle deadline CSV path. Defaults to `data/submissions/moodle_deadlines.csv`. |
+| `MOODLE_DEADLINE_TIMEZONE_OFFSET` | No | Offset appended to admin-entered deadline times. Defaults to `+03:00`. |
+| `MOODLE_GRADE_IMPORT_CSV` | No | Generated Moodle grade-import CSV path. Defaults to `data/submissions/moodle_grade_import.csv`. |
+| `MOODLE_GRADE_IMPORT_REPORT_CSV` | No | Generated validation/report CSV path. Defaults to `data/submissions/moodle_grade_import_report.csv`. |
 | `ADMIN_USERNAME` | Required for admin app | HTTP Basic Auth username. |
 | `ADMIN_PASSWORD` | Required for admin app | HTTP Basic Auth password. |
-| `SESSION_TIMEOUT_MINUTES` | No | Session duration. Defaults to `20`. |
+| `SESSION_TIMEOUT_MINUTES` | No | Session duration. Defaults to `30`. |
 | `SESSION_WARNING_MINUTES` | No | Final-window timing threshold. Defaults to `5`. |
 | `RECENT_MESSAGE_LIMIT` | No | Number of recent messages sent to the tutor model. Defaults to `10`. |
 | `MAX_DIALOGUE_CONTEXT_CHARS` | No | Context character cap for dialogue prompts. Defaults to `45000`. |
@@ -190,6 +207,7 @@ Default repo-relative runtime locations:
 | Path | Used For | Production note |
 |---|---|---|
 | `data/lecture_bot.db` | SQLite database | Keep private; mount or symlink to persistent storage. |
+| `data/submissions/` | Moodle participants exports, submission ZIPs, generated grade import CSVs, and validation reports | Private student/grade data; do not publish. |
 | `lectures/` | Lecture packages and admin uploads | Private course material; mount or symlink to persistent storage. |
 | `prompts/*_private_artifact_schema.json` | Generated private artifact schemas accompanying runtime tutor prompts | Public only if they contain no course or student data. |
 | `exports/` | Session/investigation exports from scripts | Private; do not publish. |

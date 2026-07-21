@@ -2,7 +2,7 @@
 
 Date: 2026-05-07
 
-This document captures the current state of the Moodle grade-import work so a future conversation can resume quickly.
+This document captures historical implementation context for the Moodle grade-import work so a future conversation can resume quickly. For the current step-by-step operator process, use [`moodle_grade_upload_runbook.md`](moodle_grade_upload_runbook.md).
 
 ## Goal
 
@@ -125,6 +125,7 @@ The Grades page can:
 
 - show the current participants CSV status;
 - upload/replace the participants CSV;
+- set deadlines in the browser or upload a bulk deadlines CSV;
 - show one expected submission ZIP per lecture folder;
 - upload one or more per-lecture Moodle submission ZIPs;
 - save those ZIPs using the default `<lecture_id>_submissions.zip` naming pattern;
@@ -137,6 +138,9 @@ New admin routes:
 ```text
 GET  /grades
 POST /grades/participants
+GET  /grades/deadlines/template
+POST /grades/deadlines
+POST /grades/deadlines/edit
 POST /grades/submissions
 POST /grades/prepare
 GET  /grades/files/import
@@ -149,6 +153,8 @@ Added app settings for the Moodle grade workflow:
 ```python
 moodle_submissions_dir = Path("data/submissions")
 moodle_participants_csv = Path("data/submissions/courseid_64733_participants.csv")
+moodle_deadlines_csv = Path("data/submissions/moodle_deadlines.csv")
+moodle_deadline_timezone_offset = "+03:00"
 moodle_grade_import_csv = Path("data/submissions/moodle_grade_import.csv")
 moodle_grade_import_report_csv = Path("data/submissions/moodle_grade_import_report.csv")
 ```
@@ -173,7 +179,7 @@ prepare_moodle_grade_import(...)
 write_grade_import_outputs(...)
 ```
 
-The future admin flow should eventually call:
+The admin flow calls the reusable preparation logic with resolved paths and deadline mappings. Direct use still looks like:
 
 ```python
 prepare_moodle_grade_import(
@@ -333,24 +339,18 @@ The validator now relies on the report header for the authoritative lecture/sess
 
 ### Config Shape
 
-Still needs a final config decision for grade item names and deadlines. A likely future shape:
+The active app settings cover paths and admin-entered deadline timezone offset:
 
-```json
-{
-  "moodle": {
-    "grade_items": {
-      "lecture_01": "Lecture 1",
-      "lecture_02": "Lecture 2",
-      "lecture_03": "Lecture 3"
-    },
-    "deadlines": {
-      "lecture_01": "2026-05-10T23:59:00+03:00"
-    }
-  }
-}
+```python
+moodle_submissions_dir
+moodle_participants_csv
+moodle_deadlines_csv
+moodle_deadline_timezone_offset
+moodle_grade_import_csv
+moodle_grade_import_report_csv
 ```
 
-The path settings now exist as app settings. Grade-item names and deadlines are still not surfaced in the admin UI; for now the generated columns default to lecture ids. This could be course-level config rather than global app settings. The important point is that the core function should continue receiving resolved paths/mappings rather than reading config itself.
+Deadlines are surfaced in the admin UI and stored as `lecture_id,deadline` rows. Grade-item display names are still not configured in the admin UI; generated grade columns default to lecture ids unless the CLI `--grade-item` option or a direct function call supplies names. This could become course-level config rather than global app settings. The important point is that the core function should continue receiving resolved paths/mappings rather than reading config itself.
 
 ### Tests
 
@@ -372,14 +372,7 @@ Add focused tests for:
 
 ### Moodle Dry Run
 
-Before using the CSV on the real gradebook:
-
-- create or confirm the target Moodle grade items;
-- upload the generated CSV in Moodle Grade import;
-- map `ID number` to `useridnumber`;
-- do not map `ID number` to `userid`;
-- map each lecture column to the intended grade item;
-- preview carefully before confirming.
+The current dry-run and upload process is documented in [`moodle_grade_upload_runbook.md`](moodle_grade_upload_runbook.md). The critical Moodle mapping remains: map `ID number` to `useridnumber`, not to `userid`.
 
 ## Files Changed Or Created
 

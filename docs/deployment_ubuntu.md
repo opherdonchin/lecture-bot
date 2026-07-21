@@ -235,7 +235,14 @@ ADMIN_PASSWORD=<REAL_ADMIN_PASSWORD>
 LECTURE_BOT_STUDENT_ROOT_PATH=/stats
 LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin
 
-SESSION_TIMEOUT_MINUTES=20
+MOODLE_SUBMISSIONS_DIR=data/submissions
+MOODLE_PARTICIPANTS_CSV=data/submissions/courseid_64733_participants.csv
+MOODLE_DEADLINES_CSV=data/submissions/moodle_deadlines.csv
+MOODLE_DEADLINE_TIMEZONE_OFFSET=+03:00
+MOODLE_GRADE_IMPORT_CSV=data/submissions/moodle_grade_import.csv
+MOODLE_GRADE_IMPORT_REPORT_CSV=data/submissions/moodle_grade_import_report.csv
+
+SESSION_TIMEOUT_MINUTES=30
 SESSION_WARNING_MINUTES=5
 RECENT_MESSAGE_LIMIT=10
 MAX_DIALOGUE_CONTEXT_CHARS=45000
@@ -580,6 +587,8 @@ Admin checks:
 2. admin login succeeds
 3. lecture list is visible
 4. upload/build actions render properly
+5. Sessions page loads
+6. Grades page loads
 
 ## 18. Direct OpenAI smoke test
 
@@ -666,6 +675,12 @@ pixi run python scripts/export_session_package.py --lecture-id <LECTURE_ID> --ou
 ```
 
 The export ZIP is written under `/srv/lecture-bot/exports/`. Keep it private; it can contain student content, private lecture material, prompts, model audit rows, and grades.
+
+For Moodle grade uploads, follow [`moodle_grade_upload_runbook.md`](moodle_grade_upload_runbook.md). The production admin URL is:
+
+```text
+http://<SERVER_FQDN>/stats-admin/grades
+```
 
 The current systemd app logs live here:
 

@@ -58,6 +58,11 @@ Current admin capabilities:
 - download manual prompt text and support bundles for minutes and rubric generation
 - upload generated `minutes.json` and `rubric.md`
 - refresh `topics` in `lecture_config.json` from uploaded rubric headings
+- upload Moodle participants CSVs and per-lecture submission ZIPs
+- edit or upload Moodle report-generation deadlines
+- generate and download a Moodle grade-import CSV plus validation report
+
+The Moodle grade workflow lives at `/grades` in the admin app. It saves uploaded submission ZIPs under `MOODLE_SUBMISSIONS_DIR` using `<lecture_id>_submissions.zip`, validates reports through `app.moodle_grade_import`, and writes `MOODLE_GRADE_IMPORT_CSV` plus `MOODLE_GRADE_IMPORT_REPORT_CSV`. See [`moodle_grade_upload_runbook.md`](moodle_grade_upload_runbook.md) for the operator process.
 
 ## 5. Lecture Packages
 
