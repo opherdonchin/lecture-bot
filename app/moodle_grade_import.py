@@ -18,6 +18,7 @@ REPORT_HEADER = "=== Lecture Bot Session Report ==="
 REPORT_FIELD_RE = re.compile(r"^([A-Za-z ]+):\s*(.+)$")
 SUBMISSION_FILENAME_RE = re.compile(r"_([^_/]+)_assignsubmission_file_/?([^/]*)")
 STUDENT_ID_IN_REPORT_FILENAME_RE = re.compile(r"^([0-9]+)_")
+PREFIXED_STUDENT_ID_RE = re.compile(r"^student_([0-9]+)$")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -49,6 +50,10 @@ class SubmissionRecord:
     @property
     def student_id(self) -> str:
         return self.report_fields.get("student id", "")
+
+    @property
+    def moodle_student_id(self) -> str:
+        return _moodle_student_id(self.student_id)
 
     @property
     def lecture_id(self) -> str:
@@ -268,7 +273,7 @@ def prepare_moodle_grade_import(
     grade_item_names: Mapping[str, str] | None = None,
     deadlines: Mapping[str, dt.datetime] | None = None,
     grade_tolerance: float = 1.0,
-    report_event_tolerance_seconds: float = 15.0,
+    report_event_tolerance_seconds: float = 30.0,
 ) -> GradeImportResult:
     participants = load_participants_csv(participants_csv_path)
     records, difficulties = read_submission_records(submission_archives)
@@ -405,6 +410,12 @@ def _student_id_from_uploaded_filename(filename: str) -> str:
     return match.group(1) if match else ""
 
 
+def _moodle_student_id(student_id: str) -> str:
+    normalized = student_id.strip()
+    match = PREFIXED_STUDENT_ID_RE.match(normalized)
+    return match.group(1) if match else normalized
+
+
 def _validate_record(
     record: SubmissionRecord,
     *,
@@ -414,14 +425,15 @@ def _validate_record(
     grade_tolerance: float,
     report_event_tolerance_seconds: float,
 ) -> dict[str, str]:
-    participant = participants.get(record.student_id)
+    moodle_student_id = record.moodle_student_id
+    participant = participants.get(moodle_student_id)
     base = {
         "status": "accepted",
         "issue": "",
         "detail": "Validated.",
         "expected_lecture_id": record.expected_lecture_id,
         "lecture_id": record.lecture_id,
-        "student_id": record.student_id,
+        "student_id": moodle_student_id,
         "participant_name": participant.full_name if participant else "",
         "participant_email": participant.emailaddress if participant else "",
         "session_id": record.session_id,
@@ -437,11 +449,11 @@ def _validate_record(
 
     if record.submitted_grade is None:
         return _reject(base, "grade_unparseable", "Could not parse Grade field.")
-    if not record.student_id:
+    if not moodle_student_id:
         return _reject(base, "student_id_missing", "Report did not contain a Student ID.")
     if participant is None:
         return _reject(base, "participant_missing", "Student ID is not present in participant CSV.")
-    if record.filename_student_id and record.filename_student_id != record.student_id:
+    if record.filename_student_id and record.filename_student_id != moodle_student_id:
         return _reject(
             base,
             "filename_student_mismatch",
@@ -466,7 +478,7 @@ def _validate_record(
         return _reject(base, "session_missing", "Session ID was not found in the database.")
 
     base["db_grade"] = "" if session_row["current_grade"] is None else _format_grade(float(session_row["current_grade"]))
-    if session_row["student_id"] != record.student_id:
+    if _moodle_student_id(session_row["student_id"]) != moodle_student_id:
         return _reject(
             base,
             "db_student_mismatch",
@@ -596,7 +608,7 @@ def _choose_records_for_upload(
     by_student_lecture: dict[tuple[str, str], SubmissionRecord] = {}
     superseded: set[tuple[str, str, str]] = set()
     for record in records:
-        key = (record.student_id, record.lecture_id)
+        key = (record.moodle_student_id, record.lecture_id)
         existing = by_student_lecture.get(key)
         if existing is None:
             by_student_lecture[key] = record
@@ -605,10 +617,10 @@ def _choose_records_for_upload(
         existing_time = _parse_datetime(existing.report_fields.get("report generated", ""))
         record_time = _parse_datetime(record.report_fields.get("report generated", ""))
         if existing_time is not None and record_time is not None and _to_utc_naive(record_time) > _to_utc_naive(existing_time):
-            superseded.add((existing.student_id, existing.lecture_id, existing.session_id))
+            superseded.add((existing.moodle_student_id, existing.lecture_id, existing.session_id))
             by_student_lecture[key] = record
         else:
-            superseded.add((record.student_id, record.lecture_id, record.session_id))
+            superseded.add((record.moodle_student_id, record.lecture_id, record.session_id))
     return by_student_lecture, superseded
 
 
