@@ -152,7 +152,29 @@
       </section>
 
       <section class="card admin-card">
-        <h2>Submission ZIPs</h2>
+        <div class="section-header">
+          <div>
+            <h2>Submission ZIPs</h2>
+            <p class="muted">Regeneration combines all uploaded submission ZIPs.</p>
+          </div>
+          <form method="post" action="{{ url_path('clear_grade_submissions') }}">
+            <button type="submit" {% if not has_archives %}disabled{% endif %}>Clear ZIPs</button>
+          </form>
+        </div>
+        <div class="file-row standalone-row">
+          <div>
+            <strong>Multi-lecture ZIP</strong>
+            {% if multi_lecture_archive.exists %}
+            <p class="muted">{{ multi_lecture_archive.name }} · {{ multi_lecture_archive.size_bytes }} bytes · {{ multi_lecture_archive.modified_at }}</p>
+            {% else %}
+            <p class="muted">Upload one Moodle export containing reports from multiple lectures.</p>
+            {% endif %}
+          </div>
+        </div>
+        <form method="post" action="{{ url_path('upload_multi_grade_submissions') }}" enctype="multipart/form-data" class="upload-form">
+          <input type="file" name="uploaded_file" accept=".zip,application/zip" required />
+          <button type="submit">Upload Multi-Lecture ZIP</button>
+        </form>
         {% if lectures %}
         <form method="post" action="{{ url_path('upload_grade_submissions') }}" enctype="multipart/form-data">
           <div class="file-list">

@@ -72,6 +72,25 @@ def _submissions_dir() -> pathlib.Path:
     return submissions_dir
 
 
+def _has_grade_submission_archives(submissions_dir: pathlib.Path) -> bool:
+    return (
+        any(path.exists() for path in moodle_grade_import.discover_submission_archives(submissions_dir).values())
+        or moodle_grade_import.default_multi_lecture_zip_path(submissions_dir).exists()
+    )
+
+
+def _clear_grade_submission_archives(submissions_dir: pathlib.Path) -> list[str]:
+    removed: list[str] = []
+    paths = list(moodle_grade_import.discover_submission_archives(submissions_dir).values())
+    paths.append(moodle_grade_import.default_multi_lecture_zip_path(submissions_dir))
+    for path in sorted(set(paths)):
+        if not path.exists():
+            continue
+        path.unlink()
+        removed.append(path.name)
+    return removed
+
+
 def _url_path(request: fa.Request, route_name: str, **path_params: str) -> str:
     return request.url_for(route_name, **path_params).path
 
@@ -231,7 +250,8 @@ def _grade_context(
         "deadline_timezone_offset": settings.moodle_deadline_timezone_offset,
         "upload_file": _grade_file_info(settings.moodle_grade_import_csv),
         "report_file": _grade_file_info(settings.moodle_grade_import_report_csv),
-        "has_archives": any(path.exists() for path in archives.values()),
+        "multi_lecture_archive": _grade_file_info(moodle_grade_import.default_multi_lecture_zip_path(submissions_dir)),
+        "has_archives": _has_grade_submission_archives(submissions_dir),
     }
 
 
@@ -258,11 +278,15 @@ def _run_grade_import() -> dict[str, int]:
         for lecture_id, path in moodle_grade_import.discover_submission_archives(submissions_dir).items()
         if lecture_id in known_lecture_ids
     }
+    multi_lecture_path = moodle_grade_import.default_multi_lecture_zip_path(submissions_dir)
+    multi_lecture_archives = [multi_lecture_path] if multi_lecture_path.exists() else []
     if not archives:
-        raise ValueError("No lecture submission ZIPs have been uploaded yet.")
+        if not multi_lecture_archives:
+            raise ValueError("No lecture submission ZIPs have been uploaded yet.")
     deadlines = moodle_grade_import.load_deadlines_csv(settings.moodle_deadlines_csv)
     result = moodle_grade_import.prepare_moodle_grade_import(
         submission_archives=archives,
+        multi_lecture_archives=multi_lecture_archives,
         participants_csv_path=settings.moodle_participants_csv,
         db_path=_moodle_database_path(),
         deadlines=deadlines,
@@ -519,7 +543,7 @@ async def upload_grade_deadlines(
         return _render_grades(request, error=str(exc))
 
     submissions_dir = _submissions_dir()
-    if any(path.exists() for path in moodle_grade_import.discover_submission_archives(submissions_dir).values()):
+    if _has_grade_submission_archives(submissions_dir):
         try:
             summary = _run_grade_import()
         except Exception as exc:
@@ -559,7 +583,7 @@ async def save_grade_deadlines(request: fa.Request):
     _write_deadlines_csv(settings.moodle_deadlines_csv, rows)
 
     submissions_dir = _submissions_dir()
-    if any(path.exists() for path in moodle_grade_import.discover_submission_archives(submissions_dir).values()):
+    if _has_grade_submission_archives(submissions_dir):
         try:
             summary = _run_grade_import()
         except Exception as exc:
@@ -604,6 +628,58 @@ async def upload_grade_submissions(request: fa.Request):
         notice=f"Saved {', '.join(saved)} and regenerated Moodle import files.",
         summary=summary,
     )
+
+
+@app.post(
+    "/grades/submissions/multi",
+    response_class=HTMLResponse,
+    dependencies=[fa.Depends(require_admin)],
+    name="upload_multi_grade_submissions",
+)
+async def upload_multi_grade_submissions(
+    request: fa.Request,
+    uploaded_file: fa.UploadFile = fa.File(...),
+):
+    if not uploaded_file.filename:
+        return _render_grades(request, error="Choose a multi-lecture submission ZIP to upload.")
+
+    submissions_dir = _submissions_dir()
+    destination = moodle_grade_import.default_multi_lecture_zip_path(submissions_dir)
+    try:
+        workflow.save_uploaded_file(destination, uploaded_file)
+    except Exception as exc:
+        return _render_grades(request, error=str(exc))
+
+    try:
+        summary = _run_grade_import()
+    except Exception as exc:
+        return _render_grades(
+            request,
+            error=f"Saved {uploaded_file.filename}, but grade import preparation failed: {exc}",
+        )
+    return _render_grades(
+        request,
+        notice=f"Saved {uploaded_file.filename} and regenerated Moodle import files.",
+        summary=summary,
+    )
+
+
+@app.post(
+    "/grades/submissions/clear",
+    response_class=HTMLResponse,
+    dependencies=[fa.Depends(require_admin)],
+    name="clear_grade_submissions",
+)
+async def clear_grade_submissions(request: fa.Request):
+    submissions_dir = _submissions_dir()
+    try:
+        removed = _clear_grade_submission_archives(submissions_dir)
+    except Exception as exc:
+        return _render_grades(request, error=f"Could not clear submission ZIPs: {exc}")
+
+    if not removed:
+        return _render_grades(request, notice="No submission ZIPs to clear.")
+    return _render_grades(request, notice=f"Cleared {len(removed)} submission ZIP(s).")
 
 
 @app.post("/grades/prepare", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="prepare_grade_import")

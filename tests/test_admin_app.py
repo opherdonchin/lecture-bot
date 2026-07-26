@@ -199,6 +199,73 @@ def test_admin_grades_uploads_submission_zip_and_regenerates_outputs(tmp_path, m
     assert "206391179" in download.text
 
 
+def test_admin_grades_uploads_multi_lecture_zip_and_regenerates_outputs(tmp_path, monkeypatch):
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    lecture_dir = settings.lectures_dir / "lecture_01"
+    lecture_dir.mkdir(parents=True)
+    (lecture_dir / "lecture_config.json").write_text(
+        json.dumps({"lecture_id": "lecture_01", "title": "Lecture 1", "active": True, "files": {}, "topics": []}) + "\n",
+        encoding="utf-8",
+    )
+    called = {}
+
+    def fake_run_grade_import():
+        called["ran"] = True
+        settings.moodle_grade_import_csv.parent.mkdir(parents=True, exist_ok=True)
+        settings.moodle_grade_import_csv.write_text("ID number,lecture_01\n206391179,85\n", encoding="utf-8")
+        settings.moodle_grade_import_report_csv.write_text("status\naccepted\n", encoding="utf-8")
+        return {
+            "participants": 1,
+            "archives": 1,
+            "records": 1,
+            "accepted": 1,
+            "accepted_superseded": 0,
+            "rejected": 0,
+            "difficulties": 0,
+            "upload_rows": 1,
+        }
+
+    monkeypatch.setattr(admin_main, "_run_grade_import", fake_run_grade_import)
+    client = TestClient(admin_main.app)
+
+    response = client.post(
+        "/grades/submissions/multi",
+        auth=_auth(),
+        files={"uploaded_file": ("additional.zip", b"zip bytes", "application/zip")},
+    )
+
+    assert response.status_code == 200
+    assert called["ran"] is True
+    assert (settings.moodle_submissions_dir / "multi_lecture_submissions.zip").read_bytes() == b"zip bytes"
+    assert "regenerated Moodle import files" in response.text
+
+
+def test_admin_grades_clears_only_submission_zips(tmp_path, monkeypatch):
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    settings.moodle_submissions_dir.mkdir(parents=True, exist_ok=True)
+    lecture_zip = settings.moodle_submissions_dir / "lecture_01_submissions.zip"
+    multi_zip = settings.moodle_submissions_dir / "multi_lecture_submissions.zip"
+    generated_csv = settings.moodle_grade_import_csv
+    participants_csv = settings.moodle_participants_csv
+    deadlines_csv = settings.moodle_deadlines_csv
+    for path in [lecture_zip, multi_zip, generated_csv, participants_csv, deadlines_csv]:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"content")
+
+    client = TestClient(admin_main.app)
+    response = client.post("/grades/submissions/clear", auth=_auth())
+
+    assert response.status_code == 200
+    assert "Cleared 2 submission ZIP" in response.text
+    assert not lecture_zip.exists()
+    assert not multi_zip.exists()
+    assert generated_csv.exists()
+    assert participants_csv.exists()
+    assert deadlines_csv.exists()
+
+
 def test_admin_grades_deadline_template_and_upload(tmp_path, monkeypatch):
     settings = _settings(tmp_path)
     monkeypatch.setattr(config_module, "get_settings", lambda: settings)

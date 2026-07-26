@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 DEFAULT_SUBMISSIONS_DIR = pathlib.Path("data/submissions")
 DEFAULT_PARTICIPANTS_CSV = DEFAULT_SUBMISSIONS_DIR / "courseid_64733_participants.csv"
 DEFAULT_DATABASE_PATH = pathlib.Path("data/lecture_bot.db")
+DEFAULT_MULTI_LECTURE_ZIP_NAME = "multi_lecture_submissions.zip"
 
 REPORT_HEADER = "=== Lecture Bot Session Report ==="
 REPORT_FIELD_RE = re.compile(r"^([A-Za-z ]+):\s*(.+)$")
@@ -82,6 +83,10 @@ def default_submission_zip_name(lecture_id: str) -> str:
 
 def default_submission_zip_path(submissions_dir: pathlib.Path, lecture_id: str) -> pathlib.Path:
     return submissions_dir / default_submission_zip_name(lecture_id)
+
+
+def default_multi_lecture_zip_path(submissions_dir: pathlib.Path) -> pathlib.Path:
+    return submissions_dir / DEFAULT_MULTI_LECTURE_ZIP_NAME
 
 
 def discover_submission_archives(
@@ -185,10 +190,13 @@ def parse_report_text(text: str) -> dict[str, str] | None:
 
 def read_submission_records(
     submission_archives: Mapping[str, pathlib.Path],
+    multi_lecture_archives: Sequence[pathlib.Path] | None = None,
 ) -> tuple[list[SubmissionRecord], list[dict[str, str]]]:
     records: list[SubmissionRecord] = []
     difficulties: list[dict[str, str]] = []
-    for expected_lecture_id, archive_path in sorted(submission_archives.items()):
+    archive_specs = [(lecture_id, archive_path, False) for lecture_id, archive_path in sorted(submission_archives.items())]
+    archive_specs.extend(("", archive_path, True) for archive_path in (multi_lecture_archives or []))
+    for expected_lecture_id, archive_path, infer_lecture_id in archive_specs:
         if not archive_path.exists():
             difficulties.append(
                 _difficulty_row(
@@ -252,11 +260,13 @@ def read_submission_records(
                     )
                     continue
 
+                record_expected_lecture_id = fields.get("lecture", "") if infer_lecture_id else expected_lecture_id
+
                 records.append(
                     SubmissionRecord(
                         source_zip=str(archive_path),
                         source_file=member_name,
-                        expected_lecture_id=expected_lecture_id,
+                        expected_lecture_id=record_expected_lecture_id,
                         moodle_submission_id=moodle_submission_id,
                         filename_student_id=filename_student_id,
                         report_fields=fields,
@@ -268,6 +278,8 @@ def read_submission_records(
 def prepare_moodle_grade_import(
     *,
     submission_archives: Mapping[str, pathlib.Path],
+    multi_lecture_archives: Sequence[pathlib.Path] | None = None,
+    lecture_ids: Sequence[str] | None = None,
     participants_csv_path: pathlib.Path = DEFAULT_PARTICIPANTS_CSV,
     db_path: pathlib.Path = DEFAULT_DATABASE_PATH,
     grade_item_names: Mapping[str, str] | None = None,
@@ -276,7 +288,7 @@ def prepare_moodle_grade_import(
     report_event_tolerance_seconds: float = 30.0,
 ) -> GradeImportResult:
     participants = load_participants_csv(participants_csv_path)
-    records, difficulties = read_submission_records(submission_archives)
+    records, difficulties = read_submission_records(submission_archives, multi_lecture_archives=multi_lecture_archives)
     grade_item_names = grade_item_names or {}
     deadlines = deadlines or {}
 
@@ -303,9 +315,14 @@ def prepare_moodle_grade_import(
         if key in superseded_keys:
             row["status"] = "accepted_superseded"
             row["issue"] = "duplicate_submission"
-            row["detail"] = "Another accepted submission for the same student and lecture was newer."
+            row["detail"] = "Another accepted submission for the same student and lecture was selected for upload."
 
-    lecture_ids = sorted(submission_archives)
+    if lecture_ids is None:
+        discovered_lecture_ids = {lecture_id for lecture_id in submission_archives}
+        discovered_lecture_ids.update(record.lecture_id for record in accepted_records if record.lecture_id)
+        lecture_ids = sorted(discovered_lecture_ids)
+    else:
+        lecture_ids = sorted(lecture_ids)
     upload_columns = _build_upload_columns(
         lecture_ids=lecture_ids,
         grade_item_names=grade_item_names,
@@ -320,7 +337,7 @@ def prepare_moodle_grade_import(
     )
     summary = {
         "participants": len(participants),
-        "archives": len(submission_archives),
+        "archives": len(submission_archives) + len(multi_lecture_archives or []),
         "records": len(records),
         "accepted": sum(1 for row in report_rows if row["status"] == "accepted"),
         "accepted_superseded": sum(1 for row in report_rows if row["status"] == "accepted_superseded"),
@@ -614,9 +631,24 @@ def _choose_records_for_upload(
             by_student_lecture[key] = record
             continue
 
+        existing_grade = existing.submitted_grade
+        record_grade = record.submitted_grade
         existing_time = _parse_datetime(existing.report_fields.get("report generated", ""))
         record_time = _parse_datetime(record.report_fields.get("report generated", ""))
-        if existing_time is not None and record_time is not None and _to_utc_naive(record_time) > _to_utc_naive(existing_time):
+
+        replace_existing = False
+        if existing_grade is None:
+            replace_existing = record_grade is not None
+        elif record_grade is not None and record_grade > existing_grade:
+            replace_existing = True
+        elif record_grade == existing_grade:
+            replace_existing = (
+                existing_time is not None
+                and record_time is not None
+                and _to_utc_naive(record_time) > _to_utc_naive(existing_time)
+            )
+
+        if replace_existing:
             superseded.add((existing.moodle_student_id, existing.lecture_id, existing.session_id))
             by_student_lecture[key] = record
         else:
