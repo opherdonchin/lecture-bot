@@ -756,20 +756,129 @@ The deployment is student-ready only if all of these are true:
 - final report works
 - both services survive reboot
 
-## 23. First-update procedure
+## 23. Updating the code
 
-When you want to update the code later:
+Production runs merged `main` and nothing else. Do not edit or commit in `/srv/lecture-bot`; make changes in a development clone, merge them through a pull request, then deploy from a development machine with `deploy/remote.env` configured (see `deploy/remote.env.example`):
+
+```bash
+pixi run publish-prod -- --dry-run   # shows the server's commit and what would be deployed
+pixi run publish-prod
+```
+
+`publish-prod` connects over SSH and, in `/srv/lecture-bot`:
+
+1. refuses to run if the checkout has local changes to tracked files or is not on `main`;
+2. fast-forwards to `origin/main` (it never copies files from the development machine, so `lectures/`, `data/` and other untracked server files are never touched);
+3. runs `pixi install` and repairs the shared `.pixi` permissions;
+4. restarts each course's services and checks its `/health` and admin URL.
+
+It prints the previous commit. To roll back to it:
+
+```bash
+pixi run publish-prod -- --revision <previous-commit>
+```
+
+The restarts use `sudo -n`, so the SSH user needs a sudoers rule for exactly those `systemctl restart` commands. For the Statistics services, `sudo visudo -f /etc/sudoers.d/lecture-bot-statistics` with:
+
+```
+<DEPLOY_USER> ALL=(root) NOPASSWD: /usr/bin/systemctl restart lecture-bot lecture-bot-admin
+```
+
+Each further instance adds its own rule (section 24, step 4).
+
+Lecture packages are instance data, not code: copy them into the instance's `lectures/` folder, not through git.
+
+## 24. Adding a course instance
+
+Each course runs as its own **instance**: its own environment file, database, lectures, Moodle files, exports, logs, ports and URL paths, sharing only the code checkout in `/srv/lecture-bot`. The instance's services are the template units `lecture-bot@<instance>.service` and `lecture-bot-admin@<instance>.service`. The example below adds PML (`pml`, served at `/pml` and `/pml-admin` on ports 8002 and 8003); for another course, change the name, paths and ports.
+
+Steps marked **(sudo)** need an account with sudo; the others run as the deployment user, who must be in `appops`.
+
+### 1. Create the instance folder (sudo)
+
+```bash
+sudo install -d -o root -g appops -m 2775 /srv/lecture-bot-instances
+sudo install -d -o lecturebot -g appops -m 2770 \
+  /srv/lecture-bot-instances/pml \
+  /srv/lecture-bot-instances/pml/lectures \
+  /srv/lecture-bot-instances/pml/data \
+  /srv/lecture-bot-instances/pml/data/submissions \
+  /srv/lecture-bot-instances/pml/exports
+```
+
+### 2. Write the instance environment
+
+```bash
+cp /srv/lecture-bot/deploy/instances/pml.env.example /srv/lecture-bot-instances/pml/instance.env
+chgrp appops /srv/lecture-bot-instances/pml/instance.env
+chmod 640 /srv/lecture-bot-instances/pml/instance.env
+nano /srv/lecture-bot-instances/pml/instance.env
+```
+
+Fill in every `<...>` value. Keep every line: any setting missing here silently falls back to `/srv/lecture-bot/.env`, which belongs to Statistics.
+
+Check what the instance will actually use, from the checkout so that the same fallback applies:
 
 ```bash
 cd /srv/lecture-bot
-sudo systemctl stop lecture-bot.service lecture-bot-admin.service
-git pull origin main
-pixi install
-sudo systemctl start lecture-bot.service lecture-bot-admin.service
-set -a
-source .env
-set +a
-pixi run test
+( set -a; source /srv/lecture-bot-instances/pml/instance.env; set +a
+  ~/.pixi/bin/pixi run python -c "import app.config as c; s = c.get_settings(); print(s.database_url, s.lectures_dir, s.moodle_submissions_dir, s.student_root_path, s.admin_root_path, s.admin_username, s.student_restart_command, sep='\n')" )
 ```
 
-If the code update includes changes to the private lecture packages, sync those too before restarting.
+Every path must be under `/srv/lecture-bot-instances/pml/`.
+
+### 3. Initialize the database and lecture defaults
+
+```bash
+cd /srv/lecture-bot
+( umask 007; set -a; source /srv/lecture-bot-instances/pml/instance.env; set +a
+  ~/.pixi/bin/pixi run python scripts/init_db.py )
+cp example_content/config.json /srv/lecture-bot-instances/pml/lectures/config.json
+```
+
+### 4. Logs, services, restart permission and Nginx (sudo)
+
+```bash
+sudo touch /var/log/lecture-bot/pml-student.log /var/log/lecture-bot/pml-admin.log
+sudo chown lecturebot:appops /var/log/lecture-bot/pml-student.log /var/log/lecture-bot/pml-admin.log
+sudo chmod 0660 /var/log/lecture-bot/pml-student.log /var/log/lecture-bot/pml-admin.log
+
+sudo cp /srv/lecture-bot/deploy/systemd/lecture-bot@.service.example /etc/systemd/system/lecture-bot@.service
+sudo cp /srv/lecture-bot/deploy/systemd/lecture-bot-admin@.service.example /etc/systemd/system/lecture-bot-admin@.service
+```
+
+The template units are installed once; later instances reuse them.
+
+Allow the admin app's restart button, and `publish-prod`, to restart exactly these services. Run `sudo visudo -f /etc/sudoers.d/lecture-bot-pml` and enter (with `<DEPLOY_USER>` the account `publish-prod` connects as):
+
+```
+lecturebot ALL=(root) NOPASSWD: /usr/bin/systemctl restart lecture-bot@pml.service
+<DEPLOY_USER> ALL=(root) NOPASSWD: /usr/bin/systemctl restart lecture-bot@pml.service lecture-bot-admin@pml.service
+```
+
+Add the two PML location pairs from `deploy/nginx/lecture-bot.conf.example` to `/etc/nginx/sites-available/lecture-bot`, inside the existing `server` block, then:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+sudo systemctl daemon-reload
+sudo systemctl enable --now lecture-bot@pml.service lecture-bot-admin@pml.service
+```
+
+### 5. Verify
+
+```bash
+curl -fsS http://127.0.0.1/pml/health
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1/pml-admin/    # 401 without credentials
+curl -fsS http://127.0.0.1/stats/health                                  # Statistics still up
+sudo -n /usr/bin/systemctl restart lecture-bot@pml.service               # as lecturebot's rule allows
+```
+
+Check isolation by recording the Statistics database before and after a PML test session; both values must be unchanged:
+
+```bash
+sqlite3 /srv/lecture-bot/data/lecture_bot.db 'select count(*) from sessions;'
+sha256sum /srv/lecture-bot/data/lecture_bot.db
+```
+
+Finally, add `pml=/pml` to `LECTURE_BOT_REMOTE_INSTANCES` in each development machine's `deploy/remote.env`, so that `publish-prod` restarts and checks the PML instance too.

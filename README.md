@@ -51,8 +51,8 @@ For real tutoring behavior, set `OPENAI_API_KEY` in `.env` or the process enviro
 | `pixi run sync-dev-dry-run` | Preview the development sync without changing local files. |
 | `pixi run dev-synced` | Start the student app against the generated local development snapshot from `.env.dev-sync`. |
 | `pixi run admin-dev-synced` | Start the admin app against the generated local development snapshot from `.env.dev-sync`. |
-| `pixi run publish-prod` | Rsync the local repo to the server, run `pixi install`, repair shared `.pixi` permissions, restart services, and verify health. |
-| `pixi run publish-prod-dry-run` | Preview the production publish without changing remote files. |
+| `pixi run publish-prod` | Fast-forward the server checkout to merged `origin/main`, run `pixi install`, repair shared `.pixi` permissions, restart every instance's services, and verify health. `-- --revision <commit>` rolls back. |
+| `pixi run publish-prod-dry-run` | Show the server's commit and what a publish would deploy, without changing the checkout. |
 | `pixi run python scripts/build_lecture_package.py <lecture_id> --force` | Build or rebuild a lecture package from source files. |
 | `pixi run python scripts/prepare_moodle_grade_import.py ...` | Validate Moodle submission ZIPs and generate the multi-lecture Moodle grade-import CSV. |
 | `pixi run python scripts/grade_moodle.py ...` | Run the older single-ZIP Moodle grading helper script. Prefer `prepare_moodle_grade_import.py` for the current workflow. |
