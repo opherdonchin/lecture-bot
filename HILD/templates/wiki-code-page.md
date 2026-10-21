@@ -5,7 +5,7 @@
 | **Covers** | `path/to/file.py`, `path/to/other.py` |
 | **As of** | `abc1234` |
 
-<!-- The header above is parsed by the wiki status checker when installed.
+<!-- The header above is parsed by HILD/scripts/wiki_status.py.
 Covers: tracked repository paths separated by commas; As of: a commit on main,
 not the temporary PR branch. Page name: Code-<name>. -->
 

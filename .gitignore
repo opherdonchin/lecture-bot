@@ -19,6 +19,7 @@ ENV/
 
 # IDE
 .vscode/
+.claude/settings.local.json
 .idea/
 *.swp
 *.swo
@@ -54,3 +55,6 @@ lectures/**
 
 # Grading submissions (keep directory structure but not files)
 data/submissions/**
+
+# HILD understanding map: separate GitHub wiki checkout
+/wiki/

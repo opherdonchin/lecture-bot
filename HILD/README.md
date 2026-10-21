@@ -1,67 +1,42 @@
-# Using HILD in this repository
+# HILD in lecture-bot
 
-HILD is a **human-supervised development process** for guiding, understanding
-and reviewing scientific software produced with coding agents. Its core
-requirements are explicit authorization, inspectable changes, meaningful
-review and recoverable understanding. [The process](process.md) explains
-those requirements; GitHub issues, PRs, skills and other installed files are
-its **reference implementation**. The project's [agent instructions](../AGENTS.md)
-describe its scientific goals and coding conventions.
+Lecture-bot is developed with its own version of HILD (Human-in-the-Loop
+Development), a human-supervised process for building software with coding
+agents. The researcher agrees on each piece of work in advance, reviews
+every change before it is accepted, and keeps a durable record of goals,
+decisions and what they understand.
 
-This page shows **how to begin**; it does not replace the process rules.
-The [plan](plan.md) records the project's goals and what to do next.
+| File | Purpose |
+|---|---|
+| [process.md](process.md) | How the researcher and agent work together. The authoritative rules. |
+| [plan.md](plan.md) | Current goals, state and next steps. |
+| [journal/](journal/) | What happened, one file per day. |
+| [decisions/](decisions/) | Why we chose what we chose. |
+| [templates/](templates/) | Formats for scope issues, PR explanations, journal entries, decisions and wiki pages. |
+| [scripts/](scripts/) | The session-start collector and the wiki staleness checker. |
+| [PROVENANCE.md](PROVENANCE.md) | Where this HILD build came from and how it differs from its source. |
 
-## Start a conversation
+Project rules (what lecture-bot is, its layout, coding style, privacy and
+deployment rules) are in the root [AGENTS.md](../AGENTS.md). Agent
+procedures are the `hild-*` skills in [.agents/skills/](../.agents/skills/).
 
-Open a new chat with an AI coding agent that can read and work with **this
-repository**. Copy this message:
+## Starting a session
 
-> I want to develop this repository using HILD. Please read its agent
-> instructions and HILD process, and use the `hild-scope` skill to work
-> with me on our next piece of work.
->
-> I'm new to HILD, so I'd like to learn by going through an **onboarding
-> scope** together. Start by helping me understand what we want to
-> accomplish and why; then discuss the scope with me before writing any
-> files or creating an issue.
+Open a chat with a coding agent that can work in this repository, then ask:
 
-**Already familiar with HILD?** Replace "onboarding scope" with the work you
-actually want to do.
+> We develop lecture-bot using its HILD process. Please read AGENTS.md and
+> HILD/process.md, orient me with `hild-orient`, and then use `hild-scope`
+> to work with me on the next piece of work.
 
-The [scope skill](../.agents/skills/hild-scope/SKILL.md) has a
-[companion file](../.agents/skills/hild-scope/onboarding-scope.md) for
-onboarding. It is read only for onboarding requests; there is no separate
-onboarding skill.
+In Claude Code, a session-start hook runs
+[session_context.sh](scripts/session_context.sh) and gives the agent the plan,
+latest journal, recent commits and open issues and PRs. Codex can run the same
+collector through [.codex/hooks.json](../.codex/hooks.json) once you trust the
+project's hooks. If no hook ran, ask for `hild-orient` explicitly; no HILD
+procedure depends on a hook.
 
-## What happens during onboarding?
+## What is verified
 
-The agent first helps you **develop a scope together**: what would be useful
-to accomplish, what to leave for later, and what success would look like.
-It explains HILD as you use it, rather than presenting its internal tooling
-upfront. **In ordinary supervised work**, the process requires a durable,
-approved work agreement before implementation, inspectable changes and human
-acceptance. If the researcher expressly delegates independent work, the
-agent may go further provisionally, recording approvals deferred for later
-human review; independence is not acceptance. **In the installed
-GitHub implementation**, an issue records the agreement, a branch and draft
-pull request (PR) keep changes visible, and you review and merge them. The
-plan and journal help future sessions recover current development state.
-
-The PR can propose a wiki page called `Process-HILD` explaining how this
-particular project uses HILD. If you agree, the agent drafts that page
-**after merging**, and you review it before confirming that you understand it.
-
-**Checking installation** means checking files, settings and links.
-**Validating onboarding** means observing an actual agent and researcher
-following the process. These are different checks. Onboarding is recommended
-for beginners, not required for every installation or update.
-
-If a skill, script or wiki is missing, the agent should report that instead
-of claiming the capability works.
-
-For technical details of Claude Code, Codex and Copilot setup and what is
-still untested, see [agent startup integrations](agent-setup.md).
-
-See the [upstream HILD project](https://github.com/Motor-Learning-Lab/HILD)
-for documentation and updates. Local HILD files may evolve with the project;
-future upstream changes must be reviewed rather than blindly replacing them.
+A file being present does not prove that an agent found or followed it. The
+[plan](plan.md) records what has actually been observed in a live session,
+separately for what was installed, discovered, executed and used.
