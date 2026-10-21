@@ -18,59 +18,37 @@ is in Git and the [journal](journal/).
    with speaker notes, solved and student notebooks, Zoom transcripts) and to
    a more mathematical, graduate course, without degrading Statistics.
 
-## Current state — 2026-10-21
+## Current state — 2026-10-22
 
-- **[Scope #14](https://github.com/opherdonchin/lecture-bot/issues/14) is complete.**
-  The researcher approved and squash-merged
-  [PR #15](https://github.com/opherdonchin/lecture-bot/pull/15) as
-  [8545f82](https://github.com/opherdonchin/lecture-bot/commit/8545f82) on
-  2026-10-21. Lecture-bot's HILD process, `AGENTS.md` and Claude/Codex hooks
-  are on `main`. [Decision 0001](decisions/0001-independent-hild-build.md) was
-  accepted by that merge; its status line still reads *Proposed* and is
-  corrected in the next PR, because decision records change only through PRs.
-- The repository allows squash merges only, with automatic branch deletion.
-- **Agent verification:**
-  - Claude Code *discovered and used* the `hild-*` skills through `.claude/skills`, observed in the session that built them.
-  - The session-start hook *executed and used*: not yet observed.
-  - Codex: not tested.
-- [Scope 2, issue #16](https://github.com/opherdonchin/lecture-bot/issues/16)
-  and [Scope 3, issue #17](https://github.com/opherdonchin/lecture-bot/issues/17)
-  are proposed and await the researcher's review.
-- Production serves Statistics only, from `/srv/lecture-bot` at
-  `/stats`/`/stats-admin`. The deployed code is at `3f4979a`, behind `main`.
-  Server prompts and docs match the repository.
-- Statistics runtime state (database, lectures 01–12, submissions, exports,
-  logs, environment) has been copied to the private development folder
-  `~/lecture-bot-instances/statistics/`, outside the clone. The clone root
-  still holds stale copies of `.env`, `lectures/` and `data/`.
-- PML L01's materials are on `main` of the PML development repository
-  (`f8b1389`). L02's deck is in progress; L03–L12 exist only as scope
-  documents.
-- The lecture-bot wiki (understanding map) is enabled but not yet created.
+- **Where state lives:** at the researcher's direction (2026-10-21), the plan
+  and journal are updated by direct commits to `main` only, so work branches
+  carry product changes alone. [#20](https://github.com/opherdonchin/lecture-bot/issues/20) would make this part of the process.
+- **Scopes:**
+  - [#16](https://github.com/opherdonchin/lecture-bot/issues/16), separate course instances: approved as amended ([record](https://github.com/opherdonchin/lecture-bot/issues/16#issuecomment-6326044871)). It uses the `/srv/lecture-bot/{code,instances}` layout and migrates Statistics before PML. [PR #19](https://github.com/opherdonchin/lecture-bot/pull/19) is a draft, being reworked.
+  - [#17](https://github.com/opherdonchin/lecture-bot/issues/17), PML L01 live with a hand-built package and a tutor-prompt review: approved ([record](https://github.com/opherdonchin/lecture-bot/issues/17#issuecomment-6324977298)). Not started.
+  - [#18](https://github.com/opherdonchin/lecture-bot/issues/18), course-defined sources and converters: approved. Not started.
+  - [#20](https://github.com/opherdonchin/lecture-bot/issues/20), versioned releases (release branches, release PRs, `CHANGELOG.md`): **awaiting approval**.
+- **Releases:** tags `v0.2` (first deployment, 2026-04-21) and `v0.3.0` (`3f4979a`, what production runs). The instance work is to be `v0.4`.
+- **Repository contents:** code and documentation only.
+  - The replay database with session text was removed from `main` ([a517f0d](https://github.com/opherdonchin/lecture-bot/commit/a517f0d)); earlier commits keep it, by the researcher's decision.
+  - The presentation, reports, course documents and Quarto were removed ([939fdca](https://github.com/opherdonchin/lecture-bot/commit/939fdca)). The talk is in `~/lecture-bot-talk/`, and the analysis and course documents are in `~/lecture-bot-instances/statistics/`.
+- **Production** serves Statistics only, at `v0.3.0`, from `/srv/lecture-bot`. Do not run `publish-prod` from `main` until PR #19 merges.
+- **Wiki:** four concept pages and a scripts guide, all `draft`.
+- **Agent verification:** Claude Code skills and session-start hook observed working; Codex not tested.
+- PML L01 materials are on `main` of the PML development repository (`~/Repositories/ProbabilisticMachineLearning`).
 
 ## Next steps
 
-1. **Verify the session-start hook:** the researcher opens a fresh Claude
-   Code session in lecture-bot; record whether the orientation data arrived
-   and was used.
-2. **Scope 2 ([issue #16](https://github.com/opherdonchin/lecture-bot/issues/16), proposed): separate course instances.** Instance folders, systemd
-   template units, nginx paths for PML, a PML instance with its own empty
-   database, isolation checks, then migration of Statistics into the same
-   layout and an instance-aware development sync. The deployment part comes
-   first, because L01 depends on it.
-3. **Scope 3 ([issue #17](https://github.com/opherdonchin/lecture-bot/issues/17), proposed): PML L01 tutor live by 2026-10-23.** Build the L01
-   package (slides with notes, transcript, solved notebook, minutes,
-   rubric), researcher review of the rubric topics, a pilot session and the
-   Moodle bonus setup. Then a repeatable pipeline for Typst/PDF sources
-   before L02 (2026-10-28).
-4. After L01 sessions exist, **propose Scope 4: tutoring adapted to PML**,
-   judged against replayed Statistics sessions and real PML sessions.
-5. With the researcher's specific agreement, create the wiki's first page and
-   set up the understanding map.
+1. **PR #19 rework** (#16 PR 2a): new paths, a Statistics env example, a property test over instance examples, tag support in `publish-prod`, and a rewritten description. Then the researcher's full-track review.
+2. **#17:** build the PML L01 package and post the tutor-prompt review.
+3. After PR #19 merges: the Statistics migration window ([`docs/migration_v0.4.md`](../docs/migration_v0.4.md)), then the PML bring-up. The target for L01 is 2026-10-23; its window closes 2026-10-28.
+4. **#20, once approved:** the process PR, then `release/v0.4`.
+5. **#18** PRs A–C, after v0.4. If they're not merged by 2026-10-26, L02 is built by hand under #17.
+6. **#16** PRs 2b and 2c (later version). Data access: admin UI and sync now; per-course groups when a second instructor joins.
 
 ## Open decisions
 
-- PML public paths (`/pml` and `/pml-admin` proposed).
+- PML public paths: `/pml` and `/pml-admin` are used in PR 2a, pending its review.
 - Which PML documents may feed the tutor and rubric.
 - The PML Moodle course ID and bonus-assignment setup.
-- Who runs the server steps that need sudo.
+- Sudo steps: the researcher runs them (per #16); whether the deploy account gets the sudoers rules in the runbook.
