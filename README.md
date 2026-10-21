@@ -217,7 +217,7 @@ Default repo-relative runtime locations:
 
 If `DATABASE_URL` points to a SQLite file outside `data/`, create its parent directory before running `pixi run init-db`.
 
-On Ubuntu/systemd deployments, follow [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md). The committed service examples configure systemd to append service output to `/var/log/lecture-bot/student.log` and `/var/log/lecture-bot/admin.log`; journald remains useful for service status, but these files are the expected place to inspect live app logs.
+On Ubuntu/systemd deployments, follow [docs/deployment_ubuntu.md](docs/deployment_ubuntu.md). Each course runs as its own instance under `/srv/lecture-bot/instances/<course>/`, with the template units in `deploy/systemd/` appending service output to `/var/log/lecture-bot/<course>-student.log` and `/var/log/lecture-bot/<course>-admin.log`; journald remains useful for service status, but these files are the expected place to inspect live app logs.
 
 For operational review, list recent sessions with:
 

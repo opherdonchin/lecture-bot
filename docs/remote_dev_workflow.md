@@ -22,15 +22,13 @@ Required variables:
 - `LECTURE_BOT_REMOTE_HOST`
 - `LECTURE_BOT_REMOTE_USER`
 
-Useful defaults already match the current production layout:
+For deploying (`publish-prod`), set also:
 
-- `LECTURE_BOT_REMOTE_ROOT=/srv/lecture-bot`
-- `LECTURE_BOT_REMOTE_PIXI_BIN=/home/lecturebot/.pixi/bin/pixi`
-- `LECTURE_BOT_REMOTE_LOG_DIR=/var/log/lecture-bot`
-- `LECTURE_BOT_REMOTE_STUDENT_SERVICE=lecture-bot`
-- `LECTURE_BOT_REMOTE_ADMIN_SERVICE=lecture-bot-admin`
+- `LECTURE_BOT_REMOTE_ROOT=/srv/lecture-bot/code` (the default)
+- `LECTURE_BOT_REMOTE_PIXI_BIN=/home/<DEPLOY_USER>/.pixi/bin/pixi`
+- `LECTURE_BOT_REMOTE_INSTANCES="statistics=/stats pml=/pml"`
 
-`LECTURE_BOT_REMOTE_REPO_PATH` is also accepted as a backward-compatible alias for `LECTURE_BOT_REMOTE_ROOT`.
+**`sync-dev` still expects the single-course layout**, where data and lectures sit inside the checkout. It does not work against the instance layout until PR 2c of [#16](https://github.com/opherdonchin/lecture-bot/issues/16) makes it instance-aware. Until then, copy an instance's data with `rsync` from `/srv/lecture-bot/instances/<course>/` into `~/lecture-bot-instances/<course>/`.
 
 Optional:
 
@@ -85,6 +83,6 @@ pixi run publish-prod-dry-run
 pixi run publish-prod
 ```
 
-On the server, this refuses to run if the checkout has local changes or is not on `main`, fast-forwards to `origin/main`, runs `pixi install`, restarts each course instance's services and checks their health. It prints the previous commit; `pixi run publish-prod -- --revision <commit>` rolls back to it. The steps, and the sudoers rules the restart needs, are in [deployment_ubuntu.md](deployment_ubuntu.md#23-updating-the-code).
+On the server, this refuses to run if the checkout has local changes or is not on `main`, fast-forwards to `origin/main`, runs `pixi install`, restarts each course instance's services and checks their health. It prints the previous commit; `pixi run publish-prod -- --revision <commit>` rolls back to it. The steps, and the sudoers rules the restart needs, are in [deployment_ubuntu.md](deployment_ubuntu.md#part-3--deploying-and-rolling-back).
 
 Lecture packages, databases, Moodle files and exports are instance data and are never deployed through git.

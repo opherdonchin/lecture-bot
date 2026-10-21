@@ -16,9 +16,9 @@ usage() {
 Usage: scripts/publish_production.sh [--dry-run] [--revision <commit>]
 
 Deploy merged code to the production server through git. On the server this
-fast-forwards the checkout to origin/main (or checks out --revision, for a
-rollback), refreshes the Pixi environment, restarts every course instance and
-checks its health. Nothing is copied from this machine, so local files,
+fast-forwards the checkout to origin/main (or resets it to --revision, a tag or
+commit, for a specific release or a rollback), refreshes the Pixi environment,
+restarts every course instance and checks its health. Nothing is copied from this machine, so local files,
 lectures and other untracked server files are never touched.
 
 The deploy refuses to run when the server checkout has local changes or is
@@ -26,27 +26,23 @@ not on main.
 
 Required environment:
   LECTURE_BOT_REMOTE_HOST         SSH host for the production server
+  LECTURE_BOT_REMOTE_INSTANCES    Space-separated <instance>=<path> pairs, e.g.
+                                  "statistics=/stats pml=/pml". Each restarts
+                                  lecture-bot@<instance> and
+                                  lecture-bot-admin@<instance> and checks
+                                  <path>/health and <path>-admin/.
 
 Optional environment:
   LECTURE_BOT_REMOTE_USER         SSH user (default: current SSH config)
-  LECTURE_BOT_REMOTE_ROOT         Remote repo root (default: /srv/lecture-bot)
+  LECTURE_BOT_REMOTE_ROOT         Remote code checkout (default: /srv/lecture-bot/code)
   LECTURE_BOT_REMOTE_APP_GROUP    Shared runtime group (default: appops)
   LECTURE_BOT_REMOTE_PIXI_BIN     Remote Pixi binary (default: pixi)
-  LECTURE_BOT_REMOTE_STUDENT_SERVICE Legacy Statistics student service (default: lecture-bot)
-  LECTURE_BOT_REMOTE_ADMIN_SERVICE   Legacy Statistics admin service (default: lecture-bot-admin)
-  LECTURE_BOT_REMOTE_STUDENT_HEALTH_URL  Legacy student health URL (default: http://127.0.0.1/stats/health)
-  LECTURE_BOT_REMOTE_ADMIN_URL    Legacy admin URL (default: http://127.0.0.1/stats-admin/)
-  LECTURE_BOT_REMOTE_INSTANCES    Space-separated <instance>=<path> pairs for
-                                  template-unit instances, e.g. "pml=/pml".
-                                  Each restarts lecture-bot@<instance> and
-                                  lecture-bot-admin@<instance> and checks
-                                  <path>/health and <path>-admin/.
   LECTURE_BOT_SSH_OPTS            Extra ssh options, appended as words
 
 Examples:
   pixi run publish-prod -- --dry-run
   pixi run publish-prod
-  pixi run publish-prod -- --revision 3f4979a    # roll back
+  pixi run publish-prod -- --revision v0.4.0     # a specific release, or a rollback
 EOF
 }
 
@@ -85,17 +81,17 @@ fi
 
 remote_host="${LECTURE_BOT_REMOTE_HOST:-}"
 remote_user="${LECTURE_BOT_REMOTE_USER:-}"
-remote_root="${LECTURE_BOT_REMOTE_ROOT:-${LECTURE_BOT_REMOTE_REPO_PATH:-/srv/lecture-bot}}"
+remote_root="${LECTURE_BOT_REMOTE_ROOT:-/srv/lecture-bot/code}"
 remote_app_group="${LECTURE_BOT_REMOTE_APP_GROUP:-appops}"
 remote_pixi_bin="${LECTURE_BOT_REMOTE_PIXI_BIN:-pixi}"
-student_service="${LECTURE_BOT_REMOTE_STUDENT_SERVICE:-lecture-bot}"
-admin_service="${LECTURE_BOT_REMOTE_ADMIN_SERVICE:-lecture-bot-admin}"
-student_health_url="${LECTURE_BOT_REMOTE_STUDENT_HEALTH_URL:-http://127.0.0.1/stats/health}"
-admin_url="${LECTURE_BOT_REMOTE_ADMIN_URL:-http://127.0.0.1/stats-admin/}"
 instances="${LECTURE_BOT_REMOTE_INSTANCES:-}"
 
 if [[ -z "$remote_host" ]]; then
   echo "LECTURE_BOT_REMOTE_HOST is required." >&2
+  exit 1
+fi
+if [[ -z "$instances" ]]; then
+  echo "LECTURE_BOT_REMOTE_INSTANCES is required." >&2
   exit 1
 fi
 
@@ -111,7 +107,7 @@ fi
 ssh_cmd+=("$ssh_target")
 
 # Each check is "<service>|<health url>|<admin url>".
-checks=("$student_service $admin_service|$student_health_url|$admin_url")
+checks=()
 for pair in $instances; do
   name="${pair%%=*}"
   path="${pair#*=}"
@@ -139,7 +135,7 @@ if [[ "\$branch" != "main" ]]; then
   exit 1
 fi
 
-git fetch --quiet origin
+git fetch --quiet --tags origin
 previous=\$(git rev-parse --short HEAD)
 if [[ -n "\$revision" ]]; then
   target=\$(git rev-parse --short "\$revision^{commit}")
