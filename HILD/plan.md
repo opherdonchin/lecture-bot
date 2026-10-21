@@ -44,12 +44,12 @@ is in Git and the [journal](journal/).
 1. **Researcher reviews PR #15** (read track) and merges it. Then verify in
    a fresh Claude Code session that `hild-orient` and `hild-scope` are found
    and the session-start hook output arrives, and record the result here.
-2. **Propose Scope 2: separate course instances.** Instance folders, systemd
+2. **Scope 2 ([issue #16](https://github.com/opherdonchin/lecture-bot/issues/16), proposed): separate course instances.** Instance folders, systemd
    template units, nginx paths for PML, a PML instance with its own empty
    database, isolation checks, then migration of Statistics into the same
    layout and an instance-aware development sync. The deployment part comes
    first, because L01 depends on it.
-3. **Propose Scope 3: PML L01 tutor live by 2026-10-23.** Build the L01
+3. **Scope 3 ([issue #17](https://github.com/opherdonchin/lecture-bot/issues/17), proposed): PML L01 tutor live by 2026-10-23.** Build the L01
    package (slides with notes, transcript, solved notebook, minutes,
    rubric), researcher review of the rubric topics, a pilot session and the
    Moodle bonus setup. Then a repeatable pipeline for Typst/PDF sources
