@@ -37,7 +37,7 @@ is in Git and the [journal](journal/).
   and [Scope 3, issue #17](https://github.com/opherdonchin/lecture-bot/issues/17)
   are proposed and await the researcher's review.
 - Production serves Statistics only, from `/srv/lecture-bot` at
-  `/stats`/`/stats-admin`. The deployed code is one commit behind `main`.
+  `/stats`/`/stats-admin`. The deployed code is at `3f4979a`, behind `main`.
   Server prompts and docs match the repository.
 - Statistics runtime state (database, lectures 01–12, submissions, exports,
   logs, environment) has been copied to the private development folder
