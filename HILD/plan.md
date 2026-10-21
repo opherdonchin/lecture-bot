@@ -24,8 +24,8 @@ is in Git and the [journal](journal/).
   and journal are updated by direct commits to `main` only, so work branches
   carry product changes alone. [#20](https://github.com/opherdonchin/lecture-bot/issues/20) would make this part of the process.
 - **Scopes:**
-  - [#16](https://github.com/opherdonchin/lecture-bot/issues/16), separate course instances: approved as amended ([record](https://github.com/opherdonchin/lecture-bot/issues/16#issuecomment-6326044871)). It uses the `/srv/lecture-bot/{code,instances}` layout and migrates Statistics before PML. [PR #19](https://github.com/opherdonchin/lecture-bot/pull/19) is a draft, being reworked.
-  - [#17](https://github.com/opherdonchin/lecture-bot/issues/17), PML L01 live with a hand-built package and a tutor-prompt review: approved ([record](https://github.com/opherdonchin/lecture-bot/issues/17#issuecomment-6324977298)). Not started.
+  - [#16](https://github.com/opherdonchin/lecture-bot/issues/16), separate course instances: approved as amended ([record](https://github.com/opherdonchin/lecture-bot/issues/16#issuecomment-6326044871)). It uses the `/srv/lecture-bot/{code,instances}` layout and migrates Statistics before PML. [PR #19](https://github.com/opherdonchin/lecture-bot/pull/19) is reworked and ready for full-track review.
+  - [#17](https://github.com/opherdonchin/lecture-bot/issues/17), PML L01 live with a hand-built package and a tutor-prompt review: approved ([record](https://github.com/opherdonchin/lecture-bot/issues/17#issuecomment-6324977298)). The slides, handout, notebook and bot notes are built, and the [tutor-prompt review](https://github.com/opherdonchin/lecture-bot/issues/17#issuecomment-6326993214) is posted. **Blocked on the L01 Zoom transcript.**
   - [#18](https://github.com/opherdonchin/lecture-bot/issues/18), course-defined sources and converters: approved. Not started.
   - [#20](https://github.com/opherdonchin/lecture-bot/issues/20), versioned releases (release branches, release PRs, `CHANGELOG.md`): **awaiting approval**.
 - **Releases:** tags `v0.2` (first deployment, 2026-04-21) and `v0.3.0` (`3f4979a`, what production runs). The instance work is to be `v0.4`.
@@ -39,14 +39,16 @@ is in Git and the [journal](journal/).
 
 ## Next steps
 
-1. **PR #19 rework** (#16 PR 2a): new paths, a Statistics env example, a property test over instance examples, tag support in `publish-prod`, and a rewritten description. Then the researcher's full-track review.
-2. **#17:** build the PML L01 package and post the tutor-prompt review.
+1. **PR #19:** the researcher's full-track review.
+2. **#17:** once the transcript arrives, build `transcript.md`, then the minutes and rubric, then the researcher's rubric review. Before the pilot, decide which OpenAI key and budget PML uses.
 3. After PR #19 merges: the Statistics migration window ([`docs/migration_v0.4.md`](../docs/migration_v0.4.md)), then the PML bring-up. The target for L01 is 2026-10-23; its window closes 2026-10-28.
 4. **#20, once approved:** the process PR, then `release/v0.4`.
 5. **#18** PRs A–C, after v0.4. If they're not merged by 2026-10-26, L02 is built by hand under #17.
 6. **#16** PRs 2b and 2c (later version). Data access: admin UI and sync now; per-course groups when a second instructor joins.
 
 ## Open decisions
+
+- Which OpenAI key and budget PML uses: the Statistics log shows past quota exhaustion.
 
 - PML public paths: `/pml` and `/pml-admin` are used in PR 2a, pending its review.
 - Which PML documents may feed the tutor and rubric.
