@@ -16,9 +16,9 @@ researcher's **current** confirmation is what makes a page `understood`.
 The researcher may later withdraw that confirmation; a stored status
 does not override their current judgment.
 
-In the original project, the wiki is a separate Git repository copied into a local `wiki/` folder that the main repository ignores. The installed project's configuration should identify its actual wiki location. **Do not create or overwrite a wiki implicitly.** In particular, existing-wiki integration is outside the first-install scope.
+Lecture-bot's wiki is the separate Git repository `https://github.com/opherdonchin/lecture-bot.wiki.git`, cloned into the local `wiki/` folder that the main repository ignores. **Do not create or overwrite a wiki implicitly.**
 
-**Creating a new wiki:** If there is no wiki and the researcher has approved creating one, read [new-wiki.md](new-wiki.md). This companion is for a *fresh* wiki only. If an existing wiki is found, stop and propose a separate integration scope; do not replace it.
+**Creating a new wiki:** If there is no wiki and the researcher has approved creating one, read [new-wiki.md](new-wiki.md). This companion is for a *fresh* wiki only. If the wiki already has pages, never replace them.
 
 1. **Find the wiki and get the latest pages.** Read its configured location and remote address. If it uses Git, pull only when Git can add the new changes without rewriting existing work (`--ff-only`). If that fails, stop and explain rather than overwrite anyone's edits.
 2. **Draft from the actual code.** A code page should describe what is already on `main`, with the commit it describes. If a page might be out of date, compare that commit with the current code. Use a process, concept, guide or resource page for other subjects.
@@ -27,5 +27,3 @@ retract that assessment, record `needs-review` or `needs-revision`
 as appropriate. Link related pages; create placeholders only when the agreed work needs them.
 4. **Keep navigation and status current.** Update Home and the sidebar. If the staleness checker exists, run `HILD/scripts/wiki_status.py --write` on the configured wiki and inspect what it changed. This script does not commit or publish anything.
 5. **Publish promptly.** Commit and push the wiki after each approved update; report page links and those awaiting human review.
-
-For onboarding, the scope/PR may propose a `Process-HILD` wiki page, but write the agreed draft **after** the onboarding PR has merged.

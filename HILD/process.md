@@ -38,7 +38,7 @@ already works.
 
 **How to read the rest of this document:** Process statements specify what
 the human and agent aim to achieve, without depending on a particular tool.
-Nearby implementation instructions say how this installation achieves it;
+Nearby implementation instructions say how lecture-bot achieves it;
 these remain binding conventions until the researcher agrees to change them.
 Some passages are wholly process or wholly implementation, where that is
 clearer. Do not mechanically duplicate a process statement for every command.
@@ -427,12 +427,12 @@ reviewer can confirm a page as `understood`.
 
 | Skill | Purpose |
 |---|---|
-| `hild-orient` | Present a session-start status and questions for the reviewer |
-| `hild-scope` | Prepare an agreed scope before nontrivial development |
-| `hild-explain` | Prepare a layered PR explanation for human review |
-| `hild-journal` | Record milestones and refresh the plan |
-| `hild-understood` | Draft or revise an understanding-map page |
-| `hild-digest` | Review repository hygiene and understanding debt |
+| [`hild-orient`](../.agents/skills/hild-orient/SKILL.md) | Present a session-start status and questions for the reviewer |
+| [`hild-scope`](../.agents/skills/hild-scope/SKILL.md) | Prepare an agreed scope before nontrivial development |
+| [`hild-explain`](../.agents/skills/hild-explain/SKILL.md) | Prepare a layered PR explanation for human review |
+| [`hild-journal`](../.agents/skills/hild-journal/SKILL.md) | Record milestones and refresh the plan |
+| [`hild-understood`](../.agents/skills/hild-understood/SKILL.md) | Draft or revise an understanding-map page |
+| [`hild-digest`](../.agents/skills/hild-digest/SKILL.md) | Review repository hygiene and understanding debt |
 
 **Verification:** a skill's presence does not establish that an agent
 discovered or followed it, and a configured hook does not prove it ran.

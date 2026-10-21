@@ -5,13 +5,13 @@ description: Present a concise start-of-session orientation about project progre
 
 # Orient
 
-Rules: [HILD process](../../../HILD/process.md), *Presentations* and *Durable state files*. Resolve any configured authoritative paths before acting.
+Rules: [HILD process](../../../HILD/process.md), *Presentations* and *Durable state files*.
 
 **Purpose:** restore accurate shared context so the researcher can choose
 what needs attention. The session hook and shell collector are helpful
 reference mechanisms, not prerequisites for doing this orientation.
 
-1. **Find out what happened.** If a session-start hook has provided information, use it. Otherwise read the plan, latest journal, recent Git changes, open issues and PRs, and available wiki status. The reference `HILD/scripts/session_context.sh` (once installed) can supply these facts; do not assume it has run or exists.
+1. **Find out what happened.** If a session-start hook has provided information, use it. Otherwise read the plan, latest journal, recent Git changes, open issues and PRs, and available wiki status. Running `bash HILD/scripts/session_context.sh` from the repository root supplies these facts; do not assume the hook has already run it.
 2. **Check what is missing.** Note completed work that the journal doesn't mention and wiki edits that haven't been published. Explain any gaps, then use `hild-journal` or `hild-understood` when authorized to repair them.
 3. **Present** in about fifteen lines, leading with what needs the human:
    - **Needs you:** PRs awaiting review and proposed approval tracks, scope

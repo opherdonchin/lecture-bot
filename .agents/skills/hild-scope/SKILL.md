@@ -1,6 +1,6 @@
 ---
 name: hild-scope
-description: Work with the researcher to agree on a manageable scope before nontrivial development. Use when someone wants to plan work, scope a change, or begin HILD onboarding.
+description: Work with the researcher to agree on a manageable scope before nontrivial development. Use when someone wants to plan work or scope a change.
 ---
 
 # Scope — develop an agreement together
@@ -8,8 +8,8 @@ description: Work with the researcher to agree on a manageable scope before nont
 Authority: [HILD process](../../../HILD/process.md), *Scope agreements*.
 The completed agreement uses the
 [scope issue template](../../../HILD/templates/scope-issue.md).
-Locate the host project's real plan, decisions and process; `HILD/` is
-the default, not a reason to duplicate files kept elsewhere.
+Lecture-bot's plan, decisions and process live in `HILD/`; product design
+lives in `docs/`.
 
 **Purpose:** establish a durable, inspectable agreement about what the agent
 is authorized to do. An authorization to run independently allows work to
@@ -25,13 +25,6 @@ Read the project's current plan and relevant decisions, then discuss what
 the researcher is trying to accomplish and why. Use goals they already
 gave you rather than asking them to repeat themselves. Offer useful
 expertise and explain recommendations in terms of their project.
-
-The **newcomer-specific introduction**, including what to say after
-the researcher agrees to begin their first scope, belongs in the
-[onboarding companion](onboarding-scope.md), not here. **Read that file
-when the researcher is new to HILD, requests guidance, or explicitly
-wants an onboarding scope**. Do not load it for ordinary scoping by an
-experienced researcher.
 
 ## Build shared understanding of the work
 
@@ -68,7 +61,7 @@ access blocker and remain stopped.
 GitHub link; briefly explain what the **actual issue** allows and excludes,
 and ask them to **review and approve that issue or suggest corrections**.
 This is a genuine stopping point **in the ordinary supervised workflow**.
-Do not start a branch, run an installer, apply changes, or treat an earlier
+Do not start a branch, apply changes, or treat an earlier
 conversational `OK` as approval of a GitHub document the researcher has
 not reviewed. With a **separately explicit independent-work mandate**, the
 agent may continue provisionally past ordinary approval points, recording
@@ -82,8 +75,8 @@ approval in chat. Link back to that record when starting work. If the issue
 changes materially, show the updated issue and obtain fresh approval.
 
 Approval to **discuss a scope**, permission to **create its issue**,
-approval of the **issue's contents**, permission to **apply an installer
-preview**, and **PR review/merge** are separate decisions. Keep the
+approval of the **issue's contents**, and **PR review/merge** are separate
+decisions. Keep the
 conversation concise, but never silently combine these gates.
 
 Do not merge a pull request or mark the researcher's understanding

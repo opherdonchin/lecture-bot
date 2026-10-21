@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).parents[1] / "HILD/scripts/session_context.sh"
+SCRIPT = Path(__file__).parents[2] / "HILD/scripts/session_context.sh"
 
 
 def git(repo, *args):
