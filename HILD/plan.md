@@ -46,16 +46,16 @@ is in Git and the [journal](journal/).
   The clone root still holds stale `.env`, `lectures/` (01–09) and `data/`.
 - PML L01's materials are on `main` of the PML development repository
   (`f8b1389`). L02's deck is in progress.
-- The lecture-bot wiki (understanding map) is enabled but not yet created.
+- The [wiki](https://github.com/opherdonchin/lecture-bot/wiki) exists: four concept pages and a scripts guide, all `draft`.
 
 ## Next steps
 
-1. **PR 2a ([#16](https://github.com/opherdonchin/lecture-bot/issues/16)):** open the draft PR and get the researcher's full-track review. After merge, the researcher runs the sudo steps of runbook section 24 and the agent the rest, bringing up `/pml`; then the first git-based `publish-prod`.
+1. **PR 2a ([#16](https://github.com/opherdonchin/lecture-bot/issues/16), [PR #19](https://github.com/opherdonchin/lecture-bot/pull/19), draft after review round 1):** await decisions on tags, layout and a Statistics-first order; amend #16 if agreed, then rework. After merge, the researcher runs the sudo steps of runbook section 24 and the agent the rest, bringing up `/pml`; then the first git-based `publish-prod`.
 2. **[#17](https://github.com/opherdonchin/lecture-bot/issues/17), once approved:** build the L01 package, review the tutor prompt, then rubric review, pilot and Moodle dry run, by 2026-10-23.
 3. **[#18](https://github.com/opherdonchin/lecture-bot/issues/18):** PRs A–C. If not merged by 2026-10-26, L02 is built by hand under #17.
 4. **PR 2b ([#16](https://github.com/opherdonchin/lecture-bot/issues/16)):** enforced isolation. It must also cover tutor-prompt activation, which rewrites the shared `prompts/` files from any instance's admin app.
 5. After real PML sessions, propose a PML-tutoring scope (runtime prompt, grading calibration), using the gaps listed in #17's tutor-prompt review.
-6. With the researcher's specific agreement, create the wiki's first page.
+6. Wiki: created by the researcher on 2026-10-21; concept pages for PR #19 are drafts awaiting the researcher.
 
 ## Open decisions
 
