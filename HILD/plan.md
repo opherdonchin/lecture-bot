@@ -20,13 +20,22 @@ is in Git and the [journal](journal/).
 
 ## Current state — 2026-10-21
 
-- **[Scope #14](https://github.com/opherdonchin/lecture-bot/issues/14)** (build
-  lecture-bot's HILD process) is approved. Its draft
-  [PR #15](https://github.com/opherdonchin/lecture-bot/pull/15) contains the
-  derived HILD files, `AGENTS.md`, the Claude/Codex hooks and proposed
-  [decision 0001](decisions/0001-independent-hild-build.md). The HILD
-  script tests pass locally. **Live agent discovery and hook execution are
-  not yet verified.**
+- **[Scope #14](https://github.com/opherdonchin/lecture-bot/issues/14) is complete.**
+  The researcher approved and squash-merged
+  [PR #15](https://github.com/opherdonchin/lecture-bot/pull/15) as
+  [8545f82](https://github.com/opherdonchin/lecture-bot/commit/8545f82) on
+  2026-10-21. Lecture-bot's HILD process, `AGENTS.md` and Claude/Codex hooks
+  are on `main`. [Decision 0001](decisions/0001-independent-hild-build.md) was
+  accepted by that merge; its status line still reads *Proposed* and is
+  corrected in the next PR, because decision records change only through PRs.
+- The repository allows squash merges only, with automatic branch deletion.
+- **Agent verification:**
+  - Claude Code *discovered and used* the `hild-*` skills through `.claude/skills`, observed in the session that built them.
+  - The session-start hook *executed and used*: not yet observed.
+  - Codex: not tested.
+- [Scope 2, issue #16](https://github.com/opherdonchin/lecture-bot/issues/16)
+  and [Scope 3, issue #17](https://github.com/opherdonchin/lecture-bot/issues/17)
+  are proposed and await the researcher's review.
 - Production serves Statistics only, from `/srv/lecture-bot` at
   `/stats`/`/stats-admin`. The deployed code is one commit behind `main`.
   Server prompts and docs match the repository.
@@ -41,9 +50,9 @@ is in Git and the [journal](journal/).
 
 ## Next steps
 
-1. **Researcher reviews PR #15** (read track) and merges it. Then verify in
-   a fresh Claude Code session that `hild-orient` and `hild-scope` are found
-   and the session-start hook output arrives, and record the result here.
+1. **Verify the session-start hook:** the researcher opens a fresh Claude
+   Code session in lecture-bot; record whether the orientation data arrived
+   and was used.
 2. **Scope 2 ([issue #16](https://github.com/opherdonchin/lecture-bot/issues/16), proposed): separate course instances.** Instance folders, systemd
    template units, nginx paths for PML, a PML instance with its own empty
    database, isolation checks, then migration of Statistics into the same
