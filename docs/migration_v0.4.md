@@ -1,6 +1,6 @@
 # Migrating Statistics into the v0.4 instance layout
 
-A one-time procedure. Until v0.4, the server ran a single course, Statistics, from `/srv/lecture-bot`. That one folder held the code checkout, `.env`, `data/`, `lectures/`, `exports/` and some server-only documents, and the services were `lecture-bot` and `lecture-bot-admin`.
+A one-time procedure. Until v0.4, the server ran a single course, Statistics, from `/srv/lecture-bot`. That one folder held the code checkout, `.env`, `data/`, `lectures/` and `exports/`, and the services were `lecture-bot` and `lecture-bot-admin`.
 
 This procedure moves Statistics into the layout described in [`deployment_ubuntu.md`](deployment_ubuntu.md#layout):
 
@@ -33,7 +33,7 @@ cd /srv/lecture-bot
 stamp=$(date +%Y%m%dT%H%M)
 mkdir -p ~/lecture-bot-backups
 sqlite3 data/lecture_bot.db ".backup '$HOME/lecture-bot-backups/statistics-$stamp.db'"
-tar -czf ~/lecture-bot-backups/statistics-$stamp.tar.gz .env data lectures exports reports presentations "Full grading policy.pdf" statistics_2026_2_grade_calculator.xlsx
+tar -czf ~/lecture-bot-backups/statistics-$stamp.tar.gz .env data lectures exports "Full grading policy.pdf" statistics_2026_2_grade_calculator.xlsx
 chmod 600 ~/lecture-bot-backups/statistics-$stamp.*
 ```
 
@@ -61,12 +61,12 @@ sudo install -d -o lecturebot -g appops -m 2770 /srv/lecture-bot/instances/stati
 ```bash
 cd /srv/lecture-bot/code
 sudo mv data lectures exports /srv/lecture-bot/instances/statistics/
-sudo mv reports presentations "Full grading policy.pdf" statistics_2026_2_grade_calculator.xlsx app.log admin.log /srv/lecture-bot/instances/statistics/documents/
+sudo cp -a "Full grading policy.pdf" statistics_2026_2_grade_calculator.xlsx /srv/lecture-bot/instances/statistics/documents/
 sudo mv .env /srv/lecture-bot/instances/statistics/legacy.env
 git status --short --ignored
 ```
 
-The last command should list only ignored tool folders such as `.pixi/` and `__pycache__/`. If anything else appears, decide where it belongs before continuing.
+The two course documents are copied, not moved: they are still tracked at v0.3.0, and step 5's update removes them from the checkout. The last command should list only ignored tool folders such as `.pixi/` and `__pycache__/`. If anything else appears, decide where it belongs before continuing.
 
 ## 5. Update the code and rebuild the environment
 
