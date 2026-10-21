@@ -326,6 +326,19 @@ def test_restart_student_app_uses_configured_system_service_command(tmp_path, mo
     assert calls[0][1]["timeout"] == 15
 
 
+def test_admin_lectures_page_shows_the_instance_restart_command(tmp_path, monkeypatch):
+    settings = _settings(tmp_path)
+    settings.student_restart_command = "sudo -n /usr/bin/systemctl restart lecture-bot@pml.service"
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    client = TestClient(admin_main.app)
+
+    response = client.get("/lectures", auth=_auth())
+
+    assert response.status_code == 200
+    assert "sudo -n /usr/bin/systemctl restart lecture-bot@pml.service" in response.text
+    assert "lecture-bot.service" not in response.text
+
+
 def test_restart_student_app_explains_permission_failure(tmp_path, monkeypatch):
     settings = _settings(tmp_path)
     monkeypatch.setattr(config_module, "get_settings", lambda: settings)

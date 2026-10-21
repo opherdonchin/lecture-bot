@@ -57,7 +57,7 @@
             <button type="submit" class="danger">Restart Student App</button>
           </form>
         </div>
-        <p class="muted">Restarts the <code>lecture-bot.service</code> systemd unit. Required after activating a new tutor prompt. Active sessions will be interrupted. If the server denies the web restart, run <code>sudo systemctl restart lecture-bot.service</code>.</p>
+        <p class="muted">Runs <code>{{ student_restart_command }}</code>, which restarts this course's student app. Required after activating a new tutor prompt. Active sessions will be interrupted. If the server denies the web restart, run that command on the server.</p>
       </section>
 
       <section class="card admin-card">
