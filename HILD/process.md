@@ -1,8 +1,8 @@
-# How we work — HILD
+# How we work — lecture-bot's HILD process
 
-This is a faithful adaptation of the [MotorAdpatationSBI process](https://github.com/opherdonchin/MotorAdpatationSBI/blob/main/docs/process.md), developed under [scope #5](https://github.com/opherdonchin/MotorAdpatationSBI/issues/5) and [PRs #6](https://github.com/opherdonchin/MotorAdpatationSBI/pull/6) and [#7](https://github.com/opherdonchin/MotorAdpatationSBI/pull/7). This document is the **authoritative HILD process**, not an independently invented replacement.
+This is **lecture-bot's own development process**, built from the HILD draft at [Motor-Learning-Lab/HILD@92de97e](https://github.com/Motor-Learning-Lab/HILD/blob/92de97e84bd1c6b61f9e1c997765e361dc7cd458/HILD/process.md), which is itself a faithful adaptation of the [MotorAdpatationSBI process](https://github.com/opherdonchin/MotorAdpatationSBI/blob/main/docs/process.md). It is an independent build, not an installation: lecture-bot owns this text and changes it through reviewed PRs, without tracking upstream for upgrades. [PROVENANCE.md](PROVENANCE.md) records what was taken and how it was changed, and [decision 0001](decisions/0001-independent-hild-build.md) records why.
 
-The aim is that the human **reviewer** stays fully on top of a scientific software project: what is being built, why, how it works, what has been checked, and what they understand less well. Agent-produced documentation supports that understanding.
+The aim is that the human **reviewer** stays fully on top of the software: what is being built, why, how it works, what has been checked, and what they understand less well. Agent-produced documentation supports that understanding.
 
 ## What HILD requires, and how we implement it
 
@@ -55,26 +55,23 @@ approve the actual record and future sessions can recover that approval.
 A casual conversation without a reviewable record is **not** an equivalent
 replacement. Do not silently substitute tools, weaken stopping points or
 claim equivalence without evidence. When compatibility issues arise, report
-specific problems and demonstrated workarounds upstream for later review.
+specific problems and demonstrated workarounds in lecture-bot's journal; the
+researcher decides whether to report them to upstream HILD.
 
-## Authority and local configuration
+## Authority in lecture-bot
 
 - **Requirement:** each type of authoritative guidance and development state has
-  one discoverable home, and adopting HILD preserves a host's existing authority.
-  **Default implementation:** process, plan, journal, decisions and templates live under `HILD/`.
-  An established host may configure **each** authoritative location independently,
-  preserving existing files; do not move or duplicate them merely to install HILD.
-- **Project rules:** scientific aims, source layout, coding conventions and other
-  project-specific rules live in the host's `AGENTS.md` or established equivalent.
+  one discoverable home. In lecture-bot those homes are listed in
+  *Where each thing lives* below; HILD's own files live under `HILD/`, and
+  lecture-bot's established `docs/` and `prompts/` keep their authority.
+- **Project rules:** the product's aims, source layout, coding conventions and
+  other project-specific rules live in the root [`AGENTS.md`](../AGENTS.md).
   That document **points to** this process rather than copying it.
-- **Installed HILD is local:** local modifications are legitimate. New upstream
-  versions must be compared and reconciled, not installed over the local version.
-- **Capability status:** a procedure described here is not evidence it has
-  been installed or tested. See this project's `HILD/plan.md`, installation
-  metadata (when present), and actual test evidence to determine what works.
-- **Path interpretation:** paths in this document are defaults for HILD, not
-  installation-time mandates. Every procedure must resolve the host's recorded
-  authoritative paths before acting. Choice of configuration format is deferred.
+- **This process is local:** lecture-bot changes it freely through reviewed PRs.
+  Later upstream HILD changes are ideas to consider, not updates to apply.
+- **Capability status:** a procedure described here is not evidence that it
+  works. See [`HILD/plan.md`](plan.md) and actual test evidence to determine
+  what has been verified.
 
 
 ## The life of a piece of work — GitHub reference workflow
@@ -161,8 +158,8 @@ comment there directly, or the agent may faithfully record approval given in
 chat, clearly attributed to the researcher rather than written as the agent's
 own approval. In either case the record identifies the agreed issue. A later
 material amendment requires renewed review and approval of the revised scope.
-Creating an issue, reviewing an installer preview, and approving a PR are
-**different** decisions; none substitutes for scope approval.
+Creating an issue and approving a PR are **different** decisions; neither
+substitutes for scope approval.
 
 Work inside an approved scope is authorized for execution, not thereby
 accepted as a result. In ordinary supervised work, the agent stops and asks
@@ -194,12 +191,6 @@ details as they become relevant to the researcher's next decision. If an
 access or tooling limitation blocks an agreed action, work with the researcher
 to diagnose it and choose a way forward. The completed issue may be detailed
 even when the conversation that produced it was short and focused.
-
-For a researcher **new to HILD or requesting guidance**, the
-[onboarding companion](../.agents/skills/hild-scope/onboarding-scope.md)
-is the single procedural home for introductory explanations and the
-guided first-scope conversation. Both `hild-integrate` and `hild-scope`
-point there rather than restating those instructions.
 
 ## Presentations
 
@@ -311,7 +302,7 @@ understand; they may withdraw an earlier confirmation at any time, and that
 current judgment overrides a stale page status. An agent's draft, status
 checker, or past confirmation cannot certify present understanding.
 
-**Implementation:** The **understanding map** records what the reviewer understands. The original implementation uses a separate GitHub wiki cloned into a gitignored `wiki/` directory. That is the initial reference arrangement, **not yet configured here**. An installation must identify its authoritative understanding-map location; support for alternatives is an unresolved design choice.
+**Implementation:** The **understanding map** records what the reviewer understands. In lecture-bot it is the repository's [GitHub wiki](https://github.com/opherdonchin/lecture-bot/wiki), cloned into the gitignored `wiki/` directory. The wiki is enabled but **not yet created**: GitHub requires its first page to be made in the browser. Creating it is a separate, approved step (see the [plan](plan.md)).
 
 The understanding map is never authoritative. It may restate and summarize what the repo says, in
 the reviewer's terms, to make the repo easier to approach; the repo is the source. When
@@ -329,7 +320,7 @@ on top of the work, and that it is making real progress rather than only produci
 | `guide` | A reading path: which pages to read, in what order, to understand an area. |
 | `resource` | A background source: what it is, a link, and why it matters here. |
 
-New kinds are added here when a real page needs one. The [code-page template](templates/wiki-code-page.md) and [general-page template](templates/wiki-page.md) are available in this repository; creating and validating a **fresh** wiki is still planned work under [scope #4](https://github.com/Motor-Learning-Lab/HILD/issues/4).
+New kinds are added here when a real page needs one. Pages use the [code-page template](templates/wiki-code-page.md) and [general-page template](templates/wiki-page.md); the [new-wiki procedure](../.agents/skills/hild-understood/new-wiki.md) describes creating the wiki.
 
 **Statuses.**
 
@@ -361,12 +352,12 @@ as authoritative.
 
 **Staleness.** A script compares the commit each code page describes with `main`;
 pages whose code has changed materially become `stale`, and an issue is opened to
-review them, once the corresponding tooling is installed. Code pages record `main` commits (code as it stands); journals and
+review them. Code pages record `main` commits (code as it stands); journals and
 explanations may link to branch commits.
 
 **When the wiki is committed and pushed.** The wiki has no pull requests; its history is
 its record. When a git-backed understanding map is configured, the agent pulls it before touching it (to pick up the reviewer's browser edits) and commits and pushes it straight after every change it makes. Nothing is left
-uncommitted in the local clone. When orientation tooling is installed, session-start data reports anything unpushed.
+uncommitted in the local clone. The session-start collector reports anything unpushed.
 
 ## Where each thing lives, and how to change it
 
@@ -375,28 +366,28 @@ procedure and current-state record, with links between related knowledge
 instead of duplicated prose.
 
 **Implementation:** Every rule, format and procedure has exactly one authoritative home. Other places
-point to it; they never restate it. The table gives **defaults**, not locations to
-impose on established host repositories.
+point to it; they never restate it.
 
-| What | Default authoritative home |
+| What | Authoritative home in lecture-bot |
 |---|---|
-| Why the project exists; layout; coding, notebook and hygiene rules | host `AGENTS.md` |
+| Why the project exists; layout; coding, privacy and deployment rules | [`AGENTS.md`](../AGENTS.md) |
 | How reviewer and agent work together | `HILD/process.md` (this file) |
-| Step-by-step agent procedures | agent-discoverable `hild-*` skills (placement to be verified) |
-| Formats for scope issues, PRs, journal, decisions, understanding pages | `HILD/templates/` |
-| Machinery, including scripts | `HILD/scripts/` (when ported) |
-| Agent-specific hooks | agent-native configuration (when ported) |
-| Current goals, state and next steps | `HILD/plan.md` |
-| What happened | `HILD/journal/` |
-| Why we chose what we chose | `HILD/decisions/` |
-| Project terms | host glossary, if one exists |
-| What the reviewer understands | understanding map (reference implementation: GitHub wiki) |
-| What remains unvalidated or insufficiently understood | issue tracker, with explicit debt labels when adopted |
+| Step-by-step agent procedures | `hild-*` skills in [`.agents/skills/`](../.agents/skills/) (Claude Code reads them through the `.claude/skills` link) |
+| Formats for scope issues, PRs, journal, decisions, understanding pages | [`HILD/templates/`](templates/) |
+| Machinery, including scripts | [`HILD/scripts/`](scripts/), tested in [`tests/hild/`](../tests/hild/) |
+| Agent-specific hooks | `.claude/settings.json`, `.codex/hooks.json` |
+| Product, tutor and grading design | [`docs/`](../docs/README.md) |
+| Runtime and generation prompts, and their history | [`prompts/`](../prompts/) |
+| Current goals, state and next steps | [`HILD/plan.md`](plan.md) |
+| What happened | [`HILD/journal/`](journal/) |
+| Why we chose what we chose | [`HILD/decisions/`](decisions/) |
+| What the reviewer understands | the [lecture-bot wiki](https://github.com/opherdonchin/lecture-bot/wiki) |
+| What remains unvalidated or insufficiently understood | GitHub issues, with the `understanding-debt` label |
 
 To change something:
 
-1. Find its authority in this table (or the host's configured mapping) and edit it there.
-2. A new coding or hygiene habit goes in the host's project rules; a change to how
+1. Find its authority in this table and edit it there.
+2. A new coding or hygiene habit goes in `AGENTS.md`; a change to how
    human and agent work together goes here. Skills point to rules and templates
    rather than restating them; a skill changes when the **procedure** changes.
 3. If something seems to need saying in two places, make one a pointer.
@@ -419,45 +410,35 @@ There are three different kinds of supporting tool:
   Claude Code session-start hook runs a script automatically. An agent without
   that hook can still perform the same work by following the skill manually.
 
-**Concrete example — starting a session.** In the original project, Claude
-Code starts a session and runs `session_context.sh`. That script collects
-the current branch, plan, latest journal, recent commits, open issues and
-pull requests, and wiki status. Claude then follows the `orient` skill:
-it explains what needs human attention, what changed, and what to do next.
-The script supplies facts; the skill supplies steps; this document supplies
-the governing rules.
+**Concrete example — starting a session.** When Claude Code starts a session
+in lecture-bot, its hook runs [`session_context.sh`](scripts/session_context.sh).
+That script collects the current branch, plan, latest journal, recent commits,
+open issues and pull requests, and wiki status. Claude then follows the
+`hild-orient` skill: it explains what needs human attention, what changed,
+and what to do next. The script supplies facts; the skill supplies steps;
+this document supplies the governing rules.
 
-**Concrete example — checking understanding.** Code pages in the original
-project's wiki record which files they explain and the `main` commit they
-describe. The `wiki_status.py` script compares those files with current
-code and flags pages that may be outdated. The `digest` and `understood`
-skills tell the agent how to report or follow up; only the reviewer can
-confirm a page as `understood`.
+**Concrete example — checking understanding.** Code pages in the wiki record
+which files they explain and the `main` commit they describe. The
+[`wiki_status.py`](scripts/wiki_status.py) script compares those files with
+current code and flags pages that may be outdated. The `hild-digest` and
+`hild-understood` skills tell the agent how to report or follow up; only the
+reviewer can confirm a page as `understood`.
 
-| Procedure in the original project | Purpose |
+| Skill | Purpose |
 |---|---|
-| `hild-orient` (originally `orient`) | Present a session-start status and questions for the reviewer |
-| `hild-scope` (originally `scope`) | Prepare an agreed scope before nontrivial development |
+| `hild-orient` | Present a session-start status and questions for the reviewer |
+| `hild-scope` | Prepare an agreed scope before nontrivial development |
 | `hild-explain` | Prepare a layered PR explanation for human review |
 | `hild-journal` | Record milestones and refresh the plan |
-| `understood` | Draft or revise an understanding-map page |
+| `hild-understood` | Draft or revise an understanding-map page |
 | `hild-digest` | Review repository hygiene and understanding debt |
-| `hild-integrate` | Inspect existing repositories and propose adoption; later install after explicit approval and support reconciliation |
 
-**Origin and verification:** HILD's initial tools were developed in
-[MotorAdpatationSBI](https://github.com/opherdonchin/MotorAdpatationSBI/tree/main/.github/skills),
-including its [Claude Code hooks](https://github.com/opherdonchin/MotorAdpatationSBI/blob/main/.claude/settings.json).
-The original project tested the orientation collector and compaction commands,
-but not live compaction. Some agents cannot expose the same startup data; a
-skill's presence does not establish that the agent discovered or followed it.
-The current state of an individual installation belongs in its
-[plan](plan.md) and installation verification report, not in this reusable
-process specification.
-
-Until a supporting tool is installed and verified, the agent follows the
-rules manually rather than pretending automation exists. An initial
-`hild-integrate` **assessment** never runs hooks or write-capable scripts,
-and never changes local or GitHub state before human approval.
+**Verification:** a skill's presence does not establish that an agent
+discovered or followed it, and a configured hook does not prove it ran.
+What has actually been observed belongs in the [plan](plan.md) and journal.
+Until a tool is verified, the agent follows the rules manually rather than
+pretending automation exists.
 
 ## Durable state files
 
@@ -596,7 +577,10 @@ required for human-supervised development.
   - on `main`, delete superseded files rather than keeping `old` copies; git history is
     the archive. Update or remove references in the same change.
   - Exception: decision records are kept and marked superseded.
+  - Exception: [`prompts/archive/`](../prompts/archive/) and
+    [`docs/archive/`](../docs/archive/) are deliberate histories of the
+    runtime tutor prompt and specification, not superseded drafts. Keep them.
 - Commit messages explain why, not just what.
 - When the agent acts through the reviewer's GitHub account, its comments start with
-  **🤖 Claude:** (or the agent's name) so it is clear who wrote what.
+  **🤖 Claude:** (or **🤖 Codex:**) so it is clear who wrote what.
 - Replies to review comments go in the comment's own thread, with permalinks to the fix.
