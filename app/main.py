@@ -121,7 +121,7 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
     settings = config_module.get_settings()
     state = session_manager.load_state(db, request.session_id)
 
-    if not language_policy.is_english_text(request.message):
+    if language_policy.chat_is_english_only(settings.chat_language) and not language_policy.is_english_text(request.message):
         refusal_message = language_policy.ENGLISH_ONLY_STUDENT_MESSAGE
         session_manager.append_message(db, request.session_id, "user", request.message)
         session_manager.append_message(db, request.session_id, "assistant", refusal_message)

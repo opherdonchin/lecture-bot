@@ -101,3 +101,9 @@ This archive was built from distinct versions of `docs/tutor_specification.md` i
 - Source: current working tree snapshot before the next tutor prompt/specification revision
 - Based on: `docs/tutor_specification.md`
 - Best guess: This snapshot records the active compact adaptive conceptual review tutor specification used during the score-improvement investigation. It emphasizes lecture-grounded evidence, marginal-value breadth/depth decisions, coverage transparency, consolidation and terminal closure, plateau-cause disclosure, repetition control, high-performing student depth, and explicit delegation of official grades, reports, lifecycle, persistence, and runtime transport.
+
+## 2026-10-23.md
+
+- Source: current working tree snapshot before the chat-language revision ([scope issue #26](https://github.com/opherdonchin/lecture-bot/issues/26))
+- Based on: `docs/tutor_specification.md` at `d5b2231`
+- Best guess: The specification in use at the v0.4 migration. The revision changes only its language rule, which becomes conditional on the course's `chat_language`.

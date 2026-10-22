@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import app.config as config_module
 import app.db as db_module
 import app.bot_engine as bot_engine
 import app.models as models
@@ -369,6 +370,27 @@ def test_send_message_forces_assistant_reply_to_english(client):
     assert response.status_code == 200
     data = response.json()
     assert data["message"] == "Please continue in English. This tutor only works in English."
+
+
+def test_send_message_passes_hebrew_both_ways_when_chat_language_is_any(client, monkeypatch):
+    monkeypatch.setattr(config_module.get_settings(), "chat_language", "any")
+    session_id = start_session(client)
+
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = j.dumps({
+        "assistant_message": "נכון. ומה קורה לשונות המותנית?",
+        "updated_state": {"mastery": {}, "evidence_notes": {}, "current_topic_id": None, "tutor_comment": ""},
+        "private_artifact": VALID_PRIVATE_ARTIFACT,
+    })
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        response = client.post("/send_message", json={"session_id": session_id, "message": "למה לדגום"})
+
+    assert response.status_code == 200
+    assert mock_client.chat.completions.create.called
+    assert response.json()["message"] == "נכון. ומה קורה לשונות המותנית?"
 
 
 def test_send_message_writes_dialogue_turn_audit_row(client):

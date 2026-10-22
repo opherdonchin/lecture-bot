@@ -2,9 +2,12 @@ import datetime as dt
 import json
 import unittest.mock as mock
 
+import pytest
+
 import app.bot_engine as bot_engine
 import app.config as config_module
 import app.db as db_module
+import app.language_policy as language_policy
 import app.models as models
 import app.prompt_loader as prompt_loader
 from app.main import app
@@ -479,6 +482,17 @@ def test_generate_report_returns_report_structure(client):
     assert "minutes_elapsed" in data["report_json"]
     assert "minutes_remaining" in data["report_json"]
     assert "session_duration_minutes" in data["report_json"]
+
+
+@pytest.mark.parametrize("chat_language", ["english", "any"])
+def test_generate_report_stays_english_under_every_chat_language(client, monkeypatch, chat_language):
+    monkeypatch.setattr(config_module.get_settings(), "chat_language", chat_language)
+    session_id = start_session(client)
+    _set_mastery_state(session_id, best_scores=[80])
+    with _mock_openai_report("הסטודנט הראה הבנה טובה של התניה."):
+        response = client.post("/generate_report", json={"session_id": session_id})
+    assert response.status_code == 200, response.text
+    assert response.json()["report_text"] == language_policy.ENGLISH_ONLY_REPORT_FALLBACK
 
 
 def test_get_grade_returns_session_timing_fields(client):

@@ -71,3 +71,9 @@ This archive tracks snapshots of `prompts/tutor_prompt.md`. Entries before this 
 - Source: current working tree snapshot before the next tutor prompt/specification revision
 - Based on: `prompts/tutor_prompt.md`
 - Best guess: This runtime prompt reflects the active post-investigation prompt after score-improvement and mastery-frontier adjustments. It keeps the strict JSON/runtime contract and backend ownership rules while strengthening student-requested continuation, grade-improvement response, breadth/depth selection, coverage transparency, adaptive challenge, and high-value follow-up behavior for strong engaged students.
+
+## 2026-10-23.md
+
+- Source: current working tree snapshot before the chat-language revision ([scope issue #26](https://github.com/opherdonchin/lecture-bot/issues/26))
+- Based on: `prompts/tutor_prompt.md` at `d5b2231`
+- Best guess: The runtime prompt in use for Statistics through spring 2026 and at the v0.4 migration. Its only language rule tells the tutor to ask for English when a student writes another language; the revision makes that rule depend on the new `chat_language` runtime input.

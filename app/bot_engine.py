@@ -310,6 +310,7 @@ def generate_reply(
             str(parsed["assistant_message"]),
             topic_defs=topic_defs,
             timing_context=timing_context,
+            chat_language=settings.chat_language,
         )
         raw_updated_state = parsed.get("updated_state", {})
         private_artifact = parsed.get("private_artifact")
@@ -380,10 +381,12 @@ def _build_static_dialogue_prompt_prefix(
     topic_structure_note: str,
     rubric_text: str,
     lecture_context: str,
+    chat_language: str,
     private_artifact_schema_json: str | None = None,
 ) -> str:
     """Build the cache-stable prefix: everything that is identical for the same lecture and prompt template."""
     static_fields: dict = {
+        "chat_language": chat_language,
         "lecture_context": lecture_context,
         "lecture_title": lecture_title,
         "rubric_text": rubric_text,
@@ -465,6 +468,7 @@ def build_dialogue_system_prompt(
         topic_structure_note="Use the rubric text below as the equivalent topic-to-element map or rubric structure.",
         rubric_text=lecture_package["rubric"],
         lecture_context=lecture_context,
+        chat_language=config_module.get_settings().chat_language,
         private_artifact_schema_json=private_artifact_schema_json,
     )
     suffix = _build_dynamic_dialogue_prompt_suffix(
@@ -518,6 +522,7 @@ def sanitize_assistant_message(
     *,
     topic_defs: list[dict],
     timing_context: dict | None = None,
+    chat_language: str = language_policy.CHAT_LANGUAGE_ENGLISH,
 ) -> str:
     """Apply hard guardrails to the student-facing tutor message."""
     topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
@@ -530,6 +535,8 @@ def sanitize_assistant_message(
     sanitized = _BARE_TOPIC_ID_RE.sub(replace_topic_id, sanitized).strip()
     if not timing_context or not timing_context.get("timing_reliable", False):
         sanitized = _TIME_CLAIM_RE.sub("time left", sanitized)
+    if not language_policy.chat_is_english_only(chat_language):
+        return sanitized
     return language_policy.ensure_english_text(
         sanitized,
         language_policy.ENGLISH_ONLY_ASSISTANT_FALLBACK,

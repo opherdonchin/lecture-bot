@@ -31,6 +31,19 @@ class Settings(ps.BaseSettings):
     opening_topic_choice_count: int = 3
     tutor_prompt_template: str = "tutor_prompt.md"  # Default prompt template name
     student_restart_command: str = "sudo -n systemctl restart lecture-bot.service"
+    # Languages students and the tutor may write in: "english" (the default) or "any".
+    # Written as a comma-separated list so that narrower sets can be added later.
+    chat_language: str = "english"
+
+    @pd.field_validator("chat_language")
+    @classmethod
+    def normalize_chat_language(cls, value: str) -> str:
+        languages = {part.strip().lower() for part in value.split(",") if part.strip()}
+        if languages == {"english"}:
+            return "english"
+        if languages == {"any"}:
+            return "any"
+        raise ValueError(f"CHAT_LANGUAGE must be 'english' or 'any', not {value!r}")
 
     @pd.field_validator("student_root_path", "admin_root_path")
     @classmethod

@@ -5,6 +5,7 @@ import unittest.mock as mock
 import pytest
 
 import app.bot_engine as bot_engine
+import app.config as config_module
 import app.language_policy as language_policy
 import app.prompt_loader as prompt_loader
 
@@ -1245,3 +1246,47 @@ def test_generate_reply_uses_tutor_prompt_markdown_with_injected_context():
     assert updated_state["turn_count"] == 3
     assert updated_state["evidence_notes"]["T1"] == "student made a real distinction"
     assert private_artifact == {"check": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Chat language (CHAT_LANGUAGE)
+# ---------------------------------------------------------------------------
+
+def test_sanitize_assistant_message_replaces_hebrew_when_chat_language_is_english():
+    result = bot_engine.sanitize_assistant_message(
+        "נכון. למה השונות קטנה?", topic_defs=[], timing_context=None, chat_language="english"
+    )
+    assert result == language_policy.ENGLISH_ONLY_ASSISTANT_FALLBACK
+
+
+def test_sanitize_assistant_message_keeps_hebrew_when_chat_language_is_any():
+    result = bot_engine.sanitize_assistant_message(
+        "נכון. למה השונות קטנה?", topic_defs=[], timing_context=None, chat_language="any"
+    )
+    assert result == "נכון. למה השונות קטנה?"
+
+
+@pytest.mark.parametrize("chat_language", ["english", "any"])
+def test_dialogue_prompt_tells_the_tutor_the_chat_language(monkeypatch, chat_language):
+    settings = config_module.Settings(chat_language=chat_language)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+
+    prompt = bot_engine.build_dialogue_system_prompt(
+        lecture_package=_CACHING_LECTURE_PACKAGE,
+        state={"topics_sampled": ["T1"], "turn_count": 0},
+        topic_defs=_make_topic_defs_for_caching(),
+        lecture_context=_make_lecture_context_for_caching(),
+    )
+
+    assert f'"chat_language": "{chat_language}"' in prompt
+
+
+@pytest.mark.parametrize("value,expected", [("english", "english"), ("English", "english"), ("any", "any"), (" any, ", "any")])
+def test_chat_language_setting_accepts_english_and_any(value, expected):
+    assert config_module.Settings(chat_language=value).chat_language == expected
+
+
+@pytest.mark.parametrize("value", ["hebrew", "hebrew,english", ""])
+def test_chat_language_setting_rejects_other_values(value):
+    with pytest.raises(ValueError):
+        config_module.Settings(chat_language=value)
