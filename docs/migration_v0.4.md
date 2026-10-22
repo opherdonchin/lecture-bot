@@ -8,7 +8,7 @@ This procedure moves Statistics into the layout described in [`deployment_ubuntu
 - Statistics' data moves to `/srv/lecture-bot/instances/statistics/`;
 - Statistics runs under `lecture-bot@statistics` and `lecture-bot-admin@statistics`.
 
-Its URLs (`/stats`, `/stats-admin`) and ports (8000, 8001) stay the same, so nginx does not change. Nothing is deleted except the old unit files, at the very end. Scope: [#16](https://github.com/opherdonchin/lecture-bot/issues/16).
+Its URLs (`/stats`, `/stats-admin`) and ports (8000, 8001) stay the same, so nginx does not change. Nothing is deleted except the old unit files, at the very end. Scope: [scope issue #16](https://github.com/opherdonchin/lecture-bot/issues/16).
 
 Statistics is down from step 2 to step 9. Expect about half an hour.
 

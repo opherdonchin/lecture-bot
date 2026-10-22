@@ -28,7 +28,7 @@ For deploying (`publish-prod`), set also:
 - `LECTURE_BOT_REMOTE_PIXI_BIN=/home/<DEPLOY_USER>/.pixi/bin/pixi`
 - `LECTURE_BOT_REMOTE_INSTANCES="statistics=/stats pml=/pml"`
 
-**`sync-dev` still expects the single-course layout**, where data and lectures sit inside the checkout. It does not work against the instance layout until PR 2c of [#16](https://github.com/opherdonchin/lecture-bot/issues/16) makes it instance-aware. Until then, copy an instance's data with `rsync` from `/srv/lecture-bot/instances/<course>/` into `~/lecture-bot-instances/<course>/`.
+**`sync-dev` still expects the single-course layout**, where data and lectures sit inside the checkout. It does not work against the instance layout until [scope issue #16, PR 2c](https://github.com/opherdonchin/lecture-bot/issues/16#user-content-pr-2c) makes it instance-aware. Until then, copy an instance's data with `rsync` from `/srv/lecture-bot/instances/<course>/` into `~/lecture-bot-instances/<course>/`.
 
 Optional:
 
