@@ -159,9 +159,9 @@ else
   git merge --ff-only --quiet origin/main
 fi
 "$remote_pixi_bin" install --locked
-chgrp -R "$remote_app_group" .pixi
-chmod -R g+rX .pixi
-find .pixi -type d -exec chmod g+rx {} \;
+# Repair only what this account owns; anything else is not ours to change.
+find .pixi -user "\$(id -un)" -exec chgrp "$remote_app_group" {} +
+find .pixi -user "\$(id -un)" -exec chmod g+rX {} +
 
 check_failed=0
 while IFS='|' read -r services health_url admin_url; do

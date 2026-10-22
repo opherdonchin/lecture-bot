@@ -126,9 +126,8 @@ Build the project environment as `<DEPLOY_USER>`, and make it readable to the se
 ```bash
 cd /srv/lecture-bot/code
 ~/.pixi/bin/pixi install --locked
-chgrp -R appops .pixi
-chmod -R g+rX .pixi
-find .pixi -type d -exec chmod g+rx {} \;
+find .pixi -user "$(id -un)" -exec chgrp appops {} +
+find .pixi -user "$(id -un)" -exec chmod g+rX {} +
 ```
 
 Both accounts need at least the Pixi version that `pixi.toml` requires (`requires-pixi`); keep them the same, and update both with `pixi self-update --version <version>` when that requirement changes. An older Pixi cannot read the lock file and re-resolves every dependency. The service units run `pixi run --as-is`, so starting a service never installs anything or touches `pixi.lock`.

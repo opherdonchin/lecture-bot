@@ -13,6 +13,8 @@ User=lecturebot
 Group=appops
 WorkingDirectory=/srv/lecture-bot/code
 Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
+# Do not write bytecode caches into the shared, deployer-owned Pixi environment.
+Environment=PYTHONDONTWRITEBYTECODE=1
 EnvironmentFile=/srv/lecture-bot/instances/%i/instance.env
 ExecStart=/home/lecturebot/.pixi/bin/pixi run --as-is serve
 Restart=on-failure
