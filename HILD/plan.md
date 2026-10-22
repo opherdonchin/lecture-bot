@@ -24,22 +24,22 @@ is in Git and the [journal](journal/).
   and journal are updated by direct commits to `main` only, so work branches
   carry product changes alone. [scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20) would make this part of the process.
 - **Scopes:**
-  - [scope issue #16](https://github.com/opherdonchin/lecture-bot/issues/16), separate course instances: approved as amended ([record](https://github.com/opherdonchin/lecture-bot/issues/16#issuecomment-6326044871)). It uses the `/srv/lecture-bot/{code,instances}` layout and migrates Statistics before PML. [PR #19](https://github.com/opherdonchin/lecture-bot/pull/19) is reworked and ready for full-track review.
+  - [scope issue #16](https://github.com/opherdonchin/lecture-bot/issues/16), separate course instances: approved as amended ([record](https://github.com/opherdonchin/lecture-bot/issues/16#issuecomment-6326044871)). It uses the `/srv/lecture-bot/{code,instances}` layout and migrates Statistics before PML. [PR #19](https://github.com/opherdonchin/lecture-bot/pull/19) ([scope issue #16, PR 2a](https://github.com/opherdonchin/lecture-bot/issues/16#user-content-pr-2a)) was **merged** on 2026-10-22 as [d5b2231](https://github.com/opherdonchin/lecture-bot/commit/d5b2231) and tagged **v0.4.0**. Next: the Statistics migration window, then the PML bring-up.
   - [scope issue #17](https://github.com/opherdonchin/lecture-bot/issues/17), PML L01 live with a hand-built package and a tutor-prompt review: approved ([record](https://github.com/opherdonchin/lecture-bot/issues/17#issuecomment-6324977298)). The slides, handout, notebook and bot notes are built, and the [tutor-prompt review](https://github.com/opherdonchin/lecture-bot/issues/17#issuecomment-6326993214) is posted. **Blocked on the L01 Zoom transcript.**
   - [scope issue #18](https://github.com/opherdonchin/lecture-bot/issues/18), course-defined sources and converters: approved. Not started.
   - [scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20), versioned releases (release branches, release PRs, `CHANGELOG.md`): **awaiting approval**.
-- **Releases:** tags `v0.2` (first deployment, 2026-04-21) and `v0.3.0` (`3f4979a`, what production runs). The instance work is to be `v0.4`.
+- **Releases:** tags `v0.2` (first deployment, 2026-04-21), `v0.3.0` (`3f4979a`, what production runs) and `v0.4.0` (`d5b2231`, the instance layout, not yet deployed). `pixi.toml` still says 0.1.0; versions in `pixi.toml` and `CHANGELOG.md` come with [scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20).
 - **Repository contents:** code and documentation only.
   - The replay database with session text was removed from `main` ([a517f0d](https://github.com/opherdonchin/lecture-bot/commit/a517f0d)); earlier commits keep it, by the researcher's decision.
   - The presentation, reports, course documents and Quarto were removed ([939fdca](https://github.com/opherdonchin/lecture-bot/commit/939fdca)). The talk is in `~/lecture-bot-talk/`, and the analysis and course documents are in `~/lecture-bot-instances/statistics/`.
-- **Production** serves Statistics only, at `v0.3.0`, from `/srv/lecture-bot`. Do not run `publish-prod` from `main` until PR #19 merges.
+- **Production** serves Statistics only, at `v0.3.0`, from `/srv/lecture-bot` (the single-course layout). `publish-prod` on `main` is now the git-based version, but it targets `/srv/lecture-bot/code`, which exists only after the migration.
 - **Wiki:** four concept pages and a scripts guide, all `draft`.
 - **Agent verification:** Claude Code skills and session-start hook observed working; Codex not tested.
 - PML L01 materials are on `main` of the PML development repository (`~/Repositories/ProbabilisticMachineLearning`).
 
 ## Next steps
 
-1. **[PR #19](https://github.com/opherdonchin/lecture-bot/pull/19)** ([scope issue #16, PR 2a](https://github.com/opherdonchin/lecture-bot/issues/16#user-content-pr-2a)): the researcher's full-track review.
+1. **Statistics migration** ([`docs/migration_v0.4.md`](../docs/migration_v0.4.md)): the researcher opens the window and runs the sudo steps; the agent runs the rest. Then the PML bring-up (runbook Part 2), with the researcher pasting the OpenAI key into PML's `instance.env`.
 2. **[scope issue #17](https://github.com/opherdonchin/lecture-bot/issues/17):** once the transcript arrives, build `transcript.md`, then the minutes and rubric, then the researcher's rubric review. Before the pilot, decide which OpenAI key and budget PML uses.
 3. After PR #19 merges: the Statistics migration window ([`docs/migration_v0.4.md`](../docs/migration_v0.4.md)), then the PML bring-up. The target for L01 is 2026-10-23; its window closes 2026-10-28.
 4. **[scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20), once approved:** the process PR, then `release/v0.4`.
