@@ -159,9 +159,10 @@ else
   git merge --ff-only --quiet origin/main
 fi
 "$remote_pixi_bin" install --locked
-chgrp -R "$remote_app_group" .pixi
-chmod -R g+rX .pixi
-find .pixi -type d -exec chmod g+rx {} \;
+# The services read the code and its environment but must not write to them:
+# group members may read, not write. Only files this account owns are changed.
+find . -user "\$(id -un)" -exec chgrp "$remote_app_group" {} +
+find . -user "\$(id -un)" -exec chmod g+rX,g-w {} +
 
 check_failed=0
 while IFS='|' read -r services health_url admin_url; do
