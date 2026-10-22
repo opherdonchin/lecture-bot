@@ -75,6 +75,16 @@ def is_english_text(text: str) -> bool:
     return False
 
 
+CHAT_LANGUAGE_ENGLISH = "english"
+CHAT_LANGUAGE_ANY = "any"
+CHAT_LANGUAGES = (CHAT_LANGUAGE_ENGLISH, CHAT_LANGUAGE_ANY)
+
+
+def chat_is_english_only(chat_language: str) -> bool:
+    """Return whether student messages and tutor replies must be in English."""
+    return chat_language == CHAT_LANGUAGE_ENGLISH
+
+
 def ensure_english_text(text: str, fallback: str) -> str:
     if is_english_text(text):
         return text

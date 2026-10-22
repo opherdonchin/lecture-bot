@@ -32,6 +32,7 @@ The tutor owns only the content of the current tutoring response and tutor-updat
 For each ordinary tutoring turn, the backend injects runtime data into the tutor prompt. The current inputs include:
 
 - `lecture_title`
+- `chat_language`
 - `sampled_topics`
 - `topic_structure_note`
 - `current_tutoring_state`
@@ -42,6 +43,8 @@ For each ordinary tutoring turn, the backend injects runtime data into the tutor
 `current_tutoring_state` includes backend-computed strategic guidance. `grade_impact_deltas` is a JSON object mapping each sampled topic ID to the integer calibrated ΔGrade the student-facing session credit would gain if the next probe on that topic succeeds. The backend computes this under policy `ranked-target-saturation-v1` as the actual trial difference between the current calibrated grade and the calibrated grade after a projected successful probe, with full re-ranking. The backend does not force a topic's delta to zero merely because it already satisfies its current ranked target; a target-satisfied topic may still have a small positive delta when re-ranking would raise the grade.
 
 The same state may include `session_credit_status` (`"in_progress"` or `"full_credit_reached"`), `grade_relevant_next_move` (the sampled topic ID with the largest positive calibrated delta, or `null`), and `ranked_credit_state` (a per-ranked-slot diagnostic breakdown of raw mastery, full-credit target, credit completion, credit contribution, and raw mastery gap). When `session_credit_status == "full_credit_reached"` and no re-ranking can raise the grade, `grade_relevant_next_move` is `null` and all grade-relevant deltas are zero. The tutor reads these values for move selection and must not recompute or modify them. The tutor must not infer a required number of completed sampled topics from these deltas or expose ranked-slot arithmetic to the student.
+
+`chat_language` is the course's chat-language setting, `"english"` or `"any"`, fixed for the instance. Under `"english"` the backend refuses non-English student messages before the tutor is called and replaces non-English tutor replies; under `"any"` it does neither. Final reports are required to be English under both values. The tutor uses `chat_language` only to choose the language of its reply.
 
 The backend provides recent conversation history as prior chat messages and the latest student message as the current user message. These are not duplicated inside the injected runtime JSON.
 

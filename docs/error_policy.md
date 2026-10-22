@@ -43,7 +43,9 @@ Policy:
 
 ## 4. Language Policy
 
-Student messages are checked before the tutor model is called.
+Each course instance sets `CHAT_LANGUAGE` to `english` (the default) or `any`.
+
+Under `english`, student messages are checked before the tutor model is called.
 
 If the text is rejected as non-English:
 
@@ -53,7 +55,11 @@ If the text is rejected as non-English:
 - no tutor model call is made
 - the session remains active
 
-Assistant messages returned from OpenAI are also passed through English-only fallback handling before being shown.
+Under `english`, assistant messages returned from OpenAI are also passed through English-only fallback handling before being shown.
+
+Under `any`, neither check runs: students and the tutor may write in any language.
+
+Final reports are passed through English-only fallback handling under both values.
 
 ## 5. Timeout Policy
 

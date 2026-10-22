@@ -38,7 +38,7 @@ The student app exposes a browser chat UI plus RPC-style JSON endpoints.
 | `/health` | GET | Return `{"status": "ok"}`. |
 | `/lectures` | GET | List lecture IDs with a `lecture_config.json`. |
 | `/start_session` | POST | Load the lecture package, create a session, sample focus topics, persist the backend opening message. |
-| `/send_message` | POST | Validate session, enforce timeout, reject non-English student text, call the tutor model, sanitize state, validate/log any private artifact, persist messages and audit row. |
+| `/send_message` | POST | Validate session, enforce timeout, reject non-English student text when `CHAT_LANGUAGE` is `english`, call the tutor model, sanitize state, validate/log any private artifact, persist messages and audit row. |
 | `/submit_note` | POST | Record a student note with session/turn/latest-message context without adding a move, changing state, or exposing the text to the tutor. |
 | `/get_grade` | POST | Compute current grade from backend-owned best mastery state and return timing, reply count, and the latest tutor response. |
 | `/generate_report` | POST | Build the same authoritative grade snapshot and ask OpenAI for report prose, with a local fallback and timing/move metadata. |
