@@ -26,6 +26,8 @@ Steps marked **(sudo)** are run by the researcher. The others are run by the dep
   git -C /srv/lecture-bot rev-parse --abbrev-ref HEAD             # main
   ```
 
+- Pixi is at least the version `pixi.toml` requires (`requires-pixi`), for both the deployment user and the service account (`sudo -u lecturebot -H /home/lecturebot/.pixi/bin/pixi --version`). Update with `pixi self-update --version <version>`. An older Pixi cannot read the lock file and silently re-resolves every dependency.
+
 ## 1. Back up
 
 ```bash
@@ -53,6 +55,7 @@ sha256sum /srv/lecture-bot/data/lecture_bot.db | tee -a ~/lecture-bot-backups/st
 sudo mv /srv/lecture-bot /srv/lecture-bot-v03
 sudo install -d -o root -g appops -m 2775 /srv/lecture-bot /srv/lecture-bot/instances
 sudo mv /srv/lecture-bot-v03 /srv/lecture-bot/code
+sudo chown <DEPLOY_USER>:appops /srv/lecture-bot/code
 sudo install -d -o lecturebot -g appops -m 2770 /srv/lecture-bot/instances/statistics /srv/lecture-bot/instances/statistics/documents
 ```
 
@@ -75,11 +78,13 @@ cd /srv/lecture-bot/code
 git fetch --tags origin
 git merge --ff-only v0.4.0
 rm -rf .pixi
-~/.pixi/bin/pixi install
+~/.pixi/bin/pixi install --locked
 chgrp -R appops .pixi && chmod -R g+rX .pixi && find .pixi -type d -exec chmod g+rx {} \;
 ```
 
-The Pixi environment is rebuilt because it records the folder it was installed in.
+The Pixi environment is rebuilt because it records the folder it was installed in. `--locked` installs exactly what `pixi.lock` lists and fails rather than re-resolving.
+
+The `chown` in step 3 makes the deployment user own the checkout. Git refuses to work in a repository folder owned by another account unless that folder is listed in `safe.directory`.
 
 ## 6. Write the instance settings
 

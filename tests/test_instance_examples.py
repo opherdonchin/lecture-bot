@@ -6,6 +6,7 @@ for all of them, so adding a course's example tests it against the others.
 
 import itertools as itertools_
 import pathlib as pathlib_
+import subprocess as subprocess_
 
 import pytest
 
@@ -26,6 +27,8 @@ def _read_env_example(path: pathlib_.Path) -> dict[str, str]:
         if not line or line.startswith("#"):
             continue
         key, _, value = line.partition("=")
+        if len(value) >= 2 and value[0] == value[-1] == '"':
+            value = value[1:-1]
         values[key] = value
     return values
 
@@ -111,3 +114,18 @@ def test_instance_examples_share_nothing(first, second):
     shared = {kind: value for kind, value in second_claims.items() if value in all_first_values}
 
     assert shared == {}
+
+
+@pytest.mark.parametrize("path", INSTANCE_EXAMPLES, ids=_instance_name)
+def test_instance_example_reads_the_same_in_the_shell(path):
+    # The runbook loads instance.env with the shell's `source`; systemd reads it
+    # directly. An unquoted value with spaces breaks `source`, so check that the
+    # shell sees exactly the values that systemd (and this test's reader) see.
+    script = f'set -a; source "{path}"; set +a; env -0'
+    result = subprocess_.run(["bash", "-c", script], capture_output=True, check=True, env={"PATH": "/usr/bin:/bin"})
+    shell_values = dict(item.split("=", 1) for item in result.stdout.decode().split("\0") if "=" in item)
+    expected = _read_env_example(path)
+
+    mismatched = {key: shell_values.get(key) for key, value in expected.items() if shell_values.get(key) != value}
+
+    assert mismatched == {}

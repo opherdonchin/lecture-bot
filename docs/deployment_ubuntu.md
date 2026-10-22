@@ -117,19 +117,21 @@ The setgid bit (the `2` in `2775`) makes new files inherit the `appops` group.
 Install the Pixi binary for the service account (sudo) and for the deployment user:
 
 ```bash
-sudo -u lecturebot -H bash -lc 'curl -fsSL https://pixi.sh/install.sh | bash'
-curl -fsSL https://pixi.sh/install.sh | bash
+sudo -u lecturebot -H bash -lc 'curl -fsSL https://pixi.sh/install.sh | PIXI_VERSION=v0.82.0 bash'
+curl -fsSL https://pixi.sh/install.sh | PIXI_VERSION=v0.82.0 bash
 ```
 
 Build the project environment as `<DEPLOY_USER>`, and make it readable to the service:
 
 ```bash
 cd /srv/lecture-bot/code
-~/.pixi/bin/pixi install
+~/.pixi/bin/pixi install --locked
 chgrp -R appops .pixi
 chmod -R g+rX .pixi
 find .pixi -type d -exec chmod g+rx {} \;
 ```
+
+Both accounts need at least the Pixi version that `pixi.toml` requires (`requires-pixi`); keep them the same, and update both with `pixi self-update --version <version>` when that requirement changes. An older Pixi cannot read the lock file and re-resolves every dependency. The service units run `pixi run --as-is`, so starting a service never installs anything or touches `pixi.lock`.
 
 Non-interactive SSH sessions may not have `~/.pixi/bin` on `PATH`, so these commands use the full path. Set `LECTURE_BOT_REMOTE_PIXI_BIN` in `deploy/remote.env` the same way.
 
@@ -293,7 +295,7 @@ On the server, `publish-prod`:
 
 1. refuses to run if tracked files in the checkout have been changed, or if the checkout is not on `main`;
 2. fetches, then fast-forwards to `origin/main`, or resets to `--revision`;
-3. runs `pixi install` and repairs the `.pixi` group permissions;
+3. runs `pixi install --locked`, which installs exactly what `pixi.lock` lists, and repairs the `.pixi` group permissions;
 4. restarts each listed course and checks its `/health` and admin URL.
 
 It never copies files from the development machine. Untracked files on the server, including all instance data, cannot be touched. It prints the previous commit, and if a check fails it prints the command that rolls back.

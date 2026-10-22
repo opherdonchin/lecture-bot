@@ -158,7 +158,7 @@ if [[ -n "\$revision" ]]; then
 else
   git merge --ff-only --quiet origin/main
 fi
-"$remote_pixi_bin" install
+"$remote_pixi_bin" install --locked
 chgrp -R "$remote_app_group" .pixi
 chmod -R g+rX .pixi
 find .pixi -type d -exec chmod g+rx {} \;
