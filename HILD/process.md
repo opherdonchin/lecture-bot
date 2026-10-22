@@ -223,6 +223,17 @@ A procedure that is clear only to the agent still needs improvement.
    repo. Do not rely on GitHub to make the link: a bare `#12` or commit hash links only
    in issue and PR text and never inside backticks, and nothing links by itself in a
    repository file or the wiki.
+   **Say what a number refers to.** Name the kind of thing in the link text:
+   - "[scope issue #16](…)", not "#16";
+   - "[PR #19](…)";
+   - "issue #21" for an ordinary issue.
+
+   A PR planned inside a scope issue (for example "PR 2a") is always named with its
+   scope and linked to its place in the issue: "[scope issue #16, PR 2a](…/issues/16#user-content-pr-2a)".
+   For that link to work, the scope issue gives each planned PR an anchor,
+   `<a id="pr-2a"></a>`, on the line before its description. GitHub adds no ids to
+   headings in issues, and shows an anchor `id="pr-2a"` as `user-content-pr-2a`,
+   which is why the link uses that form.
 5. **Load-bearing vs boilerplate.** The walkthrough labels code as *load-bearing — read
    this* or *boilerplate — skim*.
 6. **One sitting, one method.** As our current *process* limit, if a change

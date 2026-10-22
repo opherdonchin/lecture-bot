@@ -10,7 +10,11 @@ plan it serves. Describe the process objective, not merely the tools to use.
 How the work will be carried out using this project's agreed tools and records;
 which files or directories it touches. GitHub PRs are the reference review
 mechanism. If several PRs are needed, list them: each must be explainable in
-one sitting.
+one sitting. Give each planned PR a short name and an anchor on the line before
+its description, so other documents can link to it as "scope issue #N, PR 2a":
+
+<a id="pr-2a"></a>
+**PR 2a: <what it does> (<review track>).**
 
 ## Out of scope
 
