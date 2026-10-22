@@ -133,6 +133,7 @@ def _render_index(request: fa.Request, notice: str | None = None, error: str | N
                 "notice": notice,
                 "error": error,
                 "lectures": lecture_rows,
+                "student_restart_command": shlex.join(_student_restart_command()),
             },
         ),
     )

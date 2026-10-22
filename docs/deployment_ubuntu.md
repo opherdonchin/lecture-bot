@@ -1,540 +1,152 @@
 # Deployment runbook — lecture-bot on Ubuntu LTS
 
-> Replace every placeholder in angle brackets, such as `<SERVER_FQDN>` and `<SERVER_IP>`, with values for your own deployment. The expected deployment SSH user is `lecture-bot`.
+This runbook sets up a server that runs one or more **courses**, each as its own **instance**, from one shared code checkout. It covers:
 
-This runbook assumes:
+- one-time server setup (Part 1);
+- adding a course (Part 2);
+- deploying and rolling back code (Part 3);
+- day-to-day operations (Part 4).
 
-- server OS: **Ubuntu LTS** (tested in practice on Ubuntu 22.04 LTS; expected to work similarly on 24.04 LTS)
-- SSH currently works by IP (`<SERVER_IP>`)
-- browser access should ultimately be by DNS name (`<SERVER_FQDN>`)
-- student app path: `/stats`
-- admin app path: `/stats-admin`
-- repo checkout location: `/srv/lecture-bot`
-- simple layout: code, `.env`, database, and lecture packages all live under `/srv/lecture-bot`
-- startup uses the committed repo scripts and Pixi tasks:
-  - `pixi run serve`
-  - `pixi run admin-serve`
-- `<SERVER_IP>`: the fixed IP address of the new Ubuntu server
-- `<SERVER_FQDN>`: the DNS name students and staff should use in a browser
-- `<BOOTSTRAP_USER>`: the existing SSH user that can already log in to the VM before `lecture-bot` is created
-- `<TA_UNIX_USER>`: an optional additional Linux account for a teaching assistant or operator
-- `<PUBLIC_GITHUB_REPO_URL>`: the clone URL for this public lecture-bot repository
-- `<REAL_OPENAI_API_KEY>`: the production OpenAI API key used by the app
-- `<REAL_OPENAI_MODEL>`: the OpenAI model name to use in production
-- `<REAL_ADMIN_USERNAME>`: the admin username for the deployed admin app
-- `<REAL_ADMIN_PASSWORD>`: the admin password for the deployed admin app
-- `<OLD_SERVER_USER>`: the SSH user on the old server when copying existing private lecture material
-- `<OLD_SERVER_IP>`: the IP address or hostname of the old server when copying existing private lecture material
-- `<OLD_PRIVATE_CLONE_PATH>`: the path on the old server whose `lectures/` directory contains the private lecture packages
+Moving the original single-course Statistics installation into this layout was a one-time job, described in [`migration_v0.4.md`](migration_v0.4.md).
 
-## 0. One-time choices locked in
+Background on the terms used here is in the wiki: [services and systemd](https://github.com/opherdonchin/lecture-bot/wiki/Concept-server-services), [nginx as reverse proxy](https://github.com/opherdonchin/lecture-bot/wiki/Concept-reverse-proxy), [deploying with git](https://github.com/opherdonchin/lecture-bot/wiki/Concept-deploying-with-git) and [course instances](https://github.com/opherdonchin/lecture-bot/wiki/Concept-course-instance).
 
-Use this layout:
+Steps marked **(sudo)** need an account with sudo rights. The others run as the deployment user.
+
+## Placeholders
+
+Replace every placeholder in angle brackets with the value for your deployment:
+
+- `<SERVER_IP>` and `<SERVER_FQDN>`: the server's fixed IP address and the DNS name used in browsers.
+- `<DEPLOY_USER>`: the human account that deploys and operates lecture-bot. It must be in the `appops` group.
+- `<COURSE>`: an instance name, in lower case, such as `statistics` or `pml`.
+- `<PUBLIC_GITHUB_REPO_URL>`: the clone URL of this repository.
+
+## Layout
 
 ```text
 /srv/lecture-bot/
-├─ .env
-├─ app/
-├─ data/
-│  └─ lecture_bot.db
-├─ lectures/
-│  ├─ config.json
-│  └─ <lecture folders>
-├─ scripts/
-│  ├─ serve_student.sh
-│  └─ serve_admin.sh
-└─ ... repo files ...
+├── code/                        # git checkout of this repository; no .env, no course data
+└── instances/
+    ├── statistics/
+    │   ├── instance.env         # every setting for this course, including secrets
+    │   ├── lectures/            # config.json and one folder per lecture
+    │   ├── data/
+    │   │   ├── lecture_bot.db
+    │   │   └── submissions/     # Moodle participants, deadlines, ZIPs, imports
+    │   ├── exports/
+    │   └── documents/           # course documents kept on the server (optional)
+    └── pml/
+        └── ...
 
 /var/log/lecture-bot/
-├─ student.log
-└─ admin.log
+├── statistics-student.log
+├── statistics-admin.log
+├── pml-student.log
+└── pml-admin.log
 ```
 
-Service/user model:
+| Instance | Student path | Admin path | Student port | Admin port | Services |
+|---|---|---|---|---|---|
+| `statistics` | `/stats` | `/stats-admin` | 8000 | 8001 | `lecture-bot@statistics`, `lecture-bot-admin@statistics` |
+| `pml` | `/pml` | `/pml-admin` | 8002 | 8003 | `lecture-bot@pml`, `lecture-bot-admin@pml` |
 
-- bootstrap SSH user already present on the VM: `<BOOTSTRAP_USER>`
-- primary deployment SSH user: `lecture-bot`
-- optional other operator users: `<TA_UNIX_USER>`, sysop, etc.
-- service user: `lecturebot`
-- main group for shared repo operations: `appops`
-- production app logs: `/var/log/lecture-bot/student.log` and `/var/log/lecture-bot/admin.log`
+Accounts:
 
-Network model:
+- `lecturebot`: the service account that runs the apps. It has no login shell.
+- `<DEPLOY_USER>`: the human operator, in group `appops`.
+- `appops`: the shared group. Members can read logs and the database and write exports without becoming the service account.
 
-- student app listens locally on `127.0.0.1:8000`
-- admin app listens locally on `127.0.0.1:8001`
-- Nginx is the only public-facing service
+The apps listen only on `127.0.0.1`. Nginx is the only public-facing service.
 
-## 1. First login and host sanity check
+**Why the checkout has no `.env`:** the app reads settings from its service's environment first, then from a `.env` file in the folder it runs from. Keeping the checkout free of `.env` means a setting missing from an instance can never be taken from another course. Each `instance.env` must set every setting; `deploy/instances/*.env.example` shows them all, and a test checks that they do.
 
-SSH in by IP using the bootstrap account.
+## Part 1 — One-time server setup
 
-Run:
+### 1.1 Host check
 
 ```bash
 hostnamectl
-hostname -f || true
 ip addr
 getent hosts <SERVER_FQDN> || true
 ```
 
-What you want to know:
+If DNS does not resolve yet, continue: it only blocks the final browser URL (see 4.5).
 
-- does `<SERVER_FQDN>` resolve on the server?
-- if so, does it resolve to the new server?
-- what hostname the machine thinks it has
-
-If DNS does not yet resolve correctly, that does **not** block the rest of setup. It only blocks the final browser URL.
-
-## 2. Base packages
+### 1.2 Base packages (sudo)
 
 ```bash
 sudo apt update
 sudo apt upgrade -y
-sudo apt install -y curl git nginx sqlite3 lsof poppler-utils ca-certificates rsync
+sudo apt install -y curl git nginx sqlite3 lsof poppler-utils ca-certificates
 ```
 
-`poppler-utils` is included because admin-side PDF text conversion uses `pdftotext`.
-`rsync` is included because it is the cleanest first-pass way to copy private lecture material from an older server.
+`poppler-utils` provides `pdftotext`, which the admin app uses for PDF handouts.
 
-## 3. Create the human deployment user and SSH access
-
-Create the shared group first:
+### 1.3 Group and accounts (sudo)
 
 ```bash
 sudo addgroup --system appops || true
-```
-
-Create your primary deployment user:
-
-```bash
-sudo adduser lecture-bot
-sudo usermod -aG appops lecture-bot
-sudo usermod -aG sudo lecture-bot
-```
-
-Install an SSH key for `lecture-bot` and verify you can log in directly as that user.
-
-After this point:
-
-- use `<BOOTSTRAP_USER>` only as a fallback/bootstrap account
-- do actual deployment work as `lecture-bot`
-- use `sudo` from `lecture-bot` when needed
-
-## 4. Create the service user
-
-```bash
+sudo usermod -aG appops <DEPLOY_USER>
 sudo adduser --system --home /home/lecturebot --group --shell /usr/sbin/nologin lecturebot
 sudo usermod -aG appops lecturebot
 ```
 
-Why add `lecturebot` to `appops`:
+The service account is in `appops` so that it can read the checkout and the Pixi environment, which the deployment user manages.
 
-- the repo will be human-managed under the `appops` group
-- the service still needs read access to repo files and the built Pixi environment
-- the systemd units run with group `appops`, so deployment operators can read production log files without using the service account
-
-## 5. Create the main deployment directory
-
-Run as `lecture-bot`:
+### 1.4 Folders and checkout (sudo, then deploy user)
 
 ```bash
-sudo mkdir -p /srv/lecture-bot
-sudo chown lecture-bot:appops /srv/lecture-bot
-sudo chmod 2775 /srv/lecture-bot
+sudo install -d -o root -g appops -m 2775 /srv/lecture-bot /srv/lecture-bot/instances
+sudo install -d -o <DEPLOY_USER> -g appops -m 2775 /srv/lecture-bot/code
 ```
 
-This simple layout worked better in practice than making `/srv/lecture-bot` root-owned.
-
-## 6. Clone the public repo
-
-Clone as your normal user, not as root and not as the service user.
+As `<DEPLOY_USER>`:
 
 ```bash
-git clone <PUBLIC_GITHUB_REPO_URL> /srv/lecture-bot
-cd /srv/lecture-bot
-sudo chgrp -R appops /srv/lecture-bot
-sudo chmod -R g+rX /srv/lecture-bot
-sudo find /srv/lecture-bot/.git -type d -exec chmod g+rx {} \;
-sudo find /srv/lecture-bot/.git -type f -exec chmod g+r {} \;
+git clone <PUBLIC_GITHUB_REPO_URL> /srv/lecture-bot/code
+chmod -R g+rX /srv/lecture-bot/code
 ```
 
-## 7. Create runtime directories inside the repo
+The setgid bit (the `2` in `2775`) makes new files inherit the `appops` group.
 
-```bash
-cd /srv/lecture-bot
-sudo mkdir -p data lectures exports
-sudo chown -R lecturebot:appops data exports
-sudo chown -R lecturebot:appops lectures
-sudo chmod -R u=rwX,g=rwX,o= data exports
-sudo chmod -R u=rwX,g=rwX,o= lectures
-```
+**Do not edit or commit in `/srv/lecture-bot/code`.** It only ever moves to merged, tagged versions of `main` (Part 3).
 
-Why these permissions:
+### 1.5 Pixi
 
-- `data/` and `exports/` are private runtime state, but members of `appops` can inspect the database and write exports for debugging
-- `lectures/` is writable by the service and also accessible to course operators when they need to copy or inspect lecture packages manually
-
-## 8. Install Pixi
-
-Install the **Pixi binary** for the service user:
+Install the Pixi binary for the service account (sudo) and for the deployment user:
 
 ```bash
 sudo -u lecturebot -H bash -lc 'curl -fsSL https://pixi.sh/install.sh | bash'
+curl -fsSL https://pixi.sh/install.sh | bash
 ```
 
-Then build the **project environment** as `lecture-bot`:
+Build the project environment as `<DEPLOY_USER>`, and make it readable to the service:
 
 ```bash
-cd /srv/lecture-bot
-pixi install
+cd /srv/lecture-bot/code
+~/.pixi/bin/pixi install
+chgrp -R appops .pixi
+chmod -R g+rX .pixi
+find .pixi -type d -exec chmod g+rx {} \;
 ```
 
-Then make the built project environment readable to the service through `appops`:
+Non-interactive SSH sessions may not have `~/.pixi/bin` on `PATH`, so these commands use the full path. Set `LECTURE_BOT_REMOTE_PIXI_BIN` in `deploy/remote.env` the same way.
+
+### 1.6 Service units (sudo)
+
+The two systemd **template units** serve every course. `lecture-bot@<COURSE>` reads `/srv/lecture-bot/instances/<COURSE>/instance.env`:
 
 ```bash
-chgrp -R appops /srv/lecture-bot/.pixi
-chmod -R g+rX /srv/lecture-bot/.pixi
-find /srv/lecture-bot/.pixi -type d -exec chmod g+rx {} \;
-```
-
-This worked better in practice than trying to run `pixi install` as the `lecturebot` service account inside an `appops`-managed repo.
-
-## 9. Create the production `.env`
-
-Start from the committed example **as `lecture-bot`**:
-
-```bash
-cd /srv/lecture-bot
-cp .env.example .env
-chgrp appops .env
-chmod 640 .env
-```
-
-Edit it:
-
-```bash
-nano /srv/lecture-bot/.env
-```
-
-Use this production-oriented content as the initial template:
-
-```env
-APP_NAME=lecture-bot
-APP_ENV=prod
-
-OPENAI_API_KEY=<REAL_OPENAI_API_KEY>
-OPENAI_MODEL=<REAL_OPENAI_MODEL>
-
-DATABASE_URL=sqlite:///data/lecture_bot.db
-LECTURES_DIR=lectures
-
-ADMIN_USERNAME=<REAL_ADMIN_USERNAME>
-ADMIN_PASSWORD=<REAL_ADMIN_PASSWORD>
-
-LECTURE_BOT_STUDENT_ROOT_PATH=/stats
-LECTURE_BOT_ADMIN_ROOT_PATH=/stats-admin
-
-MOODLE_SUBMISSIONS_DIR=data/submissions
-MOODLE_PARTICIPANTS_CSV=data/submissions/courseid_64733_participants.csv
-MOODLE_DEADLINES_CSV=data/submissions/moodle_deadlines.csv
-MOODLE_DEADLINE_TIMEZONE_OFFSET=+03:00
-MOODLE_GRADE_IMPORT_CSV=data/submissions/moodle_grade_import.csv
-MOODLE_GRADE_IMPORT_REPORT_CSV=data/submissions/moodle_grade_import_report.csv
-
-SESSION_TIMEOUT_MINUTES=30
-SESSION_WARNING_MINUTES=5
-RECENT_MESSAGE_LIMIT=10
-MAX_DIALOGUE_CONTEXT_CHARS=45000
-MAX_GRADING_CONTEXT_CHARS=70000
-SAMPLED_TOPIC_COUNT=5
-OPENING_TOPIC_CHOICE_COUNT=3
-```
-
-`SAMPLED_TOPIC_COUNT` defines the candidate topic space for a session. It can remain `5` even when the ranked grading policy uses four scoring slots.
-
-Important consequence of this simple layout:
-
-- the `.env` lives in the repo root for simplicity
-- it must never be committed
-- operators who need to change it will do so via the normal deployment user
-- **after any edit to `.env`, restart the affected services**
-
-```bash
-sudo systemctl restart lecture-bot
-sudo systemctl restart lecture-bot-admin
-```
-
-## 10. Copy in private lecture material
-
-The public repo only contains the lecture scaffold. Copy the actual private lecture folders into `/srv/lecture-bot/lectures/`. The repo includes `example_content/` with a working `config.json` and `lecture_01/`; you can use this as a starting point or reference before copying in real content:
-
-```bash
-cp -r /srv/lecture-bot/example_content/. /srv/lecture-bot/lectures/
-```
-
-For first deployment, `rsync` is the cleanest method.
-
-Example pull from the old server:
-
-```bash
-rsync -av --no-owner --no-group --progress <OLD_SERVER_USER>@<OLD_SERVER_IP>:<OLD_PRIVATE_CLONE_PATH>/lectures/ /srv/lecture-bot/lectures/
-```
-
-Then fix ownership:
-
-```bash
-sudo chown -R lecturebot:appops /srv/lecture-bot/lectures
-sudo chmod -R u=rwX,g=rwX,o= /srv/lecture-bot/lectures
-```
-
-The `--no-owner --no-group` flags avoid noisy attribute-preservation warnings during a non-root copy.
-
-## 11. Initialize the database
-
-Run **as the service user**, with `.env` exported into the shell:
-
-```bash
-sudo -u lecturebot -H bash -lc '
-  cd /srv/lecture-bot
-  set -a
-  source .env
-  set +a
-  /home/lecturebot/.pixi/bin/pixi run init-db
-'
-```
-
-Then verify with `sudo`, since `data/` is intentionally private to the service:
-
-```bash
-sudo ls -l /srv/lecture-bot/data
-sudo sqlite3 /srv/lecture-bot/data/lecture_bot.db ".tables"
-```
-
-If the database file was created before `data/` used the `appops` group, align the existing files:
-
-```bash
-sudo chown -R lecturebot:appops /srv/lecture-bot/data /srv/lecture-bot/exports
-sudo chmod -R u=rwX,g=rwX,o= /srv/lecture-bot/data /srv/lecture-bot/exports
-```
-
-## 12. Run both apps manually before creating services
-
-This is the most important early gate.
-
-### Important rule before systemd
-
-Before enabling the systemd units later, make sure any manually started student/admin server processes have been stopped and ports 8000/8001 are free.
-
-Useful checks:
-
-```bash
-sudo lsof -iTCP:8000 -sTCP:LISTEN -n -P
-sudo lsof -iTCP:8001 -sTCP:LISTEN -n -P
-```
-
-### Student app
-
-In one terminal:
-
-```bash
-sudo -u lecturebot -H bash -lc '
-  cd /srv/lecture-bot
-  set -a
-  source .env
-  set +a
-  /home/lecturebot/.pixi/bin/pixi run serve
-'
-```
-
-In another terminal:
-
-```bash
-curl -i http://127.0.0.1:8000/health
-curl -i http://127.0.0.1:8000/
-```
-
-### Admin app
-
-In one terminal:
-
-```bash
-sudo -u lecturebot -H bash -lc '
-  cd /srv/lecture-bot
-  set -a
-  source .env
-  set +a
-  /home/lecturebot/.pixi/bin/pixi run admin-serve
-'
-```
-
-In another terminal:
-
-```bash
-curl -i -u '<REAL_ADMIN_USERNAME>:<REAL_ADMIN_PASSWORD>' http://127.0.0.1:8001/
-```
-
-If either of these manual starts fails, stop and fix that before touching systemd or Nginx.
-
-## 13. Run the test suite
-
-As `lecture-bot`:
-
-```bash
-cd /srv/lecture-bot
-set -a
-source .env
-set +a
-pixi run test
-```
-
-Passing tests are necessary, but not sufficient. They do **not** prove that:
-
-- the real OpenAI key works
-- DNS is correct
-- Nginx is correct
-- the private lecture files are correct
-
-## 14. Create systemd services
-
-Create the production log directory and files first:
-
-```bash
+sudo cp /srv/lecture-bot/code/deploy/systemd/lecture-bot@.service.example /etc/systemd/system/lecture-bot@.service
+sudo cp /srv/lecture-bot/code/deploy/systemd/lecture-bot-admin@.service.example /etc/systemd/system/lecture-bot-admin@.service
 sudo install -d -o lecturebot -g appops -m 2775 /var/log/lecture-bot
-sudo touch /var/log/lecture-bot/student.log /var/log/lecture-bot/admin.log
-sudo chown lecturebot:appops /var/log/lecture-bot/student.log /var/log/lecture-bot/admin.log
-sudo chmod 0660 /var/log/lecture-bot/student.log /var/log/lecture-bot/admin.log
-```
-
-This gives the service user write access and gives members of `appops` read access. The service units below also include `LogsDirectory=lecture-bot`, so systemd will recreate `/var/log/lecture-bot` on a fresh machine if needed; the explicit `install` commands keep the first log files private from the start.
-
-You may use the committed examples as a base:
-
-```bash
-sudo cp /srv/lecture-bot/deploy/systemd/lecture-bot.service.example /etc/systemd/system/lecture-bot.service
-sudo cp /srv/lecture-bot/deploy/systemd/lecture-bot-admin.service.example /etc/systemd/system/lecture-bot-admin.service
-```
-
-But verify that the final files match the real server exactly.
-
-A clean final version for the student app is:
-
-```ini
-[Unit]
-Description=Lecture Bot student app
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=lecturebot
-Group=appops
-WorkingDirectory=/srv/lecture-bot
-Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=/srv/lecture-bot/.env
-ExecStart=/home/lecturebot/.pixi/bin/pixi run serve
-Restart=on-failure
-RestartSec=5
-UMask=0007
-LogsDirectory=lecture-bot
-LogsDirectoryMode=02775
-StandardOutput=append:/var/log/lecture-bot/student.log
-StandardError=append:/var/log/lecture-bot/student.log
-
-[Install]
-WantedBy=multi-user.target
-```
-
-A clean final version for the admin app is:
-
-```ini
-[Unit]
-Description=Lecture Bot admin app
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=lecturebot
-Group=appops
-WorkingDirectory=/srv/lecture-bot
-Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=/srv/lecture-bot/.env
-ExecStart=/home/lecturebot/.pixi/bin/pixi run admin-serve
-Restart=on-failure
-RestartSec=5
-UMask=0007
-LogsDirectory=lecture-bot
-LogsDirectoryMode=02775
-StandardOutput=append:/var/log/lecture-bot/admin.log
-StandardError=append:/var/log/lecture-bot/admin.log
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Then enable them:
-
-```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now lecture-bot.service
-sudo systemctl enable --now lecture-bot-admin.service
 ```
 
-Check them:
+### 1.7 Nginx site (sudo)
 
-```bash
-sudo systemctl status lecture-bot.service --no-pager -l
-sudo systemctl status lecture-bot-admin.service --no-pager -l
-sudo ls -ld /var/log/lecture-bot
-sudo tail -n 100 /var/log/lecture-bot/student.log
-sudo tail -n 100 /var/log/lecture-bot/admin.log
-```
-
-The unit files intentionally append stdout and stderr to log files instead of leaving app output only in journald. Use `systemctl status` for process state and restart history; use `/var/log/lecture-bot/*.log` for application runtime output.
-
-## 15. Configure Nginx
-
-Create `/etc/nginx/sites-available/lecture-bot`:
-
-```nginx
-server {
-    listen 80;
-    server_name <SERVER_FQDN> <SERVER_IP>;
-
-    client_max_body_size 100M;
-
-    location = /stats {
-        return 301 /stats/;
-    }
-
-    location /stats/ {
-        proxy_pass http://127.0.0.1:8000/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_redirect off;
-    }
-
-    location = /stats-admin {
-        return 301 /stats-admin/;
-    }
-
-    location /stats-admin/ {
-        proxy_pass http://127.0.0.1:8001/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_redirect off;
-    }
-}
-```
-
-Enable it:
+Create `/etc/nginx/sites-available/lecture-bot` from [`deploy/nginx/lecture-bot.conf.example`](../deploy/nginx/lecture-bot.conf.example), keeping only the location blocks for courses that exist, then:
 
 ```bash
 sudo ln -sfn /etc/nginx/sites-available/lecture-bot /etc/nginx/sites-enabled/lecture-bot
@@ -543,233 +155,198 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-Including both `<SERVER_FQDN>` and `<SERVER_IP>` in `server_name` is helpful while DNS is still being fixed.
+Keep both `<SERVER_FQDN>` and `<SERVER_IP>` in `server_name` while DNS is being fixed.
 
-## 16. Check local reverse-proxy behavior before using the browser
+## Part 2 — Adding a course instance
 
-From the server itself:
+The commands use `pml` as the example. For another course, use its name, its paths and the next free pair of ports.
+
+### 2.1 Instance folder (sudo)
 
 ```bash
-curl -i -H 'Host: <SERVER_FQDN>' http://127.0.0.1/stats/health
-curl -i -H 'Host: <SERVER_FQDN>' http://127.0.0.1/stats/
-curl -i -u '<REAL_ADMIN_USERNAME>:<REAL_ADMIN_PASSWORD>' -H 'Host: <SERVER_FQDN>' http://127.0.0.1/stats-admin/
+sudo install -d -o lecturebot -g appops -m 2770 \
+  /srv/lecture-bot/instances/pml \
+  /srv/lecture-bot/instances/pml/lectures \
+  /srv/lecture-bot/instances/pml/data \
+  /srv/lecture-bot/instances/pml/data/submissions \
+  /srv/lecture-bot/instances/pml/exports
 ```
 
-Use `GET`, not `HEAD`, for these checks. `curl -I` can give misleading `405 Method Not Allowed` results on endpoints that only implement `GET`.
+### 2.2 Settings
 
-If these fail while the services themselves are healthy, the problem is in Nginx, not the Python app.
+If the course has no `deploy/instances/<COURSE>.env.example` yet, add one through a pull request. Copy an existing example and change every path, port, URL path and service name. The instance-example tests check that it is complete and does not collide with another course.
 
-## 17. Browser smoke test inside the VPN
-
-Now open these in a browser inside the VPN:
-
-- `http://<SERVER_IP>/stats/`
-- `http://<SERVER_IP>/stats-admin/`
-
-Once DNS is working, also test:
-
-- `http://<SERVER_FQDN>/stats/`
-- `http://<SERVER_FQDN>/stats-admin/`
-
-Student checks:
-
-1. page loads correctly
-2. CSS/JS load
-3. lecture list appears
-4. session starts
-5. a real message can be sent
-6. current grade works
-7. final report works
-
-Admin checks:
-
-1. login prompt/page works
-2. admin login succeeds
-3. lecture list is visible
-4. upload/build actions render properly
-5. Sessions page loads
-6. Grades page loads
-
-## 18. Direct OpenAI smoke test
-
-Before declaring the system ready, verify that the server can make a real structured OpenAI call using the deployed `.env`.
+Then, as `<DEPLOY_USER>`:
 
 ```bash
-sudo -u lecturebot -H bash -lc '
-  cd /srv/lecture-bot
-  set -a
-  source .env
-  set +a
-  /home/lecturebot/.pixi/bin/pixi run python - <<'"'"'PY'"'"'
-import os
-from openai import OpenAI
+cp /srv/lecture-bot/code/deploy/instances/pml.env.example /srv/lecture-bot/instances/pml/instance.env
+chgrp appops /srv/lecture-bot/instances/pml/instance.env
+chmod 640 /srv/lecture-bot/instances/pml/instance.env
+nano /srv/lecture-bot/instances/pml/instance.env      # fill in every <...>
+```
 
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=30.0, max_retries=0)
+Check what the instance will actually use:
+
+```bash
+cd /srv/lecture-bot/code
+( set -a; source /srv/lecture-bot/instances/pml/instance.env; set +a
+  ~/.pixi/bin/pixi run python -c "import app.config as c; s = c.get_settings(); print(s.database_url, s.lectures_dir, s.moodle_submissions_dir, s.student_root_path, s.admin_root_path, s.admin_username, s.student_restart_command, sep='\n')" )
+```
+
+Every path must be inside `/srv/lecture-bot/instances/pml/`.
+
+After any later edit to `instance.env`, restart the course's services: `sudo systemctl restart lecture-bot@pml lecture-bot-admin@pml`.
+
+### 2.3 Database and lectures
+
+```bash
+cd /srv/lecture-bot/code
+( umask 007; set -a; source /srv/lecture-bot/instances/pml/instance.env; set +a
+  ~/.pixi/bin/pixi run python scripts/init_db.py )
+sqlite3 /srv/lecture-bot/instances/pml/data/lecture_bot.db ".tables"
+```
+
+Put the course's `lectures/config.json` and lecture folders in `/srv/lecture-bot/instances/pml/lectures/`. `example_content/` in the checkout is a working starting point. Lecture packages are private course material: copy them in directly, never through git. New lectures should start with `"active": false` in their `lecture_config.json` until they have been reviewed and piloted.
+
+### 2.4 Logs, restart permission and Nginx (sudo)
+
+```bash
+sudo install -o lecturebot -g appops -m 0660 /dev/null /var/log/lecture-bot/pml-student.log
+sudo install -o lecturebot -g appops -m 0660 /dev/null /var/log/lecture-bot/pml-admin.log
+```
+
+The admin app's **Restart Student App** button, and `publish-prod`, restart services with `sudo -n`, which works only for commands a sudoers rule allows without a password. Run `sudo visudo -f /etc/sudoers.d/lecture-bot-pml` and enter:
+
+```
+lecturebot ALL=(root) NOPASSWD: /usr/bin/systemctl restart lecture-bot@pml.service
+<DEPLOY_USER> ALL=(root) NOPASSWD: /usr/bin/systemctl restart lecture-bot@pml.service lecture-bot-admin@pml.service
+```
+
+Each line allows exactly one command, with exactly those arguments.
+
+Add the course's two location pairs from [`deploy/nginx/lecture-bot.conf.example`](../deploy/nginx/lecture-bot.conf.example) inside the `server` block of `/etc/nginx/sites-available/lecture-bot`, then:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+sudo systemctl enable --now lecture-bot@pml.service lecture-bot-admin@pml.service
+```
+
+### 2.5 Verify
+
+```bash
+systemctl status lecture-bot@pml lecture-bot-admin@pml --no-pager
+curl -fsS http://127.0.0.1/pml/health
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1/pml-admin/      # 401 without credentials
+curl -s -o /dev/null -w '%{http_code}\n' -u '<ADMIN_USERNAME>:<ADMIN_PASSWORD>' http://127.0.0.1/pml-admin/   # 200
+sudo -u lecturebot sudo -n /usr/bin/systemctl restart lecture-bot@pml.service   # the admin button's permission
+tail -n 50 /var/log/lecture-bot/pml-student.log
+```
+
+Use `GET` (plain `curl`), not `curl -I`: `HEAD` requests can return a misleading `405`.
+
+**Isolation check.** Record every other course's database before and after a test session on the new course; both values must be unchanged:
+
+```bash
+sqlite3 /srv/lecture-bot/instances/statistics/data/lecture_bot.db 'select count(*) from sessions;'
+sha256sum /srv/lecture-bot/instances/statistics/data/lecture_bot.db
+```
+
+**OpenAI check,** with the instance's own key and model:
+
+```bash
+cd /srv/lecture-bot/code
+( set -a; source /srv/lecture-bot/instances/pml/instance.env; set +a
+  ~/.pixi/bin/pixi run python - <<'PY'
+import os
+import openai
+client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=30.0, max_retries=0)
 resp = client.chat.completions.create(
     model=os.environ["OPENAI_MODEL"],
     messages=[{"role": "user", "content": "Reply with valid JSON only: {\"ok\": true}"}],
     response_format={"type": "json_object"},
-    temperature=0,
 )
 print(resp.choices[0].message.content)
 PY
-'
+)
 ```
 
-If this fails, fix `.env` and **restart the student service** before testing the app again.
+Then do one real session in a browser: start a session, send messages, and check that the current grade and the final report work. A wrong key makes the tutor fall back quietly rather than crash, so watch the student log while you do this.
 
-## 19. Real OpenAI-backed smoke test
+### 2.6 Include the course in deploys
 
-Do one genuine end-to-end session using one of the real lectures.
+On each development machine, add the course to `LECTURE_BOT_REMOTE_INSTANCES` in `deploy/remote.env`, for example `LECTURE_BOT_REMOTE_INSTANCES="statistics=/stats pml=/pml"`. `publish-prod` then restarts and checks it.
 
-Confirm all of these:
+## Part 3 — Deploying and rolling back
 
-- the model replies sensibly
-- no API/auth errors appear in `/var/log/lecture-bot/student.log`
-- grade endpoint works
-- report endpoint works
+Production runs merged code from `main`, at a release tag (such as `v0.4.0`). Code reaches `main` only through reviewed pull requests; nobody edits files in `/srv/lecture-bot/code`.
 
-Watch logs while doing it:
+From a development machine with `deploy/remote.env` configured (see [`deploy/remote.env.example`](../deploy/remote.env.example)):
 
 ```bash
-sudo tail -f /var/log/lecture-bot/student.log
+pixi run publish-prod -- --dry-run      # the server's current commit, and what would be deployed
+pixi run publish-prod                   # deploy the newest origin/main
+pixi run publish-prod -- --revision v0.4.0   # deploy, or roll back to, a specific tag or commit
 ```
 
-This is important because a wrong key can cause the tutor to fall back gracefully without crashing the whole service.
+On the server, `publish-prod`:
 
-## 20. Operational session review and exports
+1. refuses to run if tracked files in the checkout have been changed, or if the checkout is not on `main`;
+2. fetches, then fast-forwards to `origin/main`, or resets to `--revision`;
+3. runs `pixi install` and repairs the `.pixi` group permissions;
+4. restarts each listed course and checks its `/health` and admin URL.
 
-Members of `appops` should be able to inspect the database, read logs, and write exports without becoming the service user.
+It never copies files from the development machine. Untracked files on the server, including all instance data, cannot be touched. It prints the previous commit, and if a check fails it prints the command that rolls back.
 
-List recent sessions:
+The deploy user needs a sudoers rule for each course's restart command (2.4).
+
+## Part 4 — Operations
+
+### 4.1 Logs
 
 ```bash
-cd /srv/lecture-bot
-pixi run python scripts/list_sessions.py --limit 50
+tail -n 200 /var/log/lecture-bot/<COURSE>-student.log
+tail -n 200 /var/log/lecture-bot/<COURSE>-admin.log
+systemctl status lecture-bot@<COURSE> --no-pager       # process state and restarts
 ```
 
-Or use the admin UI:
+### 4.2 Session review and exports
 
-```text
-http://<SERVER_FQDN>/stats-admin/sessions
-```
+The admin Sessions page (`/<path>-admin/sessions`) filters sessions by student, lecture, date, turn count and grade, and downloads the selected sessions as one ZIP.
 
-The admin Sessions page supports filters for student id, lecture id, date range, user turn range, and grade range. Selected sessions download as one ZIP with one top-level directory per session.
-
-List sessions since a date:
+The command-line scripts still default to folders inside the checkout, so pass the instance's paths explicitly:
 
 ```bash
-pixi run python scripts/list_sessions.py --since 2026-04-20
+cd /srv/lecture-bot/code
+~/.pixi/bin/pixi run python scripts/list_sessions.py --database /srv/lecture-bot/instances/<COURSE>/data/lecture_bot.db --limit 50
 ```
 
-Export one session for analysis:
+Exports can contain student content, private lecture material and grades. Keep them in the instance's `exports/`. Moodle grade uploads follow [`moodle_grade_upload_runbook.md`](moodle_grade_upload_runbook.md).
+
+### 4.3 Backups
+
+Before a migration or any risky change, copy the database with SQLite's own backup command, which is safe while the app runs:
 
 ```bash
-pixi run python scripts/export_session_package.py --session-id <SESSION_ID> --output-dir exports
+sqlite3 /srv/lecture-bot/instances/<COURSE>/data/lecture_bot.db ".backup '/srv/lecture-bot/instances/<COURSE>/data/lecture_bot.$(date +%Y%m%dT%H%M).bak.db'"
 ```
 
-Export the latest session for a lecture:
+A wider backup policy is [issue #5](https://github.com/opherdonchin/lecture-bot/issues/5).
 
-```bash
-pixi run python scripts/export_session_package.py --lecture-id <LECTURE_ID> --output-dir exports
-```
+### 4.4 Reboot test
 
-The export ZIP is written under `/srv/lecture-bot/exports/`. Keep it private; it can contain student content, private lecture material, prompts, model audit rows, and grades.
+Before announcing a course to students, reboot (`sudo reboot`), then check every course's services, logs and health URLs as in 2.5.
 
-For Moodle grade uploads, follow [`moodle_grade_upload_runbook.md`](moodle_grade_upload_runbook.md). The production admin URL is:
+### 4.5 DNS
 
-```text
-http://<SERVER_FQDN>/stats-admin/grades
-```
+Final student-facing use should be by hostname. Ask IT to create or verify the DNS record `<SERVER_FQDN> -> <SERVER_IP>`, and to confirm that the IP address is fixed.
 
-The current systemd app logs live here:
+### 4.6 What counts as student-ready
 
-```bash
-tail -n 200 /var/log/lecture-bot/student.log
-tail -n 200 /var/log/lecture-bot/admin.log
-```
+A course is student-ready when all of these are true:
 
-If the services used journald before file logging was enabled, copy the old journal output into the same log directory:
-
-```bash
-sudo journalctl -u lecture-bot.service --since '14 days ago' --no-pager > /tmp/lecture-bot-old-student.log
-sudo journalctl -u lecture-bot-admin.service --since '14 days ago' --no-pager > /tmp/lecture-bot-old-admin.log
-sudo mv /tmp/lecture-bot-old-student.log /var/log/lecture-bot/old-student-journal.log
-sudo mv /tmp/lecture-bot-old-admin.log /var/log/lecture-bot/old-admin-journal.log
-sudo chown lecturebot:appops /var/log/lecture-bot/old-*-journal.log
-sudo chmod 0660 /var/log/lecture-bot/old-*-journal.log
-```
-
-## 21. DNS / IT follow-up
-
-Deployment can proceed by IP, but final student-facing use should be by hostname.
-
-Ask the responsible IT/DNS team to:
-
-- create or verify the DNS A record  
-  `<SERVER_FQDN> -> <SERVER_IP>`
-- confirm that `<SERVER_IP>` is reserved/fixed for the VM rather than a temporary lease
-
-Useful checks:
-
-```bash
-getent hosts <SERVER_FQDN>
-```
-
-and from your own machine:
-
-```bash
-nslookup <SERVER_FQDN>
-```
-
-## 22. Reboot test
-
-Before announcing the system to students:
-
-```bash
-sudo reboot
-```
-
-After reboot, verify:
-
-```bash
-sudo systemctl status lecture-bot.service --no-pager
-sudo systemctl status lecture-bot-admin.service --no-pager
-sudo tail -n 50 /var/log/lecture-bot/student.log
-sudo tail -n 50 /var/log/lecture-bot/admin.log
-curl -i -H 'Host: <SERVER_FQDN>' http://127.0.0.1/stats/health
-curl -i -u '<REAL_ADMIN_USERNAME>:<REAL_ADMIN_PASSWORD>' -H 'Host: <SERVER_FQDN>' http://127.0.0.1/stats-admin/
-```
-
-## 22. What counts as student-ready
-
-The deployment is student-ready only if all of these are true:
-
-- `<SERVER_FQDN>` resolves correctly inside the VPN
-- `http://<SERVER_FQDN>/stats/` loads through Nginx
-- `http://<SERVER_FQDN>/stats-admin/` loads through Nginx
-- the real lecture packages are present
-- `pixi run test` passes
-- the direct OpenAI smoke test succeeds
-- one real OpenAI-backed session works
-- current grade works
-- final report works
-- both services survive reboot
-
-## 23. First-update procedure
-
-When you want to update the code later:
-
-```bash
-cd /srv/lecture-bot
-sudo systemctl stop lecture-bot.service lecture-bot-admin.service
-git pull origin main
-pixi install
-sudo systemctl start lecture-bot.service lecture-bot-admin.service
-set -a
-source .env
-set +a
-pixi run test
-```
-
-If the code update includes changes to the private lecture packages, sync those too before restarting.
+- `http://<SERVER_FQDN>/<path>/` and `/<path>-admin/` load through Nginx inside the VPN;
+- its lectures are present and the active ones have been reviewed;
+- the OpenAI check and one real session (grade and report) work;
+- the isolation check passed;
+- its services survive a reboot.

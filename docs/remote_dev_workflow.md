@@ -9,7 +9,7 @@ The intended cycle is:
 1. Clone or update the repo on a local Linux machine.
 2. Run one Pixi command to pull the current server state needed for development.
 3. Work locally.
-4. Run one Pixi command to publish code and content changes back to the server safely.
+4. Deploy merged code to the server with one Pixi command.
 
 This avoids day-to-day development inside the deployed server checkout.
 
@@ -22,15 +22,13 @@ Required variables:
 - `LECTURE_BOT_REMOTE_HOST`
 - `LECTURE_BOT_REMOTE_USER`
 
-Useful defaults already match the current production layout:
+For deploying (`publish-prod`), set also:
 
-- `LECTURE_BOT_REMOTE_ROOT=/srv/lecture-bot`
-- `LECTURE_BOT_REMOTE_PIXI_BIN=/home/lecturebot/.pixi/bin/pixi`
-- `LECTURE_BOT_REMOTE_LOG_DIR=/var/log/lecture-bot`
-- `LECTURE_BOT_REMOTE_STUDENT_SERVICE=lecture-bot`
-- `LECTURE_BOT_REMOTE_ADMIN_SERVICE=lecture-bot-admin`
+- `LECTURE_BOT_REMOTE_ROOT=/srv/lecture-bot/code` (the default)
+- `LECTURE_BOT_REMOTE_PIXI_BIN=/home/<DEPLOY_USER>/.pixi/bin/pixi`
+- `LECTURE_BOT_REMOTE_INSTANCES="statistics=/stats pml=/pml"`
 
-`LECTURE_BOT_REMOTE_REPO_PATH` is also accepted as a backward-compatible alias for `LECTURE_BOT_REMOTE_ROOT`.
+**`sync-dev` still expects the single-course layout**, where data and lectures sit inside the checkout. It does not work against the instance layout until [scope issue #16, PR 2c](https://github.com/opherdonchin/lecture-bot/issues/16#user-content-pr-2c) makes it instance-aware. Until then, copy an instance's data with `rsync` from `/srv/lecture-bot/instances/<course>/` into `~/lecture-bot-instances/<course>/`.
 
 Optional:
 
@@ -76,45 +74,15 @@ pixi run admin-dev-synced
 
 Because `.env.dev-sync` points at the synced prompts, docs, lectures, submissions, and database, the app can mimic current production behavior without editing the server checkout.
 
-## Publish Back To The Server
+## Deploy To The Server
 
-Run:
-
-```bash
-pixi run publish-prod
-```
-
-This command:
-
-1. Rsyncs the local repo to the remote repo path.
-2. Excludes mutable production state such as `.env`, `.pixi`, `data/*.db`, and `exports/`.
-3. Runs remote `pixi install`.
-4. Repairs shared `.pixi` permissions for the `appops` group.
-5. Restarts the student and admin systemd services.
-6. Verifies both services are active and that the backend ports are listening.
-7. Verifies the student health endpoint locally on the server.
-
-To preview without changing anything:
+Code reaches the server only through merged `main`; this machine's working tree is never copied. After a pull request is merged, run:
 
 ```bash
 pixi run publish-prod-dry-run
+pixi run publish-prod
 ```
 
-## Remote sudo requirement
+On the server, this refuses to run if the checkout has local changes or is not on `main`, fast-forwards to `origin/main`, runs `pixi install`, restarts each course instance's services and checks their health. It prints the previous commit; `pixi run publish-prod -- --revision <commit>` rolls back to it. The steps, and the sudoers rules the restart needs, are in [deployment_ubuntu.md](deployment_ubuntu.md#part-3--deploying-and-rolling-back).
 
-The publish command uses `sudo -n` on the remote machine for the service restart and status checks. The remote deployment user therefore needs passwordless sudo for the exact `systemctl` commands involved.
-
-If that is not configured, the rsync phase can still succeed, but the publish command will stop before restart with a clear error.
-
-## What This Does Not Publish
-
-The publish command is intentionally conservative. It does not push:
-
-- `.env`
-- `.pixi/`
-- SQLite database files
-- exported session bundles
-- locally synced server logs
-- local snapshot directories under `.local/`
-
-That preserves production session history, dialogue logs, notes, grades, and other archival runtime state on the server.
+Lecture packages, databases, Moodle files and exports are instance data and are never deployed through git.

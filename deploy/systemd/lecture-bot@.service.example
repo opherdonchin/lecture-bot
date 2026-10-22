@@ -1,0 +1,27 @@
+# Example/template only. Copy to /etc/systemd/system/lecture-bot@.service.
+# One unit per course instance: lecture-bot@pml.service reads
+# /srv/lecture-bot/instances/pml/instance.env and logs to
+# /var/log/lecture-bot/pml-student.log. All instances share the code checkout.
+[Unit]
+Description=Lecture Bot student app (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lecturebot
+Group=appops
+WorkingDirectory=/srv/lecture-bot/code
+Environment=PATH=/home/lecturebot/.pixi/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/srv/lecture-bot/instances/%i/instance.env
+ExecStart=/home/lecturebot/.pixi/bin/pixi run serve
+Restart=on-failure
+RestartSec=5
+UMask=0007
+LogsDirectory=lecture-bot
+LogsDirectoryMode=02775
+StandardOutput=append:/var/log/lecture-bot/%i-student.log
+StandardError=append:/var/log/lecture-bot/%i-student.log
+
+[Install]
+WantedBy=multi-user.target

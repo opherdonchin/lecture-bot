@@ -1,6 +1,6 @@
 # 0001 — Lecture-bot builds its own HILD process instead of installing HILD
 
-**Date:** 2026-10-21 · **Status:** Proposed (under review in [PR #15](https://github.com/opherdonchin/lecture-bot/pull/15))
+**Date:** 2026-10-21 · **Status:** Accepted (by the merge of [PR #15](https://github.com/opherdonchin/lecture-bot/pull/15) as [8545f82](https://github.com/opherdonchin/lecture-bot/commit/8545f82), 2026-10-21)
 
 **Relationship to earlier decisions:** None.
 

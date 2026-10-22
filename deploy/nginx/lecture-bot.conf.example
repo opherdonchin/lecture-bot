@@ -1,0 +1,76 @@
+# Example only: /etc/nginx/sites-available/lecture-bot on the production server.
+# The /stats blocks match the live server; the /pml blocks add the PML
+# instance. Each instance gets a student and an admin location, proxied to the
+# ports set in its instance.env (LECTURE_BOT_STUDENT_PORT, LECTURE_BOT_ADMIN_PORT).
+server {
+    listen 80;
+    server_name <SERVER_FQDN> <SERVER_IP>;
+
+    location = /stats {
+        return 301 /stats/;
+    }
+
+    location /stats/ {
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_redirect off;
+    }
+
+    location = /stats-admin {
+        return 301 /stats-admin/;
+    }
+
+    location /stats-admin/ {
+        proxy_pass http://127.0.0.1:8001/;
+        proxy_http_version 1.1;
+
+        client_max_body_size 250m;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_redirect off;
+    }
+
+    location = /pml {
+        return 301 /pml/;
+    }
+
+    location /pml/ {
+        proxy_pass http://127.0.0.1:8002/;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_redirect off;
+    }
+
+    location = /pml-admin {
+        return 301 /pml-admin/;
+    }
+
+    location /pml-admin/ {
+        proxy_pass http://127.0.0.1:8003/;
+        proxy_http_version 1.1;
+
+        client_max_body_size 250m;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_redirect off;
+    }
+}
