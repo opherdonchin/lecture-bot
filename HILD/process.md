@@ -233,7 +233,9 @@ A procedure that is clear only to the agent still needs improvement.
    For that link to work, the scope issue gives each planned PR an anchor,
    `<a id="pr-2a"></a>`, on the line before its description. GitHub adds no ids to
    headings in issues, and shows an anchor `id="pr-2a"` as `user-content-pr-2a`,
-   which is why the link uses that form.
+   which is why the link uses that form. Some browsers open the issue without
+   scrolling to the anchor (observed in Brave, 2026-10-22); the link is still the
+   correct one.
 5. **Load-bearing vs boilerplate.** The walkthrough labels code as *load-bearing — read
    this* or *boilerplate — skim*.
 6. **One sitting, one method.** As our current *process* limit, if a change
