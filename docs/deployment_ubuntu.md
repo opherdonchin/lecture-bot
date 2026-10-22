@@ -59,6 +59,17 @@ Accounts:
 
 The apps listen only on `127.0.0.1`. Nginx is the only public-facing service.
 
+**Who owns and writes what:**
+
+| Location | Owner | Group access | Written by |
+|---|---|---|---|
+| `/srv/lecture-bot/code` (checkout and `.pixi/`) | `<DEPLOY_USER>` | read only | the deployment user, during setup and deploys; never by the services |
+| `/srv/lecture-bot/instances/<COURSE>/` (data, lectures, exports) | `lecturebot` | read and write | the services at run time; operators for lecture packages and exports |
+| `/srv/lecture-bot/instances/<COURSE>/instance.env` | `<DEPLOY_USER>` | read only (mode 0640) | the deployment user; systemd reads it when starting the services |
+| `/var/log/lecture-bot/` | `lecturebot` | read | the services |
+
+The services run as `lecturebot`, a member of `appops`. Because the code is read-only to the group, the services cannot change it. Python then keeps its compiled-bytecode cache in memory instead of writing `__pycache__` folders into the code. `publish-prod` restores these permissions after every deploy.
+
 **Why the checkout has no `.env`:** the app reads settings from its service's environment first, then from a `.env` file in the folder it runs from. Keeping the checkout free of `.env` means a setting missing from an instance can never be taken from another course. Each `instance.env` must set every setting; `deploy/instances/*.env.example` shows them all, and a test checks that they do.
 
 ## Part 1 — One-time server setup
@@ -98,14 +109,14 @@ The service account is in `appops` so that it can read the checkout and the Pixi
 
 ```bash
 sudo install -d -o root -g appops -m 2775 /srv/lecture-bot /srv/lecture-bot/instances
-sudo install -d -o <DEPLOY_USER> -g appops -m 2775 /srv/lecture-bot/code
+sudo install -d -o <DEPLOY_USER> -g appops -m 2755 /srv/lecture-bot/code
 ```
 
 As `<DEPLOY_USER>`:
 
 ```bash
 git clone <PUBLIC_GITHUB_REPO_URL> /srv/lecture-bot/code
-chmod -R g+rX /srv/lecture-bot/code
+chmod -R g+rX,g-w /srv/lecture-bot/code
 ```
 
 The setgid bit (the `2` in `2775`) makes new files inherit the `appops` group.
@@ -126,8 +137,8 @@ Build the project environment as `<DEPLOY_USER>`, and make it readable to the se
 ```bash
 cd /srv/lecture-bot/code
 ~/.pixi/bin/pixi install --locked
-find .pixi -user "$(id -un)" -exec chgrp appops {} +
-find .pixi -user "$(id -un)" -exec chmod g+rX {} +
+find . -user "$(id -un)" -exec chgrp appops {} +
+find . -user "$(id -un)" -exec chmod g+rX,g-w {} +
 ```
 
 Both accounts need at least the Pixi version that `pixi.toml` requires (`requires-pixi`); keep them the same, and update both with `pixi self-update --version <version>` when that requirement changes. An older Pixi cannot read the lock file and re-resolves every dependency. The service units run `pixi run --as-is`, so starting a service never installs anything or touches `pixi.lock`.
