@@ -1,0 +1,203 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "turn_classification",
+    "evidence_assessment",
+    "next_move_arbitration",
+    "self_check"
+  ],
+  "properties": {
+    "turn_classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "student_move_type",
+        "has_evidence_of_understanding"
+      ],
+      "properties": {
+        "student_move_type": {
+          "type": "string",
+          "enum": [
+            "content_answer",
+            "content_question",
+            "procedural_request",
+            "hidden_internals_or_answer_request",
+            "off_task",
+            "desire_to_stop",
+            "other"
+          ]
+        },
+        "has_evidence_of_understanding": {
+          "type": "boolean"
+        },
+        "engaged_topic_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Canonical topic ID if the student message provides evidence about a backend-supplied topic; otherwise null."
+        }
+      }
+    },
+    "evidence_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_strength",
+        "independence_level",
+        "evidence_basis"
+      ],
+      "properties": {
+        "evidence_strength": {
+          "type": "string",
+          "enum": [
+            "none",
+            "weak",
+            "developing",
+            "solid",
+            "strong",
+            "robust"
+          ]
+        },
+        "independence_level": {
+          "type": "string",
+          "enum": [
+            "independent",
+            "assisted",
+            "mixed",
+            "unclear",
+            "not_applicable"
+          ]
+        },
+        "evidence_basis": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "criterion",
+              "distinction",
+              "explanation",
+              "application",
+              "interpretation",
+              "repair",
+              "ownership",
+              "synthesis",
+              "generic_or_copied",
+              "post_hint_repetition",
+              "nonresponsive_correctness",
+              "other"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "brief_rationale": {
+          "type": "string"
+        }
+      }
+    },
+    "next_move_arbitration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selected_next_topic_id",
+        "selected_move_type",
+        "strongest_alternative_direction",
+        "followed_backend_guidance",
+        "override_reason"
+      ],
+      "properties": {
+        "selected_next_topic_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Canonical topic ID selected for the next substantive content move, if any."
+        },
+        "selected_move_type": {
+          "type": "string",
+          "enum": [
+            "ordinary_probe",
+            "evidence_feedback",
+            "scaffolded_support",
+            "adaptive_challenge",
+            "topic_transition",
+            "procedural_support",
+            "redirection",
+            "lifecycle_closing",
+            "other"
+          ]
+        },
+        "strongest_alternative_direction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "topic_id",
+            "source"
+          ],
+          "properties": {
+            "topic_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Canonical topic ID for the strongest alternative considered, if identifiable from backend guidance."
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "explicit_topic_or_move_guidance",
+                "grade_impact_deltas_or_backend_strategic_guidance",
+                "optional_enrichment_after_full_credit",
+                "pedagogical_fallback",
+                "not_applicable"
+              ]
+            }
+          }
+        },
+        "followed_backend_guidance": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no",
+            "not_applicable"
+          ]
+        },
+        "override_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Short bounded reason when deviating from the strongest available backend-indicated direction; otherwise null."
+        },
+        "grade_relevant": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Optional marker for whether the selected move is still grade-driven; false may be used for optional enrichment after full session credit."
+        }
+      }
+    },
+    "self_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assistant_message_matches_move",
+        "avoids_completion_claim",
+        "keeps_private_content_out_of_student_text"
+      ],
+      "properties": {
+        "assistant_message_matches_move": {
+          "type": "boolean"
+        },
+        "avoids_completion_claim": {
+          "type": "boolean"
+        },
+        "keeps_private_content_out_of_student_text": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
