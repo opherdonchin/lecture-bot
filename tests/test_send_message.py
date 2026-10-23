@@ -587,3 +587,26 @@ def test_private_artifact_inside_updated_state_is_not_persisted(client):
     state = j.loads(state_row.state_json)
     assert "private_artifact" not in state
     assert state["mastery"]["T1"] == 55
+
+
+def _set_lecture_active(active: bool):
+    import json as json_
+    lectures_dir = config_module.get_settings().lectures_dir
+    path = lectures_dir / "lecture_01" / "lecture_config.json"
+    config = json_.loads(path.read_text(encoding="utf-8"))
+    config["active"] = active
+    path.write_text(json_.dumps(config), encoding="utf-8")
+
+
+def test_inactive_lecture_is_not_listed(client):
+    _set_lecture_active(False)
+    assert client.get("/lectures").json() == []
+    _set_lecture_active(True)
+    assert client.get("/lectures").json() == ["lecture_01"]
+
+
+def test_inactive_lecture_cannot_be_started(client):
+    _set_lecture_active(False)
+    response = client.post("/start_session", json={"student_id": "student_001", "lecture_id": "lecture_01"})
+    assert response.status_code == 404
+    assert "not open yet" in response.json()["detail"]
