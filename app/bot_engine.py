@@ -491,7 +491,7 @@ def build_dialogue_context(lecture_package: dict, max_chars: int) -> str:
     ]
     parts = []
     used = 0
-    for header, content in sections:
+    for index, (header, content) in enumerate(sections):
         text = content.strip()
         if not text:
             continue
@@ -506,6 +506,14 @@ def build_dialogue_context(lecture_package: dict, max_chars: int) -> str:
             if room > len(header) + 3:
                 parts.append(section[:room])
                 used = max_chars
+            dropped = [later_header for later_header, later_content in sections[index + 1:] if later_content.strip()]
+            _log.warning(
+                "lecture context for %s exceeds %d characters: %s cut, dropped: %s",
+                lecture_package.get("lecture_id", "?"),
+                max_chars,
+                header.removeprefix("## "),
+                ", ".join(h.removeprefix("## ") for h in dropped) or "nothing",
+            )
             break
     return "\n\n".join(parts)
 
