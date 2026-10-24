@@ -1335,3 +1335,33 @@ def test_dialogue_prompt_uses_the_lecture_selected_tutor_prompt():
         lecture_context=_make_lecture_context_for_caching(),
     )
     assert prompt.startswith("You are the tutor for one lecture of a graduate course")
+
+def test_build_dialogue_context_logs_when_it_truncates(caplog):
+    package = {
+        "lecture_id": "lecture_big",
+        "context_sections": [
+            {"key": "slides", "label": "Slides", "content": "s" * 80},
+            {"key": "handout", "label": "Handout", "content": "h" * 80},
+            {"key": "minutes", "label": "Instructional Minutes", "content": "m" * 80},
+        ],
+    }
+
+    with caplog.at_level("WARNING"):
+        context = bot_engine.build_dialogue_context(package, 120)
+
+    assert len(context) <= 120
+    assert "lecture_big" in caplog.text
+    assert "Handout cut" in caplog.text
+    assert "dropped: Instructional Minutes" in caplog.text
+
+
+def test_build_dialogue_context_is_silent_when_everything_fits(caplog):
+    package = {
+        "lecture_id": "lecture_small",
+        "context_sections": [{"key": "slides", "label": "Slides", "content": "short"}],
+    }
+
+    with caplog.at_level("WARNING"):
+        bot_engine.build_dialogue_context(package, 1000)
+
+    assert caplog.text == ""
