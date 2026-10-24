@@ -462,11 +462,12 @@ def _record_grade_event(
 
 def _build_private_artifact_repair_instruction(validation_error: str) -> str:
     return (
-        "Your previous JSON output violated the private artifact contract: "
-        f"{validation_error}. Return the full response JSON for the same student turn again. "
-        "Because private_artifact_schema_json is present, include a top-level private_artifact "
-        "that conforms exactly to the injected schema. Keep private_artifact out of "
-        "assistant_message and updated_state."
+        "Your previous reply violated the private artifact contract: "
+        f"{validation_error}. Write the whole reply for the same student turn again, in the tagged "
+        "format: the message between <assistant_message> and </assistant_message>, then one JSON "
+        "object with updated_state and a private_artifact that conforms exactly to the injected "
+        "private_artifact_schema_json. Close every brace. Keep private_artifact out of the message "
+        "and out of updated_state."
     )
 
 
