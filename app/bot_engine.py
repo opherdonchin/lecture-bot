@@ -1012,10 +1012,11 @@ def generate_report(
         "not as work required for the grade.\n\n"
         "Rubric for reference:\n"
         f"{rubric_text}\n\n"
-        "In the conversation, [USER] lines are the student's own words and [ASSISTANT] lines are the tutor's.\n"
-        "Keep two things apart. Demonstrated: what the student's own messages show they understand. "
-        "Taught in this session: ideas the tutor explained that the student has not yet shown on their own. "
-        "Never list as demonstrated something that appears only in the tutor's messages.\n\n"
+        "You will receive the student's messages on their own, followed by the full conversation.\n"
+        "Demonstrated: list only understanding that the STUDENT'S MESSAGES block itself shows, and say what in "
+        "those messages shows it. A question the student asked shows curiosity, not understanding of its answer. "
+        "Taught in this session: ideas the tutor explained or prompted that the student's messages do not show. "
+        "Anything that appears only in the tutor's turns belongs under Taught, never under Demonstrated.\n\n"
         "Return `report_text` as plain text with exactly these section headings:\n"
         "Summary:\n"
         "Demonstrated:\n"
@@ -1031,6 +1032,9 @@ def generate_report(
     conversation_text = "\n\n".join(
         f"[{msg['role'].upper()}]: {msg['content']}" for msg in messages
     )
+    student_text = "\n\n".join(
+        f"- {msg['content']}" for msg in messages if msg["role"] == "user"
+    ) or "(no student messages)"
 
     if session_credit_status == "full_credit_reached":
         fallback_next_step = "Full session credit was reached; any next work is optional enrichment."
@@ -1060,7 +1064,7 @@ def generate_report(
             model=settings.openai_model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Conversation:\n\n{conversation_text}"},
+                {"role": "user", "content": f"STUDENT'S MESSAGES:\n\n{student_text}\n\nFULL CONVERSATION:\n\n{conversation_text}"},
             ],
             response_format={"type": "json_object"},
             temperature=0.3,
