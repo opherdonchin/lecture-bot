@@ -4,6 +4,16 @@ This contract defines the runtime interface between the backend and the model-ba
 
 The tutor specification governs pedagogy. This runtime contract governs how a tutoring turn is called, what the tutor may return, and which parts of that return become state, messages, logs, grades, or lifecycle effects.
 
+**Contract version: 0.6.1.** A contract version is the development version in which the contract last changed. It stays the same across releases that leave the contract alone. The code states the version it implements (`BACKEND_CONTRACT_VERSION` in `app/prompt_loader.py`).
+
+A runtime tutor prompt must declare the contract it was written for on its first line, followed by a blank line:
+
+```text
+Backend contract: 0.6.1
+```
+
+The backend removes that line before sending the prompt to the model. It refuses to start or continue a session, with HTTP 503 and a logged reason, when the lecture's prompt declares another version or none. Version 0.6.1 introduced the tagged reply format (§3); earlier prompts asked for JSON only and do not run under this contract.
+
 ---
 
 ## 1. Ordinary tutoring turns
@@ -66,28 +76,39 @@ Semantics:
 
 ## 3. Runtime output
 
-When no session private artifact schema exists, the tutor should return JSON in this top-level shape:
+The tutor replies in the **tagged format**: the student-facing message as plain text between an `<assistant_message>` line and an `</assistant_message>` line, then one JSON object. When no session private artifact schema exists:
 
-```json
-{
-  "assistant_message": "string",
-  "updated_state": {}
-}
+```text
+<assistant_message>
+Given \(\theta\), the tosses are independent. Why does the posterior narrow as N grows?
+</assistant_message>
+{"updated_state": {}}
 ```
 
-When `private_artifact_schema_json` exists for the session, the tutor must return JSON in this top-level shape:
+When `private_artifact_schema_json` exists for the session:
 
-```json
-{
-  "assistant_message": "string",
-  "updated_state": {},
-  "private_artifact": {}
-}
+```text
+<assistant_message>
+...
+</assistant_message>
+{"updated_state": {}, "private_artifact": {}}
 ```
+
+The message carries LaTeX in its ordinary form, with single backslashes. The JSON object should contain no LaTeX or backslashes. The backend does not request a JSON response mode.
+
+**Why the message is outside JSON:** inside a JSON string every backslash must be escaped, and the model sometimes writes a garbled escape instead (`\u0018` for `\u2018`, `\b` for the start of `\beta`). The student then sees a control character in place of a symbol ([scope issue #31, PR E](https://github.com/opherdonchin/lecture-bot/issues/31#user-content-pr-e)).
+
+**Tolerant parsing:** the backend parses the reply as follows.
+- If the tags are missing, the message is the text before the JSON object.
+- A closing tag written JSON-style (`<\/assistant_message>`) is accepted.
+- Up to three missing closing braces are supplied.
+- If there is no JSON object, the message is kept with an empty `updated_state` and no `private_artifact`.
+
+An empty message is a parsing failure, which produces the fallback reply.
 
 Output semantics:
 
-- `assistant_message` is the student-facing reply for the current turn.
+- The tagged message (`assistant_message`) is the student-facing reply for the current turn.
 - `updated_state` is a sparse tutoring-state delta only.
 - `private_artifact` is required on each ordinary tutoring turn when the session has `private_artifact_schema_json`.
 - `private_artifact` must conform to the session schema.
@@ -98,19 +119,6 @@ Output semantics:
 - `private_artifact` is not lifecycle state.
 
 The tutor must not place private-artifact content inside `assistant_message` or `updated_state`.
-
-### 3.1 Tagged reply format
-
-A tutor prompt may instead ask for the **tagged format**: the student-facing message as plain text between an `<assistant_message>` line and an `</assistant_message>` line, followed by one JSON object holding only `updated_state` and, when the session has a schema, `private_artifact`. The backend uses this format whenever the rendered prompt contains both tags (currently `prompts/pml_tutor_prompt.md`); otherwise it requests and parses the JSON shapes above.
-
-The tagged format keeps LaTeX out of JSON strings. Inside a JSON string every backslash must be escaped, and the model sometimes writes a garbled escape instead, so the student sees a control character in place of a symbol ([scope issue #31, PR E](https://github.com/opherdonchin/lecture-bot/issues/31#user-content-pr-e)).
-
-The backend parses the tagged format tolerantly:
-- If the tags are missing, the message is the text before the JSON object.
-- Up to three missing closing braces are supplied.
-- If there is no JSON object, the message is kept with an empty `updated_state` and no `private_artifact`.
-
-An empty message is a parsing failure, which produces the fallback reply. The output semantics above apply unchanged.
 
 ---
 

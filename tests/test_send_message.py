@@ -65,11 +65,17 @@ VALID_PRIVATE_ARTIFACT = {
 }
 
 
+def _tagged(reply: dict) -> str:
+    """Write a reply dict in the tagged format of backend contract 0.6.1."""
+    rest = {key: value for key, value in reply.items() if key != "assistant_message"}
+    return f"<assistant_message>\n{reply['assistant_message']}\n</assistant_message>\n{j.dumps(rest, ensure_ascii=False)}"
+
+
 def _mock_openai_dialogue(reply_text="Test reply.", *, usage=None):
-    """Patch openai.OpenAI so generate_reply returns a canned JSON response."""
+    """Patch openai.OpenAI so generate_reply returns a canned tagged reply."""
     import json as j
     mock_resp = mock.MagicMock()
-    mock_resp.choices[0].message.content = j.dumps({
+    mock_resp.choices[0].message.content = _tagged({
         "assistant_message": reply_text,
         "updated_state": {
             "topics_covered": [],
@@ -130,7 +136,7 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
     session_id = start_session(client)
 
     mock_resp = mock.MagicMock()
-    mock_resp.choices[0].message.content = j.dumps({
+    mock_resp.choices[0].message.content = _tagged({
         "assistant_message": "Good. What is the key distinction?",
         "updated_state": {
             "topics_covered": ["T1"],
@@ -350,7 +356,7 @@ def test_send_message_forces_assistant_reply_to_english(client):
     session_id = start_session(client)
 
     mock_resp = mock.MagicMock()
-    mock_resp.choices[0].message.content = j.dumps({
+    mock_resp.choices[0].message.content = _tagged({
         "assistant_message": "שלום, אפשר להמשיך בעברית.",
         "updated_state": {
             "topics_covered": [],
@@ -377,7 +383,7 @@ def test_send_message_passes_hebrew_both_ways_when_chat_language_is_any(client, 
     session_id = start_session(client)
 
     mock_resp = mock.MagicMock()
-    mock_resp.choices[0].message.content = j.dumps({
+    mock_resp.choices[0].message.content = _tagged({
         "assistant_message": "נכון. ומה קורה לשונות המותנית?",
         "updated_state": {"mastery": {}, "evidence_notes": {}, "current_topic_id": None, "tutor_comment": ""},
         "private_artifact": VALID_PRIVATE_ARTIFACT,
@@ -410,9 +416,9 @@ def test_send_message_writes_dialogue_turn_audit_row(client):
         .one()
     )
     assert audit_row.turn_index == 1
-    assert audit_row.prompt_template_name == "tutor_prompt.md"
+    assert audit_row.prompt_template_name == "pml_tutor_prompt.md"
     assert audit_row.dialogue_model
-    assert "You are a focused, lecture-grounded, Socratic-but-pragmatic tutor" in audit_row.rendered_system_prompt
+    assert "You are the tutor for one lecture" in audit_row.rendered_system_prompt
     assert audit_row.user_message == "What counts as data"
 
 
@@ -450,7 +456,7 @@ def test_send_message_writes_dialogue_token_usage_to_audit_row(client):
 def test_send_message_injects_private_artifact_schema_json(client):
     session_id = start_session(client)
     mock_resp = mock.MagicMock()
-    mock_resp.choices[0].message.content = j.dumps({
+    mock_resp.choices[0].message.content = _tagged({
         "assistant_message": "What is one example?",
         "updated_state": {},
         "private_artifact": VALID_PRIVATE_ARTIFACT,
@@ -470,12 +476,12 @@ def test_send_message_injects_private_artifact_schema_json(client):
 def test_send_message_missing_private_artifact_retries_and_logs_repaired_artifact(client):
     session_id = start_session(client)
     missing_resp = mock.MagicMock()
-    missing_resp.choices[0].message.content = j.dumps({
+    missing_resp.choices[0].message.content = _tagged({
         "assistant_message": "What is one example?",
         "updated_state": {},
     })
     repaired_resp = mock.MagicMock()
-    repaired_resp.choices[0].message.content = j.dumps({
+    repaired_resp.choices[0].message.content = _tagged({
         "assistant_message": "What is one repaired example?",
         "updated_state": {},
         "private_artifact": VALID_PRIVATE_ARTIFACT,
@@ -508,13 +514,13 @@ def test_send_message_missing_private_artifact_retries_and_logs_repaired_artifac
 def test_send_message_invalid_private_artifact_retries_and_logs_repaired_artifact(client):
     session_id = start_session(client)
     invalid_resp = mock.MagicMock()
-    invalid_resp.choices[0].message.content = j.dumps({
+    invalid_resp.choices[0].message.content = _tagged({
         "assistant_message": "What is one example?",
         "updated_state": {},
         "private_artifact": {},
     })
     repaired_resp = mock.MagicMock()
-    repaired_resp.choices[0].message.content = j.dumps({
+    repaired_resp.choices[0].message.content = _tagged({
         "assistant_message": "What is one repaired example?",
         "updated_state": {},
         "private_artifact": VALID_PRIVATE_ARTIFACT,
@@ -539,12 +545,12 @@ def test_send_message_invalid_private_artifact_retries_and_logs_repaired_artifac
 def test_send_message_private_artifact_repair_failure_uses_controlled_fallback(client):
     session_id = start_session(client)
     missing_resp = mock.MagicMock()
-    missing_resp.choices[0].message.content = j.dumps({
+    missing_resp.choices[0].message.content = _tagged({
         "assistant_message": "First unusable reply.",
         "updated_state": {},
     })
     still_missing_resp = mock.MagicMock()
-    still_missing_resp.choices[0].message.content = j.dumps({
+    still_missing_resp.choices[0].message.content = _tagged({
         "assistant_message": "Second unusable reply.",
         "updated_state": {},
     })
@@ -568,7 +574,7 @@ def test_send_message_private_artifact_repair_failure_uses_controlled_fallback(c
 def test_private_artifact_inside_updated_state_is_not_persisted(client):
     session_id = start_session(client)
     mock_resp = mock.MagicMock()
-    mock_resp.choices[0].message.content = j.dumps({
+    mock_resp.choices[0].message.content = _tagged({
         "assistant_message": "What is one example?",
         "updated_state": {"private_artifact": {"bad": "state"}, "mastery": {"T1": 55}},
         "private_artifact": VALID_PRIVATE_ARTIFACT,
@@ -610,3 +616,10 @@ def test_inactive_lecture_cannot_be_started(client):
     response = client.post("/start_session", json={"student_id": "student_001", "lecture_id": "lecture_01"})
     assert response.status_code == 404
     assert "not open yet" in response.json()["detail"]
+
+
+def test_a_lecture_whose_prompt_declares_another_contract_is_refused(client, monkeypatch):
+    monkeypatch.setattr(config_module.get_settings(), "tutor_prompt_template", "tutor_prompt.md")
+    response = client.post("/start_session", json={"student_id": "s1", "lecture_id": "lecture_01"})
+    assert response.status_code == 503
+    assert "not available" in response.json()["detail"]

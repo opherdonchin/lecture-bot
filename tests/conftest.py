@@ -72,9 +72,11 @@ def client(tmp_path, monkeypatch):
     )
     Base.metadata.create_all(bind=test_engine)
     TestSession = sessionmaker(bind=test_engine, autoflush=False, autocommit=False)
+    # The only committed prompt written for the current backend contract.
     test_settings = config_module.Settings(
         database_url=f"sqlite:///{db_path}",
         lectures_dir=lectures_dir,
+        tutor_prompt_template="pml_tutor_prompt.md",
     )
 
     def override_get_db():

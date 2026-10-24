@@ -247,24 +247,15 @@ def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | 
 # ---------------------------------------------------------------------------
 # Public: tagged reply format
 # ---------------------------------------------------------------------------
+# Under backend contract 0.6.1 the tutor writes the student's message as plain
+# text between <assistant_message> tags, followed by a JSON object holding only
+# updated_state and private_artifact. Keeping LaTeX out of JSON strings avoids
+# the escapes the model garbles there.
 
-_REPLY_TAG_OPEN = "<assistant_message>"
-_REPLY_TAG_CLOSE = "</assistant_message>"
 # The closing tag is sometimes written JSON-style, as <\/assistant_message>.
 _TAGGED_MESSAGE_RE = re_.compile(r"<assistant_message>\s*(.*?)\s*<\\?/assistant_message>", re_.DOTALL)
 _STRAY_TAG_RE = re_.compile(r"<\\?/?assistant_message>")
 _STATE_OBJECT_START_RE = re_.compile(r'\{\s*"(?:updated_state|private_artifact)"')
-
-
-def uses_tagged_reply_format(system_prompt: str) -> bool:
-    """Return whether the tutor prompt asks for the tagged reply format.
-
-    In that format the student's message is plain text between
-    <assistant_message> tags, followed by a JSON object holding only
-    updated_state and private_artifact. Keeping LaTeX out of JSON strings
-    avoids the escapes the model garbles there.
-    """
-    return _REPLY_TAG_OPEN in system_prompt and _REPLY_TAG_CLOSE in system_prompt
 
 
 def _decode_state_object(text: str) -> dict:
@@ -352,16 +343,13 @@ def generate_reply(
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(recent_messages)
     messages.append({"role": "user", "content": normalized_user_message})
-    tagged_reply = uses_tagged_reply_format(system_prompt)
 
     try:
         client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
-        request_options = {} if tagged_reply else {"response_format": {"type": "json_object"}}
         response = client.chat.completions.create(
             model=settings.openai_model,
             messages=messages,
             temperature=0.3,
-            **request_options,
         )
         dialogue_usage = _extract_dialogue_usage(response)
         try:
@@ -377,8 +365,8 @@ def generate_reply(
             pass
         raw = response.choices[0].message.content
         try:
-            parsed = parse_tagged_reply(raw) if tagged_reply else j_.loads(raw)
-        except (j_.JSONDecodeError, ValueError):
+            parsed = parse_tagged_reply(raw)
+        except ValueError:
             _log.error("raw response unparseable (first 2000 chars): %r", raw[:2000])
             raise
         assistant_message = sanitize_assistant_message(
@@ -506,7 +494,9 @@ def build_dialogue_system_prompt(
 ) -> str:
     """Build the runtime system prompt around the committed markdown prompt."""
     prompt_template = get_tutor_prompt_template(lecture_package)
-    prompt_body = prompt_loader.load_prompt_template(prompt_template).strip()
+    prompt_body = prompt_loader.strip_contract_declaration(
+        prompt_loader.load_prompt_template(prompt_template)
+    ).strip()
     topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
     sampled_topic_ids = _unique_topic_ids(state.get("topics_sampled", []))
     sampled_topics = [

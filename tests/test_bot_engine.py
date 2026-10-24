@@ -1213,8 +1213,8 @@ def test_generate_reply_uses_tutor_prompt_markdown_with_injected_context():
     }
     mock_resp = mock.MagicMock()
     mock_resp.choices[0].message.content = (
-        '{"assistant_message": "Next question", '
-        '"updated_state": {"topics_covered": ["T1"], "mastery": {"T1": 80}, '
+        "<assistant_message>\nNext question\n</assistant_message>\n"
+        '{"updated_state": {"topics_covered": ["T1"], "mastery": {"T1": 80}, '
         '"evidence_notes": {"T1": "student made a real distinction"}, '
         '"current_topic_id": "T1", "tutor_comment": "Keep pressing on T1."}, '
         '"private_artifact": {"check": "ok"}}'
@@ -1405,9 +1405,30 @@ _TAGGED_STATE = (
 )
 
 
-def test_only_the_pml_prompt_uses_the_tagged_reply_format():
-    assert bot_engine.uses_tagged_reply_format(prompt_loader.load_prompt_template(PML_PROMPT))
-    assert not bot_engine.uses_tagged_reply_format(prompt_loader.load_prompt_template("tutor_prompt.md"))
+def test_the_pml_prompt_declares_the_current_backend_contract():
+    assert prompt_loader.declared_backend_contract(prompt_loader.load_prompt_template(PML_PROMPT)) == prompt_loader.BACKEND_CONTRACT_VERSION
+    assert prompt_loader.prompt_contract_problem(PML_PROMPT) is None
+
+
+def test_the_statistics_prompt_is_refused_until_it_is_regenerated():
+    problem = prompt_loader.prompt_contract_problem("tutor_prompt.md")
+    assert problem is not None and "declares no backend contract" in problem
+
+
+def test_a_prompt_for_another_contract_version_is_refused():
+    assert prompt_loader.declared_backend_contract("Backend contract: 0.3.0\n\nYou are a tutor.") == "0.3.0"
+    assert prompt_loader.declared_backend_contract("You are a tutor.\nBackend contract: 0.6.1\n") is None
+
+
+def test_the_contract_declaration_is_removed_before_the_model_sees_the_prompt():
+    package = dict(_CACHING_LECTURE_PACKAGE, config={"title": "Cache Test Lecture", "tutor_prompt_template": PML_PROMPT})
+    prompt = bot_engine.build_dialogue_system_prompt(
+        lecture_package=package,
+        state={"topics_sampled": ["T1"], "turn_count": 0},
+        topic_defs=_make_topic_defs_for_caching(),
+        lecture_context=_make_lecture_context_for_caching(),
+    )
+    assert "Backend contract:" not in prompt
 
 
 def test_parse_tagged_reply_keeps_latex_as_written():
@@ -1449,7 +1470,7 @@ def test_parse_tagged_reply_rejects_an_empty_message():
         bot_engine.parse_tagged_reply("<assistant_message>\n</assistant_message>\n" + _TAGGED_STATE)
 
 
-def test_generate_reply_with_the_pml_prompt_requests_plain_text_and_parses_tags():
+def test_generate_reply_requests_plain_text_and_parses_tags():
     package = dict(_CACHING_LECTURE_PACKAGE, config={"title": "Cache Test Lecture", "tutor_prompt_template": PML_PROMPT})
     mock_resp = mock.MagicMock()
     mock_resp.choices[0].message.content = "<assistant_message>\nWhy \\(A\\Sigma A^T\\)?\n</assistant_message>\n" + _TAGGED_STATE
