@@ -75,17 +75,22 @@ def list_lectures():
         return []
     return sorted(
         d.name for d in lectures_dir.iterdir()
-        if d.is_dir() and (d / "lecture_config.json").exists() and _lecture_is_active(d)
+        if d.is_dir() and (d / "lecture_config.json").exists() and _lecture_dir_is_active(d)
     )
 
 
-def _lecture_is_active(lecture_dir) -> bool:
-    """Return whether a lecture is open to students; a missing flag counts as active."""
+def _lecture_is_active(config: dict) -> bool:
+    """Return whether a lecture config opens the lecture to students; a missing flag counts as active."""
+    return bool(config.get("active", True))
+
+
+def _lecture_dir_is_active(lecture_dir) -> bool:
+    """Read a lecture folder's config and apply _lecture_is_active; an unreadable config counts as inactive."""
     try:
         config = j_.loads((lecture_dir / "lecture_config.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    return bool(config.get("active", True))
+    return _lecture_is_active(config)
 
 
 # API endpoints
@@ -99,7 +104,7 @@ def start_session(request: schema.StartSessionRequest, db: sqlalchemy_orm.Sessio
         lecture_package = lecture_loader.load_lecture_package(settings.lectures_dir, request.lecture_id)
     except lecture_loader.LectureNotFoundError as e:
         raise fa.HTTPException(status_code=404, detail=str(e))
-    if not lecture_package["config"].get("active", True):
+    if not _lecture_is_active(lecture_package["config"]):
         raise fa.HTTPException(status_code=404, detail=f"Lecture {request.lecture_id} is not open yet")
     
     # Create the session
