@@ -990,6 +990,9 @@ def generate_report(
     ) if topic_scores else "none assessed"
     scored_summary = ", ".join(scored_topics) if scored_topics else "no strong footholds yet"
     missing_summary = ", ".join(missing_topics) if missing_topics else "none"
+    rationale_summary = "; ".join(
+        f"{ts['topic_id']}: {ts.get('rationale', '')}" for ts in topic_scores if ts.get("rationale")
+    ) or "none"
 
     system_prompt = (
         "You are writing a final mastery report for a student's tutoring session.\n"
@@ -1002,15 +1005,22 @@ def generate_report(
         f"Topic scores: {topic_summary}\n"
         f"Assessment: {explanation}\n"
         f"Stronger areas so far: {scored_summary}\n"
+        f"Grader's evidence notes: {rationale_summary}\n"
         f"Topics not yet evidenced: {missing_summary}\n\n"
         "Raw topic scores are diagnostic depth from 0 to 100, not grade gaps.\n"
         "If the student reached full session credit, frame remaining headroom as optional enrichment, "
         "not as work required for the grade.\n\n"
         "Rubric for reference:\n"
         f"{rubric_text}\n\n"
+        "You will receive the student's messages on their own, followed by the full conversation.\n"
+        "Demonstrated: list only understanding that the STUDENT'S MESSAGES block itself shows, and say what in "
+        "those messages shows it. A question the student asked shows curiosity, not understanding of its answer. "
+        "Taught in this session: ideas the tutor explained or prompted that the student's messages do not show. "
+        "Anything that appears only in the tutor's turns belongs under Taught, never under Demonstrated.\n\n"
         "Return `report_text` as plain text with exactly these section headings:\n"
         "Summary:\n"
-        "Stronger areas:\n"
+        "Demonstrated:\n"
+        "Taught in this session:\n"
         "Next steps:\n"
         "Coverage:\n"
         "Under each heading, use 1-3 short bullet points that start with '- '.\n"
@@ -1022,6 +1032,9 @@ def generate_report(
     conversation_text = "\n\n".join(
         f"[{msg['role'].upper()}]: {msg['content']}" for msg in messages
     )
+    student_text = "\n\n".join(
+        f"- {msg['content']}" for msg in messages if msg["role"] == "user"
+    ) or "(no student messages)"
 
     if session_credit_status == "full_credit_reached":
         fallback_next_step = "Full session credit was reached; any next work is optional enrichment."
@@ -1034,8 +1047,10 @@ def generate_report(
     fallback_report_text = (
         "Summary:\n"
         f"- {explanation or 'This session produced some usable evidence, but the picture is still incomplete.'}\n"
-        "Stronger areas:\n"
+        "Demonstrated:\n"
         f"- {scored_summary}.\n"
+        "Taught in this session:\n"
+        "- See the conversation.\n"
         "Next steps:\n"
         f"- {fallback_next_step}\n"
         "Coverage:\n"
@@ -1049,7 +1064,7 @@ def generate_report(
             model=settings.openai_model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Conversation:\n\n{conversation_text}"},
+                {"role": "user", "content": f"STUDENT'S MESSAGES:\n\n{student_text}\n\nFULL CONVERSATION:\n\n{conversation_text}"},
             ],
             response_format={"type": "json_object"},
             temperature=0.3,

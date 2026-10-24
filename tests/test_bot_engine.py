@@ -239,7 +239,8 @@ def test_generate_report_fallback_uses_scannable_bullets(monkeypatch):
     )
 
     assert "Summary:" in result["report_text"]
-    assert "Stronger areas:" in result["report_text"]
+    assert "Demonstrated:" in result["report_text"]
+    assert "Taught in this session:" in result["report_text"]
     assert "Next steps:" in result["report_text"]
     assert "Coverage:" in result["report_text"]
     assert "- Reality–Data–Model distinction, Purpose of statistics." in result["report_text"]
