@@ -7,6 +7,13 @@ _REPO_ROOT = pathlib_.Path(__file__).resolve().parent.parent
 _PROMPTS_DIR = _REPO_ROOT / "prompts"
 _PLACEHOLDER_RE = re_.compile(r"{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}")
 
+# The backend-tutor contract this code implements, named by the development
+# version in which the contract last changed (docs/backend_tutor_contract.md).
+# A tutor prompt declares the contract it was written for on its first line;
+# a prompt declaring another version, or none, is not loaded.
+BACKEND_CONTRACT_VERSION = "0.6.1"
+_CONTRACT_DECLARATION_RE = re_.compile(r"\ABackend contract: *(\S+)[ \t]*\r?\n(?:[ \t]*\r?\n)?")
+
 
 @functools_.lru_cache
 def load_prompt_template(template_name: str) -> str:
@@ -44,3 +51,33 @@ def render_prompt_template(template_name: str, values: dict) -> str:
         missing_text = ", ".join(sorted(set(missing)))
         raise KeyError(f"Missing prompt template values for: {missing_text}")
     return rendered
+
+
+def declared_backend_contract(prompt_text: str) -> str | None:
+    """Return the backend contract version a prompt declares on its first line, if any."""
+    match = _CONTRACT_DECLARATION_RE.match(prompt_text)
+    return match.group(1) if match else None
+
+
+def strip_contract_declaration(prompt_text: str) -> str:
+    """Return the prompt without its contract declaration line, as the model should see it."""
+    return _CONTRACT_DECLARATION_RE.sub("", prompt_text, count=1)
+
+
+def prompt_contract_problem(template_name: str) -> str | None:
+    """Return why a tutor prompt cannot run under this backend, or None if it can."""
+    try:
+        declared = declared_backend_contract(load_prompt_template(template_name))
+    except OSError as error:
+        return f"tutor prompt {template_name!r} cannot be read: {error}"
+    if declared is None:
+        return (
+            f"tutor prompt {template_name!r} declares no backend contract; "
+            f"this backend implements contract {BACKEND_CONTRACT_VERSION}"
+        )
+    if declared != BACKEND_CONTRACT_VERSION:
+        return (
+            f"tutor prompt {template_name!r} was written for backend contract {declared}; "
+            f"this backend implements contract {BACKEND_CONTRACT_VERSION}"
+        )
+    return None

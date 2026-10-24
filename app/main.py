@@ -1,5 +1,6 @@
 import datetime as dt
 import json as j_
+import logging as logging_
 
 import fastapi as fa
 import sqlalchemy.orm as sqlalchemy_orm
@@ -15,7 +16,10 @@ import app.lecture_loader as lecture_loader
 import app.models as models
 import app.root_path as root_path_module
 import app.schema as schema
+import app.prompt_loader as prompt_loader
 import app.session_manager as session_manager
+
+_log = logging_.getLogger(__name__)
 
 app = fa.FastAPI(title="Lecture Bot", root_path=config_module.get_settings().student_root_path)
 app.add_middleware(
@@ -106,6 +110,7 @@ def start_session(request: schema.StartSessionRequest, db: sqlalchemy_orm.Sessio
         raise fa.HTTPException(status_code=404, detail=str(e))
     if not _lecture_is_active(lecture_package["config"]):
         raise fa.HTTPException(status_code=404, detail=f"Lecture {request.lecture_id} is not open yet")
+    _refuse_unusable_tutor_prompt(lecture_package)
     
     # Create the session
     session = session_manager.create_session(db, request.student_id, request.lecture_id, lecture_package)
@@ -188,6 +193,7 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
 
     # Reload lecture package
     lecture_package = _load_lecture_package_for_session(session)
+    _refuse_unusable_tutor_prompt(lecture_package)
     _update_backend_grade_state(
         db,
         session=session,
@@ -456,11 +462,12 @@ def _record_grade_event(
 
 def _build_private_artifact_repair_instruction(validation_error: str) -> str:
     return (
-        "Your previous JSON output violated the private artifact contract: "
-        f"{validation_error}. Return the full response JSON for the same student turn again. "
-        "Because private_artifact_schema_json is present, include a top-level private_artifact "
-        "that conforms exactly to the injected schema. Keep private_artifact out of "
-        "assistant_message and updated_state."
+        "Your previous reply violated the private artifact contract: "
+        f"{validation_error}. Write the whole reply for the same student turn again, in the tagged "
+        "format: the message between <assistant_message> and </assistant_message>, then one JSON "
+        "object with updated_state and a private_artifact that conforms exactly to the injected "
+        "private_artifact_schema_json. Close every brace. Keep private_artifact out of the message "
+        "and out of updated_state."
     )
 
 
@@ -506,6 +513,17 @@ def _combine_dialogue_usage(
         total_tokens=_sum_optional_ints(first.total_tokens, second.total_tokens),
         cached_prompt_tokens=_sum_optional_ints(first.cached_prompt_tokens, second.cached_prompt_tokens),
     )
+
+
+TUTOR_UNAVAILABLE_MESSAGE = "The tutor for this lecture is not available right now. Please tell the course staff."
+
+
+def _refuse_unusable_tutor_prompt(lecture_package: dict) -> None:
+    """Stop the request when the lecture's tutor prompt was written for another backend contract."""
+    problem = prompt_loader.prompt_contract_problem(bot_engine.get_tutor_prompt_template(lecture_package))
+    if problem:
+        _log.error("refusing tutor request for %s: %s", lecture_package.get("lecture_id"), problem)
+        raise fa.HTTPException(status_code=503, detail=TUTOR_UNAVAILABLE_MESSAGE)
 
 
 def _record_private_artifact_log(

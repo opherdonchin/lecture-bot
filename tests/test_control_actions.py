@@ -96,7 +96,13 @@ def test_start_session_snapshots_active_private_artifact_schema(client):
     assert "turn_classification" in schema["required"]
 
 
-def test_start_session_with_no_schema_leaves_private_artifact_schema_null(client):
+def test_start_session_with_no_schema_leaves_private_artifact_schema_null(client, tmp_path, monkeypatch):
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "no_schema_prompt.md").write_text(
+        f"Backend contract: {prompt_loader.BACKEND_CONTRACT_VERSION}\n\nPrompt\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(prompt_loader, "_PROMPTS_DIR", prompts_dir)
     lectures_dir = config_module.get_settings().lectures_dir
     config_path = lectures_dir / "lecture_01" / "lecture_config.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -114,7 +120,9 @@ def test_start_session_with_no_schema_leaves_private_artifact_schema_null(client
 def test_session_private_artifact_schema_remains_fixed_after_source_changes(client, tmp_path, monkeypatch):
     prompts_dir = tmp_path / "prompts"
     prompts_dir.mkdir()
-    (prompts_dir / "custom_prompt.md").write_text("Prompt\n", encoding="utf-8")
+    (prompts_dir / "custom_prompt.md").write_text(
+        f"Backend contract: {prompt_loader.BACKEND_CONTRACT_VERSION}\n\nPrompt\n", encoding="utf-8"
+    )
     schema_path = prompts_dir / "custom_prompt_private_artifact_schema.json"
     first_schema = {"type": "object", "required": ["first"]}
     second_schema = {"type": "object", "required": ["second"]}

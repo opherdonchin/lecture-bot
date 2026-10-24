@@ -1213,8 +1213,8 @@ def test_generate_reply_uses_tutor_prompt_markdown_with_injected_context():
     }
     mock_resp = mock.MagicMock()
     mock_resp.choices[0].message.content = (
-        '{"assistant_message": "Next question", '
-        '"updated_state": {"topics_covered": ["T1"], "mastery": {"T1": 80}, '
+        "<assistant_message>\nNext question\n</assistant_message>\n"
+        '{"updated_state": {"topics_covered": ["T1"], "mastery": {"T1": 80}, '
         '"evidence_notes": {"T1": "student made a real distinction"}, '
         '"current_topic_id": "T1", "tutor_comment": "Keep pressing on T1."}, '
         '"private_artifact": {"check": "ok"}}'
@@ -1393,3 +1393,97 @@ def test_build_dialogue_context_is_silent_when_everything_fits(caplog):
         bot_engine.build_dialogue_context(package, 1000)
 
     assert caplog.text == ""
+
+
+# ---------------------------------------------------------------------------
+# Tagged reply format (scope issue #31, PR E)
+# ---------------------------------------------------------------------------
+
+_TAGGED_STATE = (
+    '{"updated_state":{"mastery":{"T1":72},"evidence_notes":{"T1":"explained the arrow"}},'
+    '"private_artifact":{"self_check":{"assistant_message_matches_move":true}}}'
+)
+
+
+def test_the_pml_prompt_declares_the_current_backend_contract():
+    assert prompt_loader.declared_backend_contract(prompt_loader.load_prompt_template(PML_PROMPT)) == prompt_loader.BACKEND_CONTRACT_VERSION
+    assert prompt_loader.prompt_contract_problem(PML_PROMPT) is None
+
+
+def test_the_statistics_prompt_is_refused_until_it_is_regenerated():
+    problem = prompt_loader.prompt_contract_problem("tutor_prompt.md")
+    assert problem is not None and "declares no backend contract" in problem
+
+
+def test_a_prompt_for_another_contract_version_is_refused():
+    assert prompt_loader.declared_backend_contract("Backend contract: 0.3.0\n\nYou are a tutor.") == "0.3.0"
+    assert prompt_loader.declared_backend_contract("You are a tutor.\nBackend contract: 0.6.1\n") is None
+
+
+def test_the_contract_declaration_is_removed_before_the_model_sees_the_prompt():
+    package = dict(_CACHING_LECTURE_PACKAGE, config={"title": "Cache Test Lecture", "tutor_prompt_template": PML_PROMPT})
+    prompt = bot_engine.build_dialogue_system_prompt(
+        lecture_package=package,
+        state={"topics_sampled": ["T1"], "turn_count": 0},
+        topic_defs=_make_topic_defs_for_caching(),
+        lecture_context=_make_lecture_context_for_caching(),
+    )
+    assert "Backend contract:" not in prompt
+
+
+def test_parse_tagged_reply_keeps_latex_as_written():
+    raw = "<assistant_message>\nGiven \\(\\theta\\), the tosses are independent.\n\nWhy?\n</assistant_message>\n" + _TAGGED_STATE
+    parsed = bot_engine.parse_tagged_reply(raw)
+    assert parsed["assistant_message"] == "Given \\(\\theta\\), the tosses are independent.\n\nWhy?"
+    assert parsed["updated_state"]["mastery"] == {"T1": 72}
+    assert parsed["private_artifact"]["self_check"]["assistant_message_matches_move"] is True
+
+
+def test_parse_tagged_reply_accepts_a_json_escaped_closing_tag():
+    raw = "<assistant_message>\nWhat does the width mean?<\\/assistant_message>\n" + _TAGGED_STATE
+    assert bot_engine.parse_tagged_reply(raw)["assistant_message"] == "What does the width mean?"
+    raw = "What does the width mean?<\\/assistant_message>" + _TAGGED_STATE
+    assert bot_engine.parse_tagged_reply(raw)["assistant_message"] == "What does the width mean?"
+
+
+def test_parse_tagged_reply_closes_a_missing_final_brace():
+    raw = "<assistant_message>\nWhy?\n</assistant_message>\n" + _TAGGED_STATE[:-1]
+    assert bot_engine.parse_tagged_reply(raw)["updated_state"]["mastery"] == {"T1": 72}
+
+
+def test_parse_tagged_reply_without_tags_splits_at_the_state_object():
+    raw = "You used the forward law, \\(p(y)\\).\n\nWhat changes if \\(\\Omega\\) doubles?" + _TAGGED_STATE
+    parsed = bot_engine.parse_tagged_reply(raw)
+    assert parsed["assistant_message"] == "You used the forward law, \\(p(y)\\).\n\nWhat changes if \\(\\Omega\\) doubles?"
+    assert parsed["updated_state"]["evidence_notes"] == {"T1": "explained the arrow"}
+
+
+def test_parse_tagged_reply_without_a_state_object_keeps_the_message():
+    parsed = bot_engine.parse_tagged_reply("Why does \\(\\Omega\\) appear inside \\(\\Sigma_{yy}\\)?")
+    assert parsed["assistant_message"] == "Why does \\(\\Omega\\) appear inside \\(\\Sigma_{yy}\\)?"
+    assert parsed["updated_state"] == {}
+    assert parsed["private_artifact"] is None
+
+
+def test_parse_tagged_reply_rejects_an_empty_message():
+    with pytest.raises(ValueError):
+        bot_engine.parse_tagged_reply("<assistant_message>\n</assistant_message>\n" + _TAGGED_STATE)
+
+
+def test_generate_reply_requests_plain_text_and_parses_tags():
+    package = dict(_CACHING_LECTURE_PACKAGE, config={"title": "Cache Test Lecture", "tutor_prompt_template": PML_PROMPT})
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = "<assistant_message>\nWhy \\(A\\Sigma A^T\\)?\n</assistant_message>\n" + _TAGGED_STATE
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        assistant_message, updated_state, private_artifact = bot_engine.generate_reply(
+            lecture_package=package,
+            recent_messages=[],
+            state={"topics_sampled": ["T1"], "turn_count": 0},
+            user_message="Let's start.",
+        )
+    assert "response_format" not in mock_client.chat.completions.create.call_args.kwargs
+    assert assistant_message == "Why \\(A\\Sigma A^T\\)?"
+    assert updated_state["mastery"] == {"T1": 72}
+    assert private_artifact == {"self_check": {"assistant_message_matches_move": True}}

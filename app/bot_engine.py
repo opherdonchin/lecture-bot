@@ -245,6 +245,61 @@ def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | 
 
 
 # ---------------------------------------------------------------------------
+# Public: tagged reply format
+# ---------------------------------------------------------------------------
+# Under backend contract 0.6.1 the tutor writes the student's message as plain
+# text between <assistant_message> tags, followed by a JSON object holding only
+# updated_state and private_artifact. Keeping LaTeX out of JSON strings avoids
+# the escapes the model garbles there.
+
+# The closing tag is sometimes written JSON-style, as <\/assistant_message>.
+_TAGGED_MESSAGE_RE = re_.compile(r"<assistant_message>\s*(.*?)\s*<\\?/assistant_message>", re_.DOTALL)
+_STRAY_TAG_RE = re_.compile(r"<\\?/?assistant_message>")
+_STATE_OBJECT_START_RE = re_.compile(r'\{\s*"(?:updated_state|private_artifact)"')
+
+
+def _decode_state_object(text: str) -> dict:
+    """Decode the JSON object at the start of text, closing up to three missing braces."""
+    decoder = j_.JSONDecoder()
+    for missing in range(4):
+        try:
+            value, _ = decoder.raw_decode(text + "}" * missing)
+        except j_.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            return value
+    _log.warning("tagged reply: state object unparseable (first 300 chars): %r", text[:300])
+    return {}
+
+
+def parse_tagged_reply(raw: str) -> dict:
+    """Parse a tagged tutor reply into the same keys as a JSON reply.
+
+    Tolerates missing tags (the message is then the text before the state
+    object), a missing final brace and a missing state object, so that a usable
+    message is never replaced by the fallback. Raises ValueError when there is
+    no message at all.
+    """
+    tagged = _TAGGED_MESSAGE_RE.search(raw)
+    if tagged:
+        message, rest = tagged.group(1), raw[tagged.end():]
+    else:
+        starts = list(_STATE_OBJECT_START_RE.finditer(raw))
+        split = starts[-1].start() if starts else len(raw)
+        message, rest = raw[:split], raw[split:]
+    message = _STRAY_TAG_RE.sub("", message).strip()
+    if not message:
+        raise ValueError("tagged reply has no assistant message")
+    brace = rest.find("{")
+    state_object = _decode_state_object(rest[brace:]) if brace >= 0 else {}
+    return {
+        "assistant_message": message,
+        "updated_state": state_object.get("updated_state", {}),
+        "private_artifact": state_object.get("private_artifact"),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public: dialogue reply generation
 # ---------------------------------------------------------------------------
 
@@ -294,7 +349,6 @@ def generate_reply(
         response = client.chat.completions.create(
             model=settings.openai_model,
             messages=messages,
-            response_format={"type": "json_object"},
             temperature=0.3,
         )
         dialogue_usage = _extract_dialogue_usage(response)
@@ -311,8 +365,8 @@ def generate_reply(
             pass
         raw = response.choices[0].message.content
         try:
-            parsed = j_.loads(raw)
-        except j_.JSONDecodeError:
+            parsed = parse_tagged_reply(raw)
+        except ValueError:
             _log.error("raw response unparseable (first 2000 chars): %r", raw[:2000])
             raise
         assistant_message = sanitize_assistant_message(
@@ -440,7 +494,9 @@ def build_dialogue_system_prompt(
 ) -> str:
     """Build the runtime system prompt around the committed markdown prompt."""
     prompt_template = get_tutor_prompt_template(lecture_package)
-    prompt_body = prompt_loader.load_prompt_template(prompt_template).strip()
+    prompt_body = prompt_loader.strip_contract_declaration(
+        prompt_loader.load_prompt_template(prompt_template)
+    ).strip()
     topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
     sampled_topic_ids = _unique_topic_ids(state.get("topics_sampled", []))
     sampled_topics = [

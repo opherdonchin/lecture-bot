@@ -122,13 +122,15 @@ The default runtime tutor prompt is `prompts/tutor_prompt.md`, selected by `Sett
 
 The active private artifact schema, when present, is loaded from the generated schema file accompanying the active prompt. At session creation, the backend snapshots that schema text into `sessions.private_artifact_schema_json`. If no schema file exists for the active prompt, the session field is null and ordinary turns do not use private artifacts. Prompt history and schema history are not stored.
 
+At session start and on each turn, the backend refuses the request (HTTP 503) if the lecture's tutor prompt does not declare the backend contract version the code implements (see `docs/backend_tutor_contract.md`).
+
 For each ordinary student turn, the backend:
 
 1. loads recent messages,
 2. computes timing context,
 3. builds lecture context with deterministic truncation,
 4. renders the tutor prompt plus injected runtime JSON, including `private_artifact_schema_json` when the session has one,
-5. calls OpenAI with `response_format={"type": "json_object"}`,
+5. calls OpenAI without a JSON response mode and parses the tagged reply (the message between `<assistant_message>` tags, then a JSON object with `updated_state` and `private_artifact`),
 6. sanitizes the returned assistant message,
 7. sanitizes and merges state updates,
 8. validates `private_artifact` when a session schema exists,
