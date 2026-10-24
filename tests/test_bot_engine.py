@@ -1,5 +1,6 @@
 """Unit tests for pure helper functions in app/bot_engine.py."""
 import math
+import pathlib as pathlib_
 import unittest.mock as mock
 
 import pytest
@@ -723,6 +724,18 @@ def test_sanitize_assistant_message_repairs_bell_math_artifacts():
     assert r"\alpha = 0.06" in result
 
 
+def test_sanitize_assistant_message_repairs_doubled_math_delimiters():
+    message = r"Yes: \\(B=\Sigma_{12}\Sigma_{22}^{-1}\\) and \\[S=\Sigma_{11}\\]; keep \(K\) as is."
+    result = bot_engine.sanitize_assistant_message(message, topic_defs=[], timing_context=None)
+    assert result == r"Yes: \(B=\Sigma_{12}\Sigma_{22}^{-1}\) and \[S=\Sigma_{11}\]; keep \(K\) as is."
+
+
+def test_sanitize_assistant_message_restores_truncated_punctuation_escapes():
+    message = "the input\x13output view \x14 a \x18shared\x19 \x1chat R\x1d"
+    result = bot_engine.sanitize_assistant_message(message, topic_defs=[], timing_context=None)
+    assert result == "the input\u2013output view \u2014 a \u2018shared\u2019 \u201chat R\u201d"
+
+
 def test_language_policy_accepts_short_english_topic_pick():
     assert language_policy.is_english_text("Why sample")
 
@@ -1316,6 +1329,20 @@ def test_pml_tutor_prompt_states_the_backend_contract():
         "rubric_text",
         "lecture_context",
     ):
+        assert required in prompt, required
+
+
+def test_pml_tutor_prompt_names_the_math_delimiters_the_chat_renders():
+    prompt = prompt_loader.load_prompt_template(PML_PROMPT)
+    chat_js = (pathlib_.Path(__file__).resolve().parents[1] / "app/static/chat.js").read_text(encoding="utf-8")
+    assert '{ left: "\\\\(", right: "\\\\)", display: false }' in chat_js
+    assert "\\( ... \\) inline" in prompt
+    assert "never use $...$" in prompt
+
+
+def test_pml_tutor_prompt_handles_the_five_minute_warning():
+    prompt = prompt_loader.load_prompt_template(PML_PROMPT)
+    for required in ("session_timing.closing_mode", "timeout_warning_sent", "minutes_remaining", "timing_reliable"):
         assert required in prompt, required
 
 

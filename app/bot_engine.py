@@ -25,6 +25,15 @@ _TIME_CLAIM_RE = re_.compile(r"\b\d+\s+minutes?\s+left\b", re_.IGNORECASE)
 _NON_ALNUM_RE = re_.compile(r"[^a-z0-9]+")
 _BELL_CHAR = "\x07"
 _BELL_WRAPPED_INLINE_MATH_RE = re_.compile(r"\x07([^\x07\r\n]{1,200})\x07")
+# A math delimiter written with a doubled backslash, as when the model escapes
+# it once too often; the chat would show the extra backslash.
+_DOUBLED_MATH_DELIMITER_RE = re_.compile(r"\\\\([()\[\]])")
+# The model sometimes writes a \u20XX escape as \u00XX, which turns a dash or a
+# curly quote into a control character. These six are unambiguous.
+_TRUNCATED_PUNCTUATION = str.maketrans({
+    "\x13": "\u2013", "\x14": "\u2014",
+    "\x18": "\u2018", "\x19": "\u2019", "\x1c": "\u201c", "\x1d": "\u201d",
+})
 
 _FALLBACK_DIALOGUE_MESSAGE = (
     "The app cannot connect to the backend AI. "
@@ -522,6 +531,8 @@ def _normalize_malformed_math_text(text: str) -> str:
     """Repair common malformed LaTeX artifacts before showing text to students."""
     normalized = text.replace(f"{_BELL_CHAR}lpha", r"\alpha")
     normalized = _BELL_WRAPPED_INLINE_MATH_RE.sub(r"\\(\1\\)", normalized)
+    normalized = _DOUBLED_MATH_DELIMITER_RE.sub(r"\\\1", normalized)
+    normalized = normalized.translate(_TRUNCATED_PUNCTUATION)
     return normalized.replace(_BELL_CHAR, "")
 
 
