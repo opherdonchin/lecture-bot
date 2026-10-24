@@ -1292,6 +1292,50 @@ def test_chat_language_setting_rejects_other_values(value):
         config_module.Settings(chat_language=value)
 
 
+# ---------------------------------------------------------------------------
+# PML tutor prompt (scope issue #31)
+# ---------------------------------------------------------------------------
+
+PML_PROMPT = "pml_tutor_prompt.md"
+
+
+def test_pml_tutor_prompt_states_the_backend_contract():
+    prompt = prompt_loader.load_prompt_template(PML_PROMPT)
+    for required in (
+        "assistant_message",
+        "updated_state",
+        "private_artifact",
+        "private_artifact_schema_json",
+        "mastery",
+        "evidence_notes",
+        "current_topic_id",
+        "tutor_comment",
+        "grade_impact_deltas",
+        "chat_language",
+        "rubric_text",
+        "lecture_context",
+    ):
+        assert required in prompt, required
+
+
+def test_pml_tutor_prompt_has_a_valid_private_artifact_schema():
+    schema_json = prompt_loader.load_private_artifact_schema_json(PML_PROMPT)
+    assert schema_json is not None
+    import json as json_
+    import jsonschema as jsonschema_
+    jsonschema_.Draft202012Validator.check_schema(json_.loads(schema_json))
+
+
+def test_dialogue_prompt_uses_the_lecture_selected_tutor_prompt():
+    package = dict(_CACHING_LECTURE_PACKAGE, config={"title": "Cache Test Lecture", "tutor_prompt_template": PML_PROMPT})
+    prompt = bot_engine.build_dialogue_system_prompt(
+        lecture_package=package,
+        state={"topics_sampled": ["T1"], "turn_count": 0},
+        topic_defs=_make_topic_defs_for_caching(),
+        lecture_context=_make_lecture_context_for_caching(),
+    )
+    assert prompt.startswith("You are the tutor for one lecture of a graduate course")
+
 def test_build_dialogue_context_logs_when_it_truncates(caplog):
     package = {
         "lecture_id": "lecture_big",
