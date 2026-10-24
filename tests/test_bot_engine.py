@@ -1418,6 +1418,13 @@ def test_parse_tagged_reply_keeps_latex_as_written():
     assert parsed["private_artifact"]["self_check"]["assistant_message_matches_move"] is True
 
 
+def test_parse_tagged_reply_accepts_a_json_escaped_closing_tag():
+    raw = "<assistant_message>\nWhat does the width mean?<\\/assistant_message>\n" + _TAGGED_STATE
+    assert bot_engine.parse_tagged_reply(raw)["assistant_message"] == "What does the width mean?"
+    raw = "What does the width mean?<\\/assistant_message>" + _TAGGED_STATE
+    assert bot_engine.parse_tagged_reply(raw)["assistant_message"] == "What does the width mean?"
+
+
 def test_parse_tagged_reply_closes_a_missing_final_brace():
     raw = "<assistant_message>\nWhy?\n</assistant_message>\n" + _TAGGED_STATE[:-1]
     assert bot_engine.parse_tagged_reply(raw)["updated_state"]["mastery"] == {"T1": 72}

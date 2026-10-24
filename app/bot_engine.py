@@ -250,7 +250,9 @@ def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | 
 
 _REPLY_TAG_OPEN = "<assistant_message>"
 _REPLY_TAG_CLOSE = "</assistant_message>"
-_TAGGED_MESSAGE_RE = re_.compile(r"<assistant_message>\s*(.*?)\s*</assistant_message>", re_.DOTALL)
+# The closing tag is sometimes written JSON-style, as <\/assistant_message>.
+_TAGGED_MESSAGE_RE = re_.compile(r"<assistant_message>\s*(.*?)\s*<\\?/assistant_message>", re_.DOTALL)
+_STRAY_TAG_RE = re_.compile(r"<\\?/?assistant_message>")
 _STATE_OBJECT_START_RE = re_.compile(r'\{\s*"(?:updated_state|private_artifact)"')
 
 
@@ -294,7 +296,7 @@ def parse_tagged_reply(raw: str) -> dict:
         starts = list(_STATE_OBJECT_START_RE.finditer(raw))
         split = starts[-1].start() if starts else len(raw)
         message, rest = raw[:split], raw[split:]
-    message = message.replace(_REPLY_TAG_OPEN, "").replace(_REPLY_TAG_CLOSE, "").strip()
+    message = _STRAY_TAG_RE.sub("", message).strip()
     if not message:
         raise ValueError("tagged reply has no assistant message")
     brace = rest.find("{")
