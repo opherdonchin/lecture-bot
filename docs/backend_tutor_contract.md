@@ -99,6 +99,19 @@ Output semantics:
 
 The tutor must not place private-artifact content inside `assistant_message` or `updated_state`.
 
+### 3.1 Tagged reply format
+
+A tutor prompt may instead ask for the **tagged format**: the student-facing message as plain text between an `<assistant_message>` line and an `</assistant_message>` line, followed by one JSON object holding only `updated_state` and, when the session has a schema, `private_artifact`. The backend uses this format whenever the rendered prompt contains both tags (currently `prompts/pml_tutor_prompt.md`); otherwise it requests and parses the JSON shapes above.
+
+The tagged format keeps LaTeX out of JSON strings. Inside a JSON string every backslash must be escaped, and the model sometimes writes a garbled escape instead, so the student sees a control character in place of a symbol ([scope issue #31, PR E](https://github.com/opherdonchin/lecture-bot/issues/31#user-content-pr-e)).
+
+The backend parses the tagged format tolerantly:
+- If the tags are missing, the message is the text before the JSON object.
+- Up to three missing closing braces are supplied.
+- If there is no JSON object, the message is kept with an empty `updated_state` and no `private_artifact`.
+
+An empty message is a parsing failure, which produces the fallback reply. The output semantics above apply unchanged.
+
 ---
 
 ## 4. State ownership

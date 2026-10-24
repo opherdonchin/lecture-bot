@@ -245,6 +245,68 @@ def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | 
 
 
 # ---------------------------------------------------------------------------
+# Public: tagged reply format
+# ---------------------------------------------------------------------------
+
+_REPLY_TAG_OPEN = "<assistant_message>"
+_REPLY_TAG_CLOSE = "</assistant_message>"
+_TAGGED_MESSAGE_RE = re_.compile(r"<assistant_message>\s*(.*?)\s*</assistant_message>", re_.DOTALL)
+_STATE_OBJECT_START_RE = re_.compile(r'\{\s*"(?:updated_state|private_artifact)"')
+
+
+def uses_tagged_reply_format(system_prompt: str) -> bool:
+    """Return whether the tutor prompt asks for the tagged reply format.
+
+    In that format the student's message is plain text between
+    <assistant_message> tags, followed by a JSON object holding only
+    updated_state and private_artifact. Keeping LaTeX out of JSON strings
+    avoids the escapes the model garbles there.
+    """
+    return _REPLY_TAG_OPEN in system_prompt and _REPLY_TAG_CLOSE in system_prompt
+
+
+def _decode_state_object(text: str) -> dict:
+    """Decode the JSON object at the start of text, closing up to three missing braces."""
+    decoder = j_.JSONDecoder()
+    for missing in range(4):
+        try:
+            value, _ = decoder.raw_decode(text + "}" * missing)
+        except j_.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            return value
+    _log.warning("tagged reply: state object unparseable (first 300 chars): %r", text[:300])
+    return {}
+
+
+def parse_tagged_reply(raw: str) -> dict:
+    """Parse a tagged tutor reply into the same keys as a JSON reply.
+
+    Tolerates missing tags (the message is then the text before the state
+    object), a missing final brace and a missing state object, so that a usable
+    message is never replaced by the fallback. Raises ValueError when there is
+    no message at all.
+    """
+    tagged = _TAGGED_MESSAGE_RE.search(raw)
+    if tagged:
+        message, rest = tagged.group(1), raw[tagged.end():]
+    else:
+        starts = list(_STATE_OBJECT_START_RE.finditer(raw))
+        split = starts[-1].start() if starts else len(raw)
+        message, rest = raw[:split], raw[split:]
+    message = message.replace(_REPLY_TAG_OPEN, "").replace(_REPLY_TAG_CLOSE, "").strip()
+    if not message:
+        raise ValueError("tagged reply has no assistant message")
+    brace = rest.find("{")
+    state_object = _decode_state_object(rest[brace:]) if brace >= 0 else {}
+    return {
+        "assistant_message": message,
+        "updated_state": state_object.get("updated_state", {}),
+        "private_artifact": state_object.get("private_artifact"),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public: dialogue reply generation
 # ---------------------------------------------------------------------------
 
@@ -288,14 +350,16 @@ def generate_reply(
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(recent_messages)
     messages.append({"role": "user", "content": normalized_user_message})
+    tagged_reply = uses_tagged_reply_format(system_prompt)
 
     try:
         client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
+        request_options = {} if tagged_reply else {"response_format": {"type": "json_object"}}
         response = client.chat.completions.create(
             model=settings.openai_model,
             messages=messages,
-            response_format={"type": "json_object"},
             temperature=0.3,
+            **request_options,
         )
         dialogue_usage = _extract_dialogue_usage(response)
         try:
@@ -311,8 +375,8 @@ def generate_reply(
             pass
         raw = response.choices[0].message.content
         try:
-            parsed = j_.loads(raw)
-        except j_.JSONDecodeError:
+            parsed = parse_tagged_reply(raw) if tagged_reply else j_.loads(raw)
+        except (j_.JSONDecodeError, ValueError):
             _log.error("raw response unparseable (first 2000 chars): %r", raw[:2000])
             raise
         assistant_message = sanitize_assistant_message(

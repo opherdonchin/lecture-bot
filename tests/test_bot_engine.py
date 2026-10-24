@@ -1393,3 +1393,69 @@ def test_build_dialogue_context_is_silent_when_everything_fits(caplog):
         bot_engine.build_dialogue_context(package, 1000)
 
     assert caplog.text == ""
+
+
+# ---------------------------------------------------------------------------
+# Tagged reply format (scope issue #31, PR E)
+# ---------------------------------------------------------------------------
+
+_TAGGED_STATE = (
+    '{"updated_state":{"mastery":{"T1":72},"evidence_notes":{"T1":"explained the arrow"}},'
+    '"private_artifact":{"self_check":{"assistant_message_matches_move":true}}}'
+)
+
+
+def test_only_the_pml_prompt_uses_the_tagged_reply_format():
+    assert bot_engine.uses_tagged_reply_format(prompt_loader.load_prompt_template(PML_PROMPT))
+    assert not bot_engine.uses_tagged_reply_format(prompt_loader.load_prompt_template("tutor_prompt.md"))
+
+
+def test_parse_tagged_reply_keeps_latex_as_written():
+    raw = "<assistant_message>\nGiven \\(\\theta\\), the tosses are independent.\n\nWhy?\n</assistant_message>\n" + _TAGGED_STATE
+    parsed = bot_engine.parse_tagged_reply(raw)
+    assert parsed["assistant_message"] == "Given \\(\\theta\\), the tosses are independent.\n\nWhy?"
+    assert parsed["updated_state"]["mastery"] == {"T1": 72}
+    assert parsed["private_artifact"]["self_check"]["assistant_message_matches_move"] is True
+
+
+def test_parse_tagged_reply_closes_a_missing_final_brace():
+    raw = "<assistant_message>\nWhy?\n</assistant_message>\n" + _TAGGED_STATE[:-1]
+    assert bot_engine.parse_tagged_reply(raw)["updated_state"]["mastery"] == {"T1": 72}
+
+
+def test_parse_tagged_reply_without_tags_splits_at_the_state_object():
+    raw = "You used the forward law, \\(p(y)\\).\n\nWhat changes if \\(\\Omega\\) doubles?" + _TAGGED_STATE
+    parsed = bot_engine.parse_tagged_reply(raw)
+    assert parsed["assistant_message"] == "You used the forward law, \\(p(y)\\).\n\nWhat changes if \\(\\Omega\\) doubles?"
+    assert parsed["updated_state"]["evidence_notes"] == {"T1": "explained the arrow"}
+
+
+def test_parse_tagged_reply_without_a_state_object_keeps_the_message():
+    parsed = bot_engine.parse_tagged_reply("Why does \\(\\Omega\\) appear inside \\(\\Sigma_{yy}\\)?")
+    assert parsed["assistant_message"] == "Why does \\(\\Omega\\) appear inside \\(\\Sigma_{yy}\\)?"
+    assert parsed["updated_state"] == {}
+    assert parsed["private_artifact"] is None
+
+
+def test_parse_tagged_reply_rejects_an_empty_message():
+    with pytest.raises(ValueError):
+        bot_engine.parse_tagged_reply("<assistant_message>\n</assistant_message>\n" + _TAGGED_STATE)
+
+
+def test_generate_reply_with_the_pml_prompt_requests_plain_text_and_parses_tags():
+    package = dict(_CACHING_LECTURE_PACKAGE, config={"title": "Cache Test Lecture", "tutor_prompt_template": PML_PROMPT})
+    mock_resp = mock.MagicMock()
+    mock_resp.choices[0].message.content = "<assistant_message>\nWhy \\(A\\Sigma A^T\\)?\n</assistant_message>\n" + _TAGGED_STATE
+    mock_client = mock.MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+    with mock.patch("openai.OpenAI", return_value=mock_client):
+        assistant_message, updated_state, private_artifact = bot_engine.generate_reply(
+            lecture_package=package,
+            recent_messages=[],
+            state={"topics_sampled": ["T1"], "turn_count": 0},
+            user_message="Let's start.",
+        )
+    assert "response_format" not in mock_client.chat.completions.create.call_args.kwargs
+    assert assistant_message == "Why \\(A\\Sigma A^T\\)?"
+    assert updated_state["mastery"] == {"T1": 72}
+    assert private_artifact == {"self_check": {"assistant_message_matches_move": True}}
