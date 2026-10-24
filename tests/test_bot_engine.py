@@ -730,6 +730,12 @@ def test_sanitize_assistant_message_repairs_doubled_math_delimiters():
     assert result == r"Yes: \(B=\Sigma_{12}\Sigma_{22}^{-1}\) and \[S=\Sigma_{11}\]; keep \(K\) as is."
 
 
+def test_sanitize_assistant_message_restores_truncated_punctuation_escapes():
+    message = "the input\x13output view \x14 a \x18shared\x19 \x1chat R\x1d"
+    result = bot_engine.sanitize_assistant_message(message, topic_defs=[], timing_context=None)
+    assert result == "the input\u2013output view \u2014 a \u2018shared\u2019 \u201chat R\u201d"
+
+
 def test_language_policy_accepts_short_english_topic_pick():
     assert language_policy.is_english_text("Why sample")
 
