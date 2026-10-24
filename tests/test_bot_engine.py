@@ -724,6 +724,12 @@ def test_sanitize_assistant_message_repairs_bell_math_artifacts():
     assert r"\alpha = 0.06" in result
 
 
+def test_sanitize_assistant_message_repairs_doubled_math_delimiters():
+    message = r"Yes: \\(B=\Sigma_{12}\Sigma_{22}^{-1}\\) and \\[S=\Sigma_{11}\\]; keep \(K\) as is."
+    result = bot_engine.sanitize_assistant_message(message, topic_defs=[], timing_context=None)
+    assert result == r"Yes: \(B=\Sigma_{12}\Sigma_{22}^{-1}\) and \[S=\Sigma_{11}\]; keep \(K\) as is."
+
+
 def test_language_policy_accepts_short_english_topic_pick():
     assert language_policy.is_english_text("Why sample")
 
