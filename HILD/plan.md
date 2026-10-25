@@ -54,4 +54,4 @@ is in Git and the [journal](journal/).
 
 - Whether to keep the tutor's message, rather than showing the fallback, when the retry still lacks a valid private note. The contract currently says fallback.
 - The grade formula: scope it next week if live sessions show the problem.
-- The PML Moodle course ID and bonus-assignment setup.
+- The PML Moodle grade-import setup (course ID, deadlines). The L01 submissions go to the [tutor assignment](https://moodle.bgu.ac.il/moodle/mod/assign/view.php?id=3454021); full credit by Wednesday 2026-10-28 23:59, half credit before the final exam.
