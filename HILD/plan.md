@@ -39,7 +39,6 @@ is in Git and the [journal](journal/).
 - **Known limits:**
   - Score calibration is untested, because the simulated students answer too well.
   - The best-four grade formula lets a student score well without reaching the load-bearing topics. It is out of scope until scoped next week if needed.
-  - The L01 load-bearing designation (T6 and T7 load-bearing, T5 feeding them) awaits the researcher's confirmation.
 - **Wiki:** four concept pages and a scripts guide, all `draft`. Concept-tutor-json-replies needs updating for the tagged format.
 
 ## Next steps
@@ -55,5 +54,4 @@ is in Git and the [journal](journal/).
 
 - Whether to keep the tutor's message, rather than showing the fallback, when the retry still lacks a valid private note. The contract currently says fallback.
 - The grade formula: scope it next week if live sessions show the problem.
-- The L01 load-bearing designation.
 - The PML Moodle course ID and bonus-assignment setup.
