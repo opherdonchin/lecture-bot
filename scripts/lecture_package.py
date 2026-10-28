@@ -23,6 +23,7 @@ import shlex as shlex_module
 import subprocess as subprocess_module
 import sys as sys_module
 import tarfile as tarfile_module
+import time as time_module
 
 
 SCRIPT_DIR = pathlib_.Path(__file__).resolve().parent
@@ -142,6 +143,7 @@ def build_archive(lecture_dir: pathlib_.Path, files: list[str]) -> bytes:
             info = tarfile_module.TarInfo(name)
             info.size = len(data)
             info.mode = 0o660
+            info.mtime = int(time_module.time())
             tar.addfile(info, io_module.BytesIO(data))
     return buffer.getvalue()
 
@@ -256,7 +258,7 @@ def push_lecture(
     )
     # The script runs as the command and reads the package archive on stdin.
     runner = push_command(env, target_dir)
-    print(f"==> {' '.join(runner)}: {lectures_dir}/{lecture_id}")
+    print(f"==> {' '.join(runner)}: {lectures_dir}/{lecture_id}", flush=True)
     completed = subprocess_module.run([*runner, script], input=build_archive(lecture_dir, result.files))
     return completed.returncode
 
