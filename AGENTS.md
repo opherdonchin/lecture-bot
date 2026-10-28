@@ -21,7 +21,8 @@ process rules here.
 
 - `app/`: the student app (`main.py`), the admin app (`admin_main.py`) and
   their modules, templates and static files.
-- `scripts/`: conversion, build, export, Moodle and deployment scripts.
+- `scripts/`: conversion, build, export, Moodle and deployment scripts. To prepare a
+  lecture for a course, follow the [`prepare-lecture`](.agents/skills/prepare-lecture/SKILL.md) skill.
 - `tests/`: the pytest suite. `tests/hild/` tests the HILD scripts.
 - `docs/`: authoritative product, tutor and grading design; start at
   [docs/README.md](docs/README.md).

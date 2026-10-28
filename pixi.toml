@@ -47,6 +47,8 @@ sync-dev = "bash scripts/sync_dev_environment.sh"
 sync-dev-dry-run = "bash scripts/sync_dev_environment.sh --dry-run"
 publish-prod = "bash scripts/publish_production.sh"
 publish-prod-dry-run = "bash scripts/publish_production.sh --dry-run"
+check-lecture = "python scripts/lecture_package.py check"
+push-lecture = "python scripts/lecture_package.py push"
 admin-stop = '''bash -lc '
 pids=$(lsof -tiTCP:8001 -sTCP:LISTEN 2>/dev/null || true)
 
