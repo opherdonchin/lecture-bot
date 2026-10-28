@@ -29,9 +29,9 @@ is in Git and the [journal](journal/).
   - **PML L01 is live**, with brief v2. Its bonus window closes on **2026-10-28**.
 - **Scopes:**
   - **In progress:** [scope issue #31](https://github.com/opherdonchin/lecture-bot/issues/31), the PML tutor from compact briefs; PRs #36 to #38 are merged. [Scope issue #39](https://github.com/opherdonchin/lecture-bot/issues/39), both tutors generated for contract 0.6.1 and archived with provenance, is approved but not started.
+  - **Proposed:** [scope issue #40](https://github.com/opherdonchin/lecture-bot/issues/40), agent-prepared lecture packages, superseding scope issue #18 (closed).
   - **Approved and not started:**
-    - [scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20), a `develop` branch, with `v0.7.0` as the next release;
-    - [scope issue #18](https://github.com/opherdonchin/lecture-bot/issues/18), sources and converters.
+    - [scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20), a `develop` branch, with `v0.7.0` as the next release.
   - **Delivered but still open:**
     - [scope issue #16](https://github.com/opherdonchin/lecture-bot/issues/16), separate instances; PRs 2b and 2c remain;
     - [scope issue #17](https://github.com/opherdonchin/lecture-bot/issues/17), L01 live;
@@ -45,7 +45,7 @@ is in Git and the [journal](journal/).
 
 1. **Watch the first live PML sessions on `v0.6.1`:** fallbacks, control characters, scoring and the five-minute warning. Then review score calibration on real answers.
 2. **[Scope issue #39](https://github.com/opherdonchin/lecture-bot/issues/39):** PR A (the generator and an archive check against the contract), PR B (a PML specification and generated prompt, compared in simulation), PR C (regenerate Statistics' prompt). Then install both archives and unpin Statistics.
-3. **PML L02** by 2026-10-28: by hand under [scope issue #17](https://github.com/opherdonchin/lecture-bot/issues/17)'s pattern, with a v2 brief, unless [scope issue #18](https://github.com/opherdonchin/lecture-bot/issues/18) lands first.
+3. **PML L02 by agent recipe, [scope issue #40](https://github.com/opherdonchin/lecture-bot/issues/40)** (awaiting approval; supersedes scope issue #18): the PML recipe, `check-lecture`, `push-lecture`, then L02 prepared, reviewed, pushed and activated. Window 2026-10-28 to 11-04.
 4. Update the wiki page Concept-tutor-json-replies.
 5. **[Scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20):** create `develop`; from then on, work merges there and `v0.7.0` is the next release.
 6. **Server cleanup:** remove the old unit files and `legacy.env`.
