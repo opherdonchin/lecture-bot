@@ -22,7 +22,7 @@ They sit beside the [Backend–Tutor Runtime Contract](backend_tutor_contract.md
 
 **Two things a contract does not decide:**
 
-- **A course's recipe** says where that course's sources are and what it emphasises. The contract says what the tutor needs; the recipe says how to get it from this course's materials. The researcher owns it. A recipe can ask for more than a contract does, but it cannot remove what a contract expects.
+- **A course's recipe,** `lecture_recipe.md` in its own repository, says where that course's sources are and what it emphasises. The contract says what the tutor needs; the recipe says how to get it from this course's materials. The researcher owns it. A recipe can ask for more than a contract does, but it cannot remove what a contract expects.
 - **A lecture's content:** its topics, what is taught and how it is scored. The preparing agent proposes these, and the researcher's review is the only check on them.
 
 ## 1. What the app requires of every package
@@ -71,6 +71,6 @@ A contract is valid if:
 6. **It changes with its prompt.** When a prompt starts or stops relying on some kind of information, the contract and the prompt change in the same pull request, and the contract gets a new version and a new file.
 
 <a id="comparing-declarations"></a>
-**Comparing declarations.** A package declares the contract it was built for, as `"package_contract"` in `lecture_config.json`. The **package check**, which is [`check-lecture`](../README.md#agent-prepared-lectures), compares that with the prompt's declaration and fails if they differ or if the contract has no file. So packages built for an old version fail the check until they are rebuilt; lectures already installed are not affected. The backend does not compare them while running, because a mismatch makes a poorer tutor, not a broken one, and refusing could take a live lecture down when a prompt changes.
+**Comparing declarations.** A package declares the contract it was built for, as `"package_contract"` in `lecture_config.json`. The **package check**, which is the [handshake's](lecture_package_handshake.md) `check` and `install`, and [`check-lecture`](../README.md#agent-prepared-lectures) in a lecture-bot clone, compares that with the prompt's declaration and fails if they differ or if the contract has no file. So packages built for an old version fail the check until they are rebuilt; lectures already installed are not affected. The backend does not compare them while running, because a mismatch makes a poorer tutor, not a broken one, and refusing could take a live lecture down when a prompt changes.
 
 **What the comparison cannot do.** It catches a package built for another contract. It cannot show that a contract matches what a prompt really does, or that a package supplies what its contract describes. Those rest on review.
