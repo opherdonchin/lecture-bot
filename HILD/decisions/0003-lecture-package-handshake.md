@@ -1,8 +1,8 @@
 # 0003 — One handshake between course agents and an instance; only the route changes
 
-**Date:** 2026-10-30 · **Status:** Proposed
+**Date:** 2026-10-30 · **Status:** Accepted by the researcher, 2026-10-30 ([PR #49](https://github.com/opherdonchin/lecture-bot/pull/49))
 
-**Relationship to earlier decisions:** Builds on [decision 0002](0002-lecture-package-contract.md), which it does not change. The handshake is how an agent gets the contract that decision describes.
+**Relationship to earlier decisions:** Modifies one provision of [decision 0002](0002-lecture-package-contract.md). Item 4 there says `check-lecture` compares a package's contract with its prompt's. That comparison is now made by the handshake's `check` and `install`, with `check-lecture` remaining for a lecture-bot clone. It still happens when a lecture is prepared and not while the app runs. Everything else in decision 0002 still applies. The handshake is how an agent gets the contract that decision describes.
 
 **Context:** Under [scope issue #40](https://github.com/opherdonchin/lecture-bot/issues/40), an agent had to work in a lecture-bot clone, and `push-lecture` sent a script over SSH that had to know the server's folders. A course working from its own repository, or an agent with no clone, could not use it. The researcher wanted admin hooks eventually, and a process now that would be reusable and would not change much as capabilities improve.
 
@@ -28,4 +28,4 @@
 - `push-lecture` is a thin client of `install`, so it also needs the deployed handshake.
 - One fixed path remains until hooks exist: the command's location on the server, in a line of a course's `AGENTS.md`.
 
-**Validation:** This becomes accepted when the researcher merges the pull request introducing it. Its first real use is an agent in PML's repository preparing Lecture 3 with no lecture-bot clone.
+**Validation:** Its first real use is an agent in PML's repository preparing Lecture 3 with no lecture-bot clone.
