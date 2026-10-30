@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Lecture Packages</title>
+    <link rel="stylesheet" href="{{ url_path('static', path='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_path('static', path='admin.css') }}" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="topbar">
+        <a href="{{ url_path('admin_root') }}" class="back-link">Admin Home</a>
+        <nav class="admin-nav" aria-label="Admin sections">
+          <a href="{{ url_path('admin_lectures') }}">Content</a>
+          <a href="{{ url_path('admin_sessions') }}">Sessions</a>
+          <a href="{{ url_path('admin_grades') }}">Grades</a>
+          <a href="{{ url_path('admin_analysis') }}">Analysis</a>
+        </nav>
+      </div>
+
+      <section class="admin-hero">
+        <div>
+          <p class="eyebrow">Admin App</p>
+          <h1>Lecture Packages</h1>
+          <p class="lead">Get what this course's tutor expects, then check or install a package prepared elsewhere.</p>
+        </div>
+      </section>
+
+      <section class="card admin-card">
+        <div class="section-header">
+          <h2>What the tutor expects</h2>
+          {% if expected.ok %}
+          <a href="{{ url_path('download_package_expectations') }}" class="secondary-action">Download</a>
+          {% endif %}
+        </div>
+        {% if expected.ok %}
+        <p class="muted">This course's tutor prompt declares the contract <code>{{ expected.package_contract }}</code>. The download holds that contract, the rules all contracts share, and the preparation instructions.</p>
+        {% else %}
+        {% for message in expected.errors %}<div class="notice error">{{ message }}</div>{% endfor %}
+        {% endif %}
+      </section>
+
+      <section class="card admin-card">
+        <h2>Check or install a package</h2>
+        <p class="muted">A <code>.zip</code> with the package's files at its top level. Installing always leaves the lecture switched off; switch it on from its page under Content. A passing check means the package loads and declares the right contract, not that its content is good.</p>
+        <form method="post" action="{{ url_path('submit_lecture_package') }}" enctype="multipart/form-data">
+          <label>Lecture ID <input type="text" name="lecture_id" value="{{ lecture_id }}" required /></label>
+          <label>Package <input type="file" name="uploaded_file" accept=".zip" required /></label>
+          <label><input type="checkbox" name="replace" /> Replace this lecture if it is already installed and switched off</label>
+          <button type="submit" name="action" value="check" class="secondary-action">Check</button>
+          <button type="submit" name="action" value="install">Install</button>
+        </form>
+      </section>
+
+      {% if result %}
+      <section class="card admin-card">
+        <h2>Result: {{ result.lecture_id }}</h2>
+        {% if result.ok %}
+        <div class="notice success">{{ result.message or "The package passes the check. Nothing was installed." }}</div>
+        {% endif %}
+        {% for message in result.errors %}<div class="notice error">{{ message }}</div>{% endfor %}
+        {% if result.package_contract %}<p>Contract: <code>{{ result.package_contract }}</code></p>{% endif %}
+        {% if result.files %}
+        <h3>Files</h3>
+        <ul>{% for name in result.files %}<li><code>{{ name }}</code></li>{% endfor %}</ul>
+        {% endif %}
+        {% if result.topics %}
+        <h3>Topics</h3>
+        <ul>{% for topic in result.topics %}<li>{{ topic.topic_id }}. {{ topic.label }}</li>{% endfor %}</ul>
+        {% endif %}
+        <h3>Load-bearing, for you to confirm</h3>
+        {% if result.load_bearing %}
+        <ul>{% for line in result.load_bearing %}<li>{{ line }}</li>{% endfor %}</ul>
+        {% else %}
+        <p class="muted">None marked.</p>
+        {% endif %}
+      </section>
+      {% endif %}
+    </main>
+  </body>
+</html>

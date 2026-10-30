@@ -1,11 +1,15 @@
+import html
+import io
 import json
 import re
 import subprocess
+import zipfile
 
 from fastapi.testclient import TestClient
 
 import app.admin_main as admin_main
 import app.config as config_module
+import app.lecture_packages as lecture_packages
 
 
 def _auth():
@@ -353,3 +357,108 @@ def test_restart_student_app_explains_permission_failure(tmp_path, monkeypatch):
     assert ok is False
     assert "needs service-manager permission" in message
     assert "sudo -n systemctl restart lecture-bot.service" in message
+
+
+def _package_settings(tmp_path):
+    settings = _settings(tmp_path)
+    settings.tutor_prompt_template = "pml_tutor_prompt.md"
+    (settings.lectures_dir / "config.json").write_text(
+        json.dumps({"context_files": [{"key": "bot_notes", "path": "bot_notes.md", "required": True}]}),
+        encoding="utf-8",
+    )
+    return settings
+
+
+def _package_zip(**config_overrides):
+    config = {"title": "Lecture 3", "package_contract": "pml-brief-1", **config_overrides}
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("lecture_config.json", json.dumps(config))
+        archive.writestr("rubric.md", "# Brief\n- **Load-bearing:** T1.\n\n### T1. Core result\n")
+        archive.writestr("bot_notes.md", "Notes\n")
+    return buffer.getvalue()
+
+
+def _submit_package(client, data, action, **form):
+    return client.post(
+        "/lecture-packages",
+        auth=_auth(),
+        data={"lecture_id": "lecture_03", "action": action, **form},
+        files={"uploaded_file": ("lecture_03.zip", data, "application/zip")},
+    )
+
+
+def test_lecture_packages_page_requires_login(tmp_path, monkeypatch):
+    settings = _package_settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    client = TestClient(admin_main.app)
+
+    assert client.get("/lecture-packages").status_code == 401
+    assert client.get("/lecture-packages/expected.zip").status_code == 401
+    assert _submit_package(client, _package_zip(), "install").status_code == 200
+    unauthenticated = client.post(
+        "/lecture-packages",
+        data={"lecture_id": "lecture_03", "action": "install"},
+        files={"uploaded_file": ("x.zip", b"x", "application/zip")},
+    )
+    assert unauthenticated.status_code == 401
+
+
+def test_lecture_packages_page_names_the_contract_and_offers_the_download(tmp_path, monkeypatch):
+    settings = _package_settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    client = TestClient(admin_main.app)
+
+    page = client.get("/lecture-packages", auth=_auth())
+    assert page.status_code == 200 and "pml-brief-1" in page.text
+
+    download = client.get("/lecture-packages/expected.zip", auth=_auth())
+    names = zipfile.ZipFile(io.BytesIO(download.content)).namelist()
+    assert names == ["pml-brief-1.md", "shared_rules.md", "instructions.md"]
+
+
+def test_lecture_packages_page_reports_a_prompt_without_a_contract(tmp_path, monkeypatch):
+    settings = _package_settings(tmp_path)
+    settings.tutor_prompt_template = "tutor_prompt.md"
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    client = TestClient(admin_main.app)
+
+    assert "declares no lecture package contract" in client.get("/lecture-packages", auth=_auth()).text
+    assert client.get("/lecture-packages/expected.zip", auth=_auth()).status_code == 404
+
+
+def test_lecture_packages_page_checks_without_installing(tmp_path, monkeypatch):
+    settings = _package_settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    client = TestClient(admin_main.app)
+
+    response = _submit_package(client, _package_zip(), "check")
+
+    assert "Nothing was installed" in response.text and "Core result" in response.text
+    assert not (settings.lectures_dir / "lecture_03").exists()
+
+
+def test_lecture_packages_page_installs_switched_off_and_refuses_to_overwrite(tmp_path, monkeypatch):
+    settings = _package_settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    client = TestClient(admin_main.app)
+
+    assert "switched off" in _submit_package(client, _package_zip(active=True), "install").text
+    config = json.loads((settings.lectures_dir / "lecture_03" / "lecture_config.json").read_text())
+    assert config["active"] is False
+
+    assert "already installed" in _submit_package(client, _package_zip(), "install").text
+    assert "lecture_backups" in _submit_package(client, _package_zip(), "install", replace="on").text
+
+
+def test_lecture_packages_page_gives_the_same_result_as_the_handshake(tmp_path, monkeypatch):
+    settings = _package_settings(tmp_path)
+    monkeypatch.setattr(config_module, "get_settings", lambda: settings)
+    client = TestClient(admin_main.app)
+    data = _package_zip(package_contract="pml-brief-0")
+
+    handshake = lecture_packages.check_archive(settings.lectures_dir, "lecture_03", data, "pml_tutor_prompt.md")
+    response = _submit_package(client, data, "check")
+
+    assert handshake.errors
+    assert html.unescape(response.text).count(handshake.errors[0]) == 1

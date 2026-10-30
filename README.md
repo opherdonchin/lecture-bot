@@ -204,7 +204,7 @@ That generated path requires `OPENAI_API_KEY`.
 
 A course can have an agent prepare each lecture, working from the course's own repository without a lecture-bot clone. It uses the [lecture package handshake](docs/lecture_package_handshake.md): ask the instance what's expected, send a package, get a result. A course needs only a recipe, `lecture_recipe.md`, saying where its sources are and what to emphasise, and a line in its `AGENTS.md` saying how to reach the instance. What the package must hold comes from the [lecture package contract](docs/lecture_package_contracts/) that the course's tutor prompt declares; [the shared rules](docs/lecture_package_contract.md) cover what every package needs. The agent's instructions are the [`prepare-lecture`](.agents/skills/prepare-lecture/SKILL.md) skill, which the handshake returns.
 
-Installing always leaves the lecture switched off, and you switch it on in the admin page. Nothing checks a lecture's content but your review.
+You can also do this by hand on the admin app's *Lecture Packages* page: download what's expected, then upload a package to check or install. Installing always leaves the lecture switched off, and you switch it on in the admin page. Nothing checks a lecture's content but your review.
 
 In a lecture-bot clone, two conveniences work on a folder in `~/lecture-bot-instances/<course>/lectures/`:
 
