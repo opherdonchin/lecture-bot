@@ -6,6 +6,11 @@ Part of #<scope issue>
 What human/research objective does this change serve, and why now? State the
 purpose independently of the particular file, tool or GitHub operation.
 
+## What this rests on
+
+Link the scope issue's *What this rests on*, and add only what this change
+itself relies on, in the same form: where it was decided, specified and explained.
+
 ## What you should understand after reading this
 
 Name two or three things the human reviewer should be able to explain afterward.

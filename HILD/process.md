@@ -268,6 +268,15 @@ A procedure that is clear only to the agent still needs improvement.
     and listed as relevant. The other proposed pages are written once the reviewer
     agrees to them; code pages after the merge, because they record a `main` commit.
 
+11. **A document stands alone.** A proposal or explanation never assumes its reader
+    remembers an earlier decision, even one the reader made. It names each earlier
+    decision, specification or fact it relies on, and links where that was decided,
+    where it is specified and where it is explained, normally a wiki page with its
+    status. Where one of these does not exist, it says so; if what is missing is the
+    record of a consequential decision, it proposes one. The scope issue does this in
+    *What this rests on*; a pull request links to that section and adds only what the
+    change itself relies on.
+
 | Presentation | When | Where |
 |---|---|---|
 | Proposal | Before nontrivial work | The scope issue |

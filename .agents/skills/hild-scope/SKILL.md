@@ -52,7 +52,10 @@ and propose a feasible next step instead of merely stopping.
 ## Record, show, and obtain approval of the actual scope
 
 Once you have developed a coherent scope together, prepare a proposal using
-the [canonical template](../../../HILD/templates/scope-issue.md).
+the [canonical template](../../../HILD/templates/scope-issue.md). Fill in
+*What this rests on* from the records themselves, not from memory, and check
+the wiki for what explains them ([the rule](../../../HILD/process.md#presentations)
+that a document stands alone).
 Obtain agreement to **create the proposed issue**, then, if GitHub access
 permits, create it labelled `scope`. Otherwise show the draft, explain the
 access blocker and remain stopped.

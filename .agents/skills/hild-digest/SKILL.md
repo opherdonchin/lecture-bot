@@ -7,8 +7,8 @@ description: Audit repo understandability, stale material, duplicated rules, neg
 
 The aim is a project the human researcher can readily understand. Authoritative criteria come from lecture-bot's [`AGENTS.md`](../../../AGENTS.md) and [HILD process](../../../HILD/process.md). **Do not duplicate a separate hygiene rulebook in this skill.**
 
-1. **Understanding map:** when the wiki exists, pull fast-forward and check code pages for staleness using `HILD/scripts/wiki_status.py`; record missing pages and open understanding-debt issues. Create/update issues and wiki status only as authorized by the project's agreed scope. Report missing tooling rather than pretending this check ran.
-2. **Review the repository:** examine tracked files (`git ls-files`), plan, decisions, code, relevant wiki pages, PRs and tests. Look for obsolete or unused files, the same rule written in multiple places, confusing names, missing test evidence, conflicting claims and changes awaiting review. Also flag language that confuses a **process outcome or human safeguard**
+1. **Understanding map:** when the wiki exists, pull fast-forward and check code pages for staleness using `HILD/scripts/wiki_status.py`; record missing pages, including pages that merged PRs proposed and nobody wrote, and open understanding-debt issues. Create/update issues and wiki status only as authorized by the project's agreed scope. Report missing tooling rather than pretending this check ran.
+2. **Review the repository:** examine tracked files (`git ls-files`), plan, decisions, code, relevant wiki pages, PRs and tests. Look for obsolete or unused files, the same rule written in multiple places, confusing names, missing test evidence, documents that assume the reader remembers an earlier decision, conflicting claims and changes awaiting review. Also flag language that confuses a **process outcome or human safeguard**
 with a particular GitHub, skill or hook mechanism, or treats an untested
 alternative as working. Check that independent-work permission debt is not
 misreported as accepted and that altered older decisions have a prominent

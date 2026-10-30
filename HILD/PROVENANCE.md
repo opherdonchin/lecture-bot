@@ -20,7 +20,7 @@ change.
 |---|---|---|
 | [process.md](process.md) | `HILD/process.md` | Describes lecture-bot's process: concrete authority table, the lecture-bot wiki, six skills, keep-rule for `prompts/archive/` and `docs/archive/`. Install, integration and onboarding text removed. |
 | [README.md](README.md) | `HILD/README.md` | Rewritten as lecture-bot's entry page; onboarding prompt replaced by a session-start prompt. |
-| [templates/](templates/) (6 Markdown templates) | `HILD/templates/` | Unchanged except one comment in `wiki-code-page.md`. |
+| [templates/](templates/) (6 Markdown templates) | `HILD/templates/` | Unchanged except one comment in `wiki-code-page.md` and a *What this rests on* section in `scope-issue.md` and `pr-explanation.md`. |
 | [.claude/settings.json](../.claude/settings.json) | `HILD/templates/claude-settings.json` | Unchanged; moved to where Claude Code reads it. |
 | [.codex/hooks.json](../.codex/hooks.json) | `HILD/templates/codex-hooks.json` | Unchanged; moved to where Codex reads it. |
 | [scripts/session_context.sh](scripts/session_context.sh), [scripts/wiki_status.py](scripts/wiki_status.py) | `HILD/scripts/` | Unchanged. |
