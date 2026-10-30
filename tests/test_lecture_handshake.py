@@ -159,6 +159,23 @@ def test_a_config_that_is_not_an_object_is_refused(lectures_dir):
     assert "cannot be loaded" in result.errors[0]
 
 
+@pytest.mark.parametrize("template", ["../../etc/passwd", "/etc/passwd", "sub/prompt.md", ".."])
+def test_a_package_cannot_name_a_prompt_outside_the_prompts_folder(lectures_dir, template):
+    archive = make_archive(tutor_prompt_template=template)
+
+    result = lecture_packages.check_archive(lectures_dir, "lecture_03", archive, PROMPT)
+
+    assert any("not a file name in prompts/" in error for error in result.errors)
+
+
+def test_a_lectures_own_prompt_is_what_a_package_is_checked_against(lectures_dir):
+    archive = make_archive(tutor_prompt_template="tutor_prompt.md")
+
+    result = lecture_packages.check_archive(lectures_dir, "lecture_03", archive, PROMPT)
+
+    assert any("tutor_prompt.md declares no lecture package contract" in error for error in result.errors)
+
+
 def test_describe_expectations_gives_the_contract_rules_and_instructions():
     response = lecture_packages.describe_expectations(PROMPT)
 

@@ -35,6 +35,7 @@ INSTRUCTIONS_FILE = REPO_ROOT / ".agents" / "skills" / "prepare-lecture" / "SKIL
 
 _LOAD_BEARING_RE = re_module.compile(r"^\s*-\s*\*\*Load-bearing:\*\*.*$", re_module.MULTILINE)
 _LECTURE_ID_RE = re_module.compile(r"\A[A-Za-z0-9_-]+\Z")
+_PROMPT_NAME_RE = re_module.compile(r"\A[A-Za-z0-9_][A-Za-z0-9_.-]*\Z")
 
 
 class ArchiveError(ValueError):
@@ -79,6 +80,8 @@ def contract_problem(declared: str | None, template: str | None) -> str | None:
     """Return why a package's declared contract does not match the one its tutor prompt declares."""
     if template is None:
         return "Cannot find the tutor prompt for this lecture."
+    if not _PROMPT_NAME_RE.match(template):
+        return f"Tutor prompt {template!r} is not a file name in prompts/."
     try:
         expected = prompt_loader.declared_package_contract(prompt_loader.load_prompt_template(template))
     except OSError as error:

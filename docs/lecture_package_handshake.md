@@ -12,6 +12,8 @@ A preparing agent needs its course's materials and a way to reach the instance. 
 | `check` | A course, a lecture ID, a package archive | A result. Installs nothing |
 | `install` | The same, and optionally `replace` | A result. Installs the lecture switched off |
 
+`contract` describes the prompt the instance uses. A lecture can set its own `tutor_prompt_template`; `check` and `install` then compare against that prompt, while `contract` still describes the instance's.
+
 `install` refuses a lecture that is already installed unless asked to replace it, and never replaces one whose config does not say `"active": false`, because the app treats a missing setting as on. A replaced lecture moves to the instance's `lecture_backups/` folder. No operation switches a lecture on.
 
 ## The package archive
