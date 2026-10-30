@@ -14,7 +14,7 @@ _PLACEHOLDER_RE = re_.compile(r"{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}")
 BACKEND_CONTRACT_VERSION = "0.6.1"
 _CONTRACT_DECLARATION_RE = re_.compile(r"\ABackend contract: *(\S+)[ \t]*\r?\n(?:[ \t]*\r?\n)?")
 # A prompt may also declare the lecture package it expects, next after that line
-# (docs/lecture_package_contract.md). scripts/lecture_package.py compares it with
+# (docs/lecture_package_contracts/). scripts/lecture_package.py compares it with
 # the package when a lecture is prepared; nothing checks it while the app runs.
 _PACKAGE_DECLARATION_RE = re_.compile(r"\ALecture package contract: *(\S+)[ \t]*\r?\n(?:[ \t]*\r?\n)?")
 

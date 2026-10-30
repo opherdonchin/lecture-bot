@@ -10,10 +10,11 @@ repository) and the README's *Agent-prepared lectures* section for the commands.
 
 1. **Read what the tutor expects.** Find the course's tutor prompt from
    `TUTOR_PROMPT_TEMPLATE` in `deploy/instances/<course>.env.example`; its
-   `Lecture package contract:` line names a format in the
-   [lecture package contract](../../../docs/lecture_package_contract.md). Read
-   that format, then the prompt's own description of what it is given. The
-   package you build must supply that information, and declare that format.
+   `Lecture package contract:` line names a file in
+   [`docs/lecture_package_contracts/`](../../../docs/lecture_package_contracts/).
+   Read that contract, the [rules all contracts share](../../../docs/lecture_package_contract.md),
+   and the prompt's own description of what it is given. The package you build
+   must supply that information, and declare that contract.
 2. **Read the recipe:** `~/lecture-bot-instances/<course>/lecture_recipe.md`.
    It says where the sources are and what the course emphasises. If the course
    has no recipe, stop and ask the researcher. Read the previous lecture's package

@@ -100,6 +100,14 @@ def test_check_uses_a_lectures_own_tutor_prompt(tmp_path):
     assert any("tutor_prompt.md declares no lecture package contract" in error for error in result.errors)
 
 
+def test_check_fails_when_the_declared_contract_has_no_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(lecture_package, "PACKAGE_CONTRACTS_DIR", tmp_path / "no_contracts")
+
+    result = lecture_package.check_lecture(make_instance(tmp_path))
+
+    assert any("has no file" in error for error in result.errors)
+
+
 def test_check_fails_for_an_unknown_course(tmp_path):
     lecture_dir = make_instance(tmp_path)
     renamed = tmp_path / "nosuchcourse"

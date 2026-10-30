@@ -3,7 +3,7 @@
 A lecture package is the folder the student app reads for one lecture:
 ``lecture_config.json``, ``rubric.md`` (a rubric or a lecture brief) and the
 context files the course lists. A local agent prepares packages by reading the
-contract its course's tutor prompt declares (docs/lecture_package_contract.md)
+contract its course's tutor prompt declares (docs/lecture_package_contracts/)
 and following the course's recipe; this script checks them with the student
 app's own loader and installs them on the server. See the README's
 "Agent-prepared lectures".
@@ -42,6 +42,7 @@ DEFAULT_INSTANCES_ROOT = pathlib_.Path.home() / "lecture-bot-instances"
 DEFAULT_REMOTE_INSTANCES_ROOT = "/srv/lecture-bot/instances"
 REMOTE_ENV_FILE = REPO_ROOT / "deploy" / "remote.env"
 INSTANCE_EXAMPLES_DIR = REPO_ROOT / "deploy" / "instances"
+PACKAGE_CONTRACTS_DIR = REPO_ROOT / "docs" / "lecture_package_contracts"
 PROMPT_TEMPLATE_RE = re_module.compile(r"^TUTOR_PROMPT_TEMPLATE=(\S+)", re_module.MULTILINE)
 LOAD_BEARING_RE = re_module.compile(r"^\s*-\s*\*\*Load-bearing:\*\*.*$", re_module.MULTILINE)
 
@@ -139,10 +140,13 @@ def _package_contract_problem(course: str, declared: str | None, lecture_templat
         return f"Cannot read tutor prompt {template!r}: {error}"
     if expected is None:
         return f"Tutor prompt {template} declares no lecture package contract."
+    contract_file = PACKAGE_CONTRACTS_DIR / f"{expected}.md"
+    if not contract_file.exists():
+        return f"Tutor prompt {template} declares contract {expected!r}, which has no file at {contract_file.name}."
     if declared != expected:
         return (
             f"lecture_config.json declares package_contract {declared!r}, but tutor prompt {template} "
-            f"expects {expected!r}. See docs/lecture_package_contract.md."
+            f"expects {expected!r}. See docs/lecture_package_contracts/{contract_file.name}."
         )
     return None
 
