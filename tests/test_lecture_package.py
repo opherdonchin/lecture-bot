@@ -157,6 +157,16 @@ def test_push_never_replaces_an_active_lecture(tmp_path):
     assert j.loads((target / "lecture_02" / "lecture_config.json").read_text())["active"] is True
 
 
+def test_push_treats_a_lecture_with_no_active_setting_as_active(tmp_path):
+    make_instance(tmp_path)
+    target = tmp_path / "server" / "lectures"
+    (target / "lecture_02").mkdir(parents=True)
+    (target / "lecture_02" / "lecture_config.json").write_text(j.dumps({"title": "Old"}), encoding="utf-8")
+
+    assert push(tmp_path, target, replace=True) != 0
+    assert j.loads((target / "lecture_02" / "lecture_config.json").read_text()) == {"title": "Old"}
+
+
 def test_push_refuses_a_failing_package(tmp_path):
     lecture_dir = make_instance(tmp_path)
     (lecture_dir / "bot_notes.md").unlink()
