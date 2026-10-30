@@ -151,8 +151,9 @@ def build_archive(lecture_dir: pathlib_.Path, files: list[str]) -> bytes:
 def remote_install_script(lectures_dir: str, lecture_id: str, *, replace: bool, group: str, dry_run: bool) -> str:
     """Shell script that installs the tar on stdin as <lectures_dir>/<lecture_id>.
 
-    It refuses to overwrite an existing lecture without replace, and never
-    replaces an active one. A replaced lecture is moved to
+    It refuses to overwrite an existing lecture without replace, and replaces
+    one only if its config says it is off, because the app treats a lecture with
+    no "active" setting as on. A replaced lecture is moved to
     <instance>/lecture_backups/, outside the folder the app lists.
     """
     q = shlex_module.quote
@@ -170,8 +171,8 @@ if [[ -e "$target" ]]; then
   if [[ $replace -ne 1 ]]; then
     echo "Refusing: $target already exists. Use --replace to replace it." >&2; exit 1
   fi
-  if grep -Eq '"active"[[:space:]]*:[[:space:]]*true' "$target/lecture_config.json" 2>/dev/null; then
-    echo "Refusing: $target is active. Switch it off in the admin page first." >&2; exit 1
+  if ! grep -Eq '"active"[[:space:]]*:[[:space:]]*false' "$target/lecture_config.json" 2>/dev/null; then
+    echo "Refusing: $target is not marked as off. Switch it off in the admin page first." >&2; exit 1
   fi
 fi
 staging=$(mktemp -d "$lectures/.push-$lecture_id.XXXXXX")
