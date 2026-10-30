@@ -202,13 +202,13 @@ That generated path requires `OPENAI_API_KEY`.
 
 ### Agent-prepared lectures
 
-A course can instead have a local agent prepare each lecture. The course keeps a private recipe, `~/lecture-bot-instances/<course>/lecture_recipe.md`, saying where its sources are, which files to produce and what to emphasise. You ask the agent to "prepare lecture N"; it follows the [`prepare-lecture`](.agents/skills/prepare-lecture/SKILL.md) skill, builds the package in the instance's `lectures/` folder, keeps its working files in `build/`, and checks it:
+A course can instead have a local agent prepare each lecture. The course keeps a private recipe, `~/lecture-bot-instances/<course>/lecture_recipe.md`, saying where its sources are and what to emphasise. What the package must hold comes from the [lecture package contract](docs/lecture_package_contract.md), which the course's tutor prompt declares. You ask the agent to "prepare lecture N"; it follows the [`prepare-lecture`](.agents/skills/prepare-lecture/SKILL.md) skill, builds the package in the instance's `lectures/` folder, keeps its working files in `build/`, and checks it:
 
 ```bash
 pixi run check-lecture ~/lecture-bot-instances/pml/lectures/lecture_02
 ```
 
-The check loads the package with the student app's own loader, requires `### Tn.` topics with `Importance` lines in `rubric.md`, rejects a `topics` list in `lecture_config.json` that differs from those headings (the app would use the list), and prints the files to install, the topics and the lines marked `- **Load-bearing:**`.
+The check loads the package with the student app's own loader, requires `### Tn.` topics in `rubric.md`, compares the package's declared contract with the one its tutor prompt declares, rejects a `topics` list in `lecture_config.json` that differs from those headings (the app would use the list), and prints the files to install, the topics and the lines marked `- **Load-bearing:**`.
 
 To install the package on the server:
 

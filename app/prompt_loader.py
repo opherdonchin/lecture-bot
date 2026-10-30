@@ -13,6 +13,10 @@ _PLACEHOLDER_RE = re_.compile(r"{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}")
 # a prompt declaring another version, or none, is not loaded.
 BACKEND_CONTRACT_VERSION = "0.6.1"
 _CONTRACT_DECLARATION_RE = re_.compile(r"\ABackend contract: *(\S+)[ \t]*\r?\n(?:[ \t]*\r?\n)?")
+# A prompt may also declare the lecture package it expects, next after that line
+# (docs/lecture_package_contract.md). scripts/lecture_package.py compares it with
+# the package when a lecture is prepared; nothing checks it while the app runs.
+_PACKAGE_DECLARATION_RE = re_.compile(r"\ALecture package contract: *(\S+)[ \t]*\r?\n(?:[ \t]*\r?\n)?")
 
 
 @functools_.lru_cache
@@ -59,9 +63,16 @@ def declared_backend_contract(prompt_text: str) -> str | None:
     return match.group(1) if match else None
 
 
+def declared_package_contract(prompt_text: str) -> str | None:
+    """Return the lecture package contract a prompt declares after its backend contract, if any."""
+    match = _PACKAGE_DECLARATION_RE.match(_CONTRACT_DECLARATION_RE.sub("", prompt_text, count=1))
+    return match.group(1) if match else None
+
+
 def strip_contract_declaration(prompt_text: str) -> str:
-    """Return the prompt without its contract declaration line, as the model should see it."""
-    return _CONTRACT_DECLARATION_RE.sub("", prompt_text, count=1)
+    """Return the prompt without its contract declaration lines, as the model should see it."""
+    without_backend = _CONTRACT_DECLARATION_RE.sub("", prompt_text, count=1)
+    return _PACKAGE_DECLARATION_RE.sub("", without_backend, count=1)
 
 
 def prompt_contract_problem(template_name: str) -> str | None:

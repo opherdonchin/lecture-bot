@@ -1420,6 +1420,17 @@ def test_a_prompt_for_another_contract_version_is_refused():
     assert prompt_loader.declared_backend_contract("You are a tutor.\nBackend contract: 0.6.1\n") is None
 
 
+def test_the_pml_prompt_declares_its_lecture_package_contract():
+    assert prompt_loader.declared_package_contract(prompt_loader.load_prompt_template(PML_PROMPT)) == "pml-brief-1"
+    assert prompt_loader.declared_package_contract("Backend contract: 0.6.1\n\nYou are a tutor.") is None
+    assert prompt_loader.declared_package_contract("Lecture package contract: x-1\n\nYou are a tutor.") == "x-1"
+
+
+def test_both_declarations_are_removed_from_the_prompt_text():
+    text = "Backend contract: 0.6.1\n\nLecture package contract: pml-brief-1\n\nYou are a tutor."
+    assert prompt_loader.strip_contract_declaration(text) == "You are a tutor."
+
+
 def test_the_contract_declaration_is_removed_before_the_model_sees_the_prompt():
     package = dict(_CACHING_LECTURE_PACKAGE, config={"title": "Cache Test Lecture", "tutor_prompt_template": PML_PROMPT})
     prompt = bot_engine.build_dialogue_system_prompt(

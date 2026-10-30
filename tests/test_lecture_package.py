@@ -12,14 +12,12 @@ BRIEF = """# Lecture brief: Fixture
 - **Load-bearing:** T2.
 
 ### T1. Framing
-- **Importance:** important
 
 ### T2. Core result
-- **Importance:** core
 """
 
 
-def make_instance(root: pathlib_.Path, *, active: bool = False, rubric: str = BRIEF, topics=None) -> pathlib_.Path:
+def make_instance(root: pathlib_.Path, *, active: bool = False, rubric: str = BRIEF, topics=None, package_contract: str | None = "pml-brief-1") -> pathlib_.Path:
     """Create <root>/pml/lectures/lecture_02 with a brief, bot notes and an unused source."""
     lectures = root / "pml" / "lectures"
     lecture_dir = lectures / "lecture_02"
@@ -31,6 +29,8 @@ def make_instance(root: pathlib_.Path, *, active: bool = False, rubric: str = BR
     config = {"lecture_id": "lecture_02", "title": "Lecture 2", "active": active}
     if topics is not None:
         config["topics"] = topics
+    if package_contract is not None:
+        config["package_contract"] = package_contract
     (lecture_dir / "lecture_config.json").write_text(j.dumps(config), encoding="utf-8")
     (lecture_dir / "rubric.md").write_text(rubric, encoding="utf-8")
     (lecture_dir / "bot_notes.md").write_text("Notes\n", encoding="utf-8")
@@ -57,14 +57,45 @@ def test_check_fails_without_rubric(tmp_path):
     assert "rubric.md" in result.errors[0]
 
 
-def test_check_fails_without_topics_or_importance(tmp_path):
-    result = lecture_package.check_lecture(make_instance(tmp_path, rubric="# Brief\n\n### T1. Only\nNo importance.\n"))
+def test_check_fails_without_topics(tmp_path):
+    no_topics = lecture_package.check_lecture(make_instance(tmp_path, rubric="# Brief\n"))
+
+    assert any("topic headings" in error for error in no_topics.errors)
+
+
+def test_check_reports_the_package_contract(tmp_path):
+    result = lecture_package.check_lecture(make_instance(tmp_path))
+
+    assert result.package_contract == "pml-brief-1"
+    assert "Package contract: pml-brief-1" in lecture_package.format_check(result)
+
+
+@pytest.mark.parametrize("declared", ["pml-brief-0", None])
+def test_check_fails_when_the_package_contract_differs_from_the_prompts(tmp_path, declared):
+    result = lecture_package.check_lecture(make_instance(tmp_path, package_contract=declared))
 
     assert not result.ok
-    assert any("Importance" in error for error in result.errors)
+    assert any("pml-brief-1" in error and "pml_tutor_prompt.md" in error for error in result.errors)
 
-    no_topics = lecture_package.check_lecture(make_instance(tmp_path / "b", rubric="# Brief\n"))
-    assert any("topic headings" in error for error in no_topics.errors)
+
+def test_check_fails_for_a_course_without_a_declared_contract(tmp_path):
+    lecture_dir = make_instance(tmp_path)
+    renamed = tmp_path / "statistics"
+    (tmp_path / "pml").rename(renamed)
+
+    result = lecture_package.check_lecture(renamed / "lectures" / lecture_dir.name)
+
+    assert any("declares no lecture package contract" in error for error in result.errors)
+
+
+def test_check_fails_for_an_unknown_course(tmp_path):
+    lecture_dir = make_instance(tmp_path)
+    renamed = tmp_path / "nosuchcourse"
+    (tmp_path / "pml").rename(renamed)
+
+    result = lecture_package.check_lecture(renamed / "lectures" / lecture_dir.name)
+
+    assert any("Cannot find the tutor prompt" in error for error in result.errors)
 
 
 def test_check_fails_when_config_topics_override_the_brief(tmp_path):
