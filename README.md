@@ -200,6 +200,25 @@ pixi run python scripts/build_lecture_package.py lecture_03 --force
 
 That generated path requires `OPENAI_API_KEY`.
 
+### Agent-prepared lectures
+
+A course can instead have a local agent prepare each lecture. The course keeps a private recipe, `~/lecture-bot-instances/<course>/lecture_recipe.md`, saying where its sources are, which files to produce and what to emphasise. You ask the agent to "prepare lecture N"; it follows the [`prepare-lecture`](.agents/skills/prepare-lecture/SKILL.md) skill, builds the package in the instance's `lectures/` folder, keeps its working files in `build/`, and checks it:
+
+```bash
+pixi run check-lecture ~/lecture-bot-instances/pml/lectures/lecture_02
+```
+
+The check loads the package with the student app's own loader, requires `### Tn.` topics with `Importance` lines in `rubric.md`, rejects a `topics` list in `lecture_config.json` that differs from those headings (the app would use the list), and prints the files to install, the topics and the lines marked `- **Load-bearing:**`.
+
+To install the package on the server:
+
+```bash
+pixi run push-lecture -- pml lecture_02 --dry-run
+pixi run push-lecture -- pml lecture_02
+```
+
+`push-lecture` checks the package again and copies only the files the app reads (`lecture_config.json`, `rubric.md` and the context files) to `/srv/lecture-bot/instances/<course>/lectures/` over the SSH settings in `deploy/remote.env` (`LECTURE_BOT_REMOTE_INSTANCES_ROOT` overrides the instances folder). The lecture always arrives with `"active": false`. It refuses to overwrite an existing lecture unless given `--replace`, never replaces an active one, and moves a replaced lecture to the instance's `lecture_backups/`. Switch the lecture on in the admin page's lecture form once you have reviewed its brief.
+
 ## Runtime Files
 
 Default repo-relative runtime locations:
