@@ -7,9 +7,11 @@ plan it serves. Describe the process objective, not merely the tools to use.
 
 ## What this rests on
 
-Each earlier decision, specification or fact this scope relies on, so that the
-reader does not have to remember it. Say so plainly when something has no
-record (process, *Presentations*, the rule that a document stands alone).
+Start with a short account of how the earlier decisions, specifications and
+wiki-defined concepts work together to give this scope its background, so that
+the reader does not have to remember them. Then list each one. Say so plainly
+when something has no record. This section does not replace links in the text
+above and below it (process, *Presentations*, the rule that a document stands alone).
 
 | Earlier decision or fact | Where it was decided | Where it is specified | Where it is explained |
 |---|---|---|---|

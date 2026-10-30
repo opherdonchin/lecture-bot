@@ -9,7 +9,8 @@ purpose independently of the particular file, tool or GitHub operation.
 ## What this rests on
 
 Link the scope issue's *What this rests on*, and add only what this change
-itself relies on, in the same form: where it was decided, specified and explained.
+itself relies on, in the same form: how it fits together, then where each part
+was decided, specified and explained. This does not replace links in the text.
 
 ## What you should understand after reading this
 
