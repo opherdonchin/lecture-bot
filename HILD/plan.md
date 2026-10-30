@@ -46,9 +46,10 @@ is in Git and the [journal](journal/).
 1. **Watch the first live PML sessions on `v0.6.1`:** fallbacks, control characters, scoring and the five-minute warning. Then review score calibration on real answers.
 2. **[Scope issue #39](https://github.com/opherdonchin/lecture-bot/issues/39):** PR A (the generator and an archive check against the contract), PR B (a PML specification and generated prompt, compared in simulation), PR C (regenerate Statistics' prompt). Then install both archives and unpin Statistics.
 3. **PML L02 by agent recipe, [scope issue #40](https://github.com/opherdonchin/lecture-bot/issues/40)** (approved): [PR #41](https://github.com/opherdonchin/lecture-bot/pull/41) is in review. L02 has been prepared and checked locally; next, the researcher reviews the brief and confirms the load-bearing topics (T3, T4), then it is pushed and activated, **after the contract in [scope issue #43](https://github.com/opherdonchin/lecture-bot/issues/43)**, which the researcher wants in place first ([PR #44](https://github.com/opherdonchin/lecture-bot/pull/44) and [PR #45](https://github.com/opherdonchin/lecture-bot/pull/45), in review; review them in the order PR #41, PR #44, PR #45). Window 2026-10-28 to 11-04. The researcher could not follow the PR from its documents; [open questions from 2026-10-30](journal/2026-10-30.md#open-questions) are waiting on the researcher, along with [how a prompt and its package stay aligned](journal/2026-10-30.md#session-2--process-pr-upstream-issue-and-aligning-the-prompt-with-the-package). The process rule that documents stand alone is in [PR #42](https://github.com/opherdonchin/lecture-bot/pull/42), and the suggestion to upstream in [HILD issue #15](https://github.com/Motor-Learning-Lab/HILD/issues/15).
-4. Update the wiki page Concept-tutor-json-replies.
-5. **[Scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20):** create `develop`; from then on, work merges there and `v0.7.0` is the next release.
-6. **Server cleanup:** remove the old unit files and `legacy.env`.
+4. **[Scope issue #46](https://github.com/opherdonchin/lecture-bot/issues/46)** (proposed): one handshake between course agents and an instance, over SSH now, for Lecture 3 onward.
+5. Update the wiki page Concept-tutor-json-replies.
+6. **[Scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20):** create `develop`; from then on, work merges there and `v0.7.0` is the next release.
+7. **Server cleanup:** remove the old unit files and `legacy.env`.
 
 ## Open decisions
 
