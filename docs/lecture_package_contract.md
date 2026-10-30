@@ -22,7 +22,7 @@ They sit beside the [Backend–Tutor Runtime Contract](backend_tutor_contract.md
 
 **Two things a contract does not decide:**
 
-- **A course's recipe,** `~/lecture-bot-instances/<course>/lecture_recipe.md`, says where that course's sources are and what it emphasises. The contract says what the tutor needs; the recipe says how to get it from this course's materials. The researcher owns it. A recipe can ask for more than a contract does, but it cannot remove what a contract expects.
+- **A course's recipe** says where that course's sources are and what it emphasises. The contract says what the tutor needs; the recipe says how to get it from this course's materials. The researcher owns it. A recipe can ask for more than a contract does, but it cannot remove what a contract expects.
 - **A lecture's content:** its topics, what is taught and how it is scored. The preparing agent proposes these, and the researcher's review is the only check on them.
 
 ## 1. What the app requires of every package
@@ -36,7 +36,7 @@ These come from the code and hold whatever the contract. The code is the authori
 - `rubric.md`, which the backend sends to the tutor as `rubric_text`;
 - every context file marked required in the course's `lectures/config.json`.
 
-**Topic headings in `rubric.md`,** the one place the code reads the text itself. A heading is `### T<n>. <name>` or `### T<n> — <name>` ([`parse_rubric_topics`](../app/bot_engine.py)). The app would still open a session with no headings, but it keeps scores only for known topics, so nothing could be scored. [`check-lecture`](../README.md#agent-prepared-lectures) therefore fails without them.
+**Topic headings in `rubric.md`,** the one place the code reads the text itself. A heading is `### T<n>. <name>` or `### T<n> — <name>` ([`parse_rubric_topics`](../app/bot_engine.py)). The app would still open a session with no headings, but it keeps scores only for known topics, so nothing could be scored. The [package check](#comparing-declarations) therefore fails without them.
 
 **Context files reach the tutor only under the keys `bot_notes`, `slides`, `handout` and `minutes`.** A file listed under any other key loads and is then silently left out.
 
@@ -44,13 +44,13 @@ These come from the code and hold whatever the contract. The code is the authori
 
 | Setting | If absent | Note |
 |---|---|---|
-| `active` | **The lecture is on** | `push-lecture` always installs it as `false`. |
+| `active` | **The lecture is on** | Installing a package always sets it to `false`. |
 | `title` | The lecture's folder name | |
-| `topics` | Topics come from the headings | A copy of the headings that the app prefers to them. `check-lecture` fails if it disagrees with them. |
+| `topics` | Topics come from the headings | A copy of the headings that the app prefers to them. The package check fails if it disagrees with them. |
 | `tutor_prompt_template` | The instance's prompt | Lets one lecture use a different prompt. |
 | `context_files` | The course's `lectures/config.json` | |
 
-**Everything else is ignored by the student app.** That includes other files in the folder, and other settings: `course` and `files`, which the admin pages use; `package_contract`, which only `check-lecture` reads; and `lecture_id`, which `check-lecture` requires to match the folder if present.
+**Everything else is ignored by the student app.** That includes other files in the folder, and other settings: `course` and `files`, which the admin pages use; `package_contract`, which only the package check reads; and `lecture_id`, which the package check requires to match the folder if present.
 
 ## 2. What makes a contract valid
 
@@ -70,6 +70,7 @@ A contract is valid if:
 5. **It describes sorts of information, not a lecture's content.** It requires exact wording only where the code or the prompt depends on that wording, and says so. Any layout it shows is an example.
 6. **It changes with its prompt.** When a prompt starts or stops relying on some kind of information, the contract and the prompt change in the same pull request, and the contract gets a new version and a new file.
 
-**Comparing declarations.** A package declares the contract it was built for, as `"package_contract"` in `lecture_config.json`. `check-lecture` compares that with the prompt's declaration and fails if they differ or if the contract has no file. So packages built for an old version fail the check until they are rebuilt; lectures already installed are not affected. The backend does not compare them while running, because a mismatch makes a poorer tutor, not a broken one, and refusing could take a live lecture down when a prompt changes.
+<a id="comparing-declarations"></a>
+**Comparing declarations.** A package declares the contract it was built for, as `"package_contract"` in `lecture_config.json`. The **package check**, which is [`check-lecture`](../README.md#agent-prepared-lectures), compares that with the prompt's declaration and fails if they differ or if the contract has no file. So packages built for an old version fail the check until they are rebuilt; lectures already installed are not affected. The backend does not compare them while running, because a mismatch makes a poorer tutor, not a broken one, and refusing could take a live lecture down when a prompt changes.
 
 **What the comparison cannot do.** It catches a package built for another contract. It cannot show that a contract matches what a prompt really does, or that a package supplies what its contract describes. Those rest on review.
