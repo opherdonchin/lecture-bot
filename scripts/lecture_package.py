@@ -85,7 +85,9 @@ def check_lecture(lecture_dir: pathlib_.Path) -> CheckResult:
         )
 
     result.package_contract = config.get("package_contract")
-    contract_problem = _package_contract_problem(lecture_dir.parent.parent.name, result.package_contract)
+    contract_problem = _package_contract_problem(
+        lecture_dir.parent.parent.name, result.package_contract, config.get("tutor_prompt_template")
+    )
     if contract_problem:
         result.errors.append(contract_problem)
 
@@ -118,18 +120,28 @@ def check_lecture(lecture_dir: pathlib_.Path) -> CheckResult:
     return result
 
 
-def _package_contract_problem(course: str, declared: str | None) -> str | None:
-    """Return why the package's contract does not match the one its course's tutor prompt declares."""
-    settings = INSTANCE_EXAMPLES_DIR / f"{course}.env.example"
-    template = PROMPT_TEMPLATE_RE.search(settings.read_text(encoding="utf-8")) if settings.exists() else None
+def _package_contract_problem(course: str, declared: str | None, lecture_template: str | None) -> str | None:
+    """Return why the package's contract does not match the one its tutor prompt declares.
+
+    The prompt is the lecture's own tutor_prompt_template if it sets one, as in
+    the app, and otherwise the one in the course's instance settings.
+    """
+    template = lecture_template
     if template is None:
-        return f"Cannot find the tutor prompt for course {course!r}: no TUTOR_PROMPT_TEMPLATE in {settings.name}."
-    expected = prompt_loader.declared_package_contract(prompt_loader.load_prompt_template(template.group(1)))
+        settings = INSTANCE_EXAMPLES_DIR / f"{course}.env.example"
+        match = PROMPT_TEMPLATE_RE.search(settings.read_text(encoding="utf-8")) if settings.exists() else None
+        if match is None:
+            return f"Cannot find the tutor prompt for course {course!r}: no TUTOR_PROMPT_TEMPLATE in {settings.name}."
+        template = match.group(1)
+    try:
+        expected = prompt_loader.declared_package_contract(prompt_loader.load_prompt_template(template))
+    except OSError as error:
+        return f"Cannot read tutor prompt {template!r}: {error}"
     if expected is None:
-        return f"Tutor prompt {template.group(1)} declares no lecture package contract."
+        return f"Tutor prompt {template} declares no lecture package contract."
     if declared != expected:
         return (
-            f"lecture_config.json declares package_contract {declared!r}, but tutor prompt {template.group(1)} "
+            f"lecture_config.json declares package_contract {declared!r}, but tutor prompt {template} "
             f"expects {expected!r}. See docs/lecture_package_contract.md."
         )
     return None

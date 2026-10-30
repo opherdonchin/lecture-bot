@@ -88,6 +88,18 @@ def test_check_fails_for_a_course_without_a_declared_contract(tmp_path):
     assert any("declares no lecture package contract" in error for error in result.errors)
 
 
+def test_check_uses_a_lectures_own_tutor_prompt(tmp_path):
+    lecture_dir = make_instance(tmp_path)
+    config_path = lecture_dir / "lecture_config.json"
+    config = j.loads(config_path.read_text())
+    config["tutor_prompt_template"] = "tutor_prompt.md"
+    config_path.write_text(j.dumps(config), encoding="utf-8")
+
+    result = lecture_package.check_lecture(lecture_dir)
+
+    assert any("tutor_prompt.md declares no lecture package contract" in error for error in result.errors)
+
+
 def test_check_fails_for_an_unknown_course(tmp_path):
     lecture_dir = make_instance(tmp_path)
     renamed = tmp_path / "nosuchcourse"

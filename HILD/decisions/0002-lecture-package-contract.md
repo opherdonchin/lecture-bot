@@ -1,6 +1,6 @@
 # 0002 — A contract aligns tutor prompts and lecture packages; the code does not judge content
 
-**Date:** 2026-10-30 · **Status:** Proposed
+**Date:** 2026-10-30 · **Status:** Accepted by the researcher, 2026-10-30 ([PR #45](https://github.com/opherdonchin/lecture-bot/pull/45))
 
 **Relationship to earlier decisions:** None. [Decision 0001](0001-independent-hild-build.md) concerns the process and is unaffected.
 
@@ -30,4 +30,4 @@
 - Statistics has no format yet: its prompt declares none, and it does not use `check-lecture`.
 - The generator and the archive still need to take the contract in, under [scope issue #39, PR A](https://github.com/opherdonchin/lecture-bot/issues/39#user-content-pr-a).
 
-**Validation:** This becomes accepted when the researcher merges the pull request introducing it. The contract itself arrives in [scope issue #43, PR 1](https://github.com/opherdonchin/lecture-bot/issues/43#user-content-pr-1). Its first real use is L02.
+**Validation:** The contract itself arrives in [scope issue #43, PR 1](https://github.com/opherdonchin/lecture-bot/issues/43#user-content-pr-1). Its first real use is L02.
