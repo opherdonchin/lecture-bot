@@ -202,22 +202,19 @@ That generated path requires `OPENAI_API_KEY`.
 
 ### Agent-prepared lectures
 
-A course can instead have a local agent prepare each lecture. The course keeps a private recipe, `~/lecture-bot-instances/<course>/lecture_recipe.md`, saying where its sources are and what to emphasise. What the package must hold comes from the [lecture package contract](docs/lecture_package_contracts/) that the course's tutor prompt declares; [the shared rules](docs/lecture_package_contract.md) cover what every package needs. You ask the agent to "prepare lecture N"; it follows the [`prepare-lecture`](.agents/skills/prepare-lecture/SKILL.md) skill, builds the package in the instance's `lectures/` folder, keeps its working files in `build/`, and checks it:
+A course can have an agent prepare each lecture, working from the course's own repository without a lecture-bot clone. It uses the [lecture package handshake](docs/lecture_package_handshake.md): ask the instance what's expected, send a package, get a result. A course needs only a recipe, `lecture_recipe.md`, saying where its sources are and what to emphasise, and a line in its `AGENTS.md` saying how to reach the instance. What the package must hold comes from the [lecture package contract](docs/lecture_package_contracts/) that the course's tutor prompt declares; [the shared rules](docs/lecture_package_contract.md) cover what every package needs. The agent's instructions are the [`prepare-lecture`](.agents/skills/prepare-lecture/SKILL.md) skill, which the handshake returns.
+
+Installing always leaves the lecture switched off, and you switch it on in the admin page. Nothing checks a lecture's content but your review.
+
+In a lecture-bot clone, two conveniences work on a folder in `~/lecture-bot-instances/<course>/lectures/`:
 
 ```bash
 pixi run check-lecture ~/lecture-bot-instances/pml/lectures/lecture_02
-```
-
-The check loads the package with the student app's own loader, requires `### Tn.` topics in `rubric.md`, compares the package's declared contract with the one its tutor prompt declares, rejects a `topics` list in `lecture_config.json` that differs from those headings (the app would use the list), and prints the files to install, the topics and the lines marked `- **Load-bearing:**`.
-
-To install the package on the server:
-
-```bash
 pixi run push-lecture -- pml lecture_02 --dry-run
 pixi run push-lecture -- pml lecture_02
 ```
 
-`push-lecture` checks the package again and copies only the files the app reads (`lecture_config.json`, `rubric.md` and the context files) to `/srv/lecture-bot/instances/<course>/lectures/` over the SSH settings in `deploy/remote.env` (`LECTURE_BOT_REMOTE_INSTANCES_ROOT` overrides the instances folder). The lecture always arrives with `"active": false`. It refuses to overwrite an existing lecture unless given `--replace`, never replaces an active one, and moves a replaced lecture to the instance's `lecture_backups/`. Switch the lecture on in the admin page's lecture form once you have reviewed its brief.
+`check-lecture` works locally, using the course's example settings. `push-lecture` zips the files the app reads and sends them to the instance's `check` or `install` operation over the SSH settings in `deploy/remote.env`; it adds `--replace` if asked. It needs the handshake deployed on the server.
 
 ## Runtime Files
 

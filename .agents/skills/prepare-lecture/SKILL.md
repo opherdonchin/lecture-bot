@@ -1,38 +1,40 @@
 ---
 name: prepare-lecture
-description: Prepare a course's lecture package from its sources by following the course's private recipe, check it, and push it inactive to the server when the researcher asks. Use when asked to prepare, build, update or install a lecture for a course instance.
+description: Prepare a course's lecture package from its sources, check it with the course's lecture-bot instance, and install it switched off when the researcher asks. Use when asked to prepare, build, update or install a lecture for a course.
 ---
 
 # Prepare a lecture
 
-Rules: [AGENTS.md](../../../AGENTS.md) (privacy, instance data outside the
-repository) and the README's *Agent-prepared lectures* section for the commands.
+You may be working in the course's own repository, without lecture-bot. Everything
+you need from lecture-bot comes through the
+[lecture package handshake](../../../docs/lecture_package_handshake.md), and these
+are the instructions it returns. The course's `AGENTS.md` says how to reach the
+instance: below, `<handshake>` means the command it gives, up to and including
+`lecture-package`, and `<course>` the course's name.
 
-1. **Read what the tutor expects.** Find the course's tutor prompt from
-   `TUTOR_PROMPT_TEMPLATE` in `deploy/instances/<course>.env.example`; its
-   `Lecture package contract:` line names a file in
-   [`docs/lecture_package_contracts/`](../../../docs/lecture_package_contracts/).
-   Read that contract, the [rules all contracts share](../../../docs/lecture_package_contract.md),
-   and the prompt's own description of what it is given. The package you build
-   must supply that information, and declare that contract.
-2. **Read the recipe:** `~/lecture-bot-instances/<course>/lecture_recipe.md`.
-   It says where the sources are and what the course emphasises. If the course
-   has no recipe, stop and ask the researcher. Read the previous lecture's package
-   too, as an example; where it disagrees with the contract, follow the contract.
-3. **Build** the package in `~/lecture-bot-instances/<course>/lectures/<lecture_id>/`
-   and keep converted sources and drafts in `~/lecture-bot-instances/<course>/build/<lecture_id>/`,
-   with a `provenance.md` naming each source and its commit or date. Never put
-   course materials, transcripts or student data in this repository.
-4. **Check** with `pixi run check-lecture <lecture folder>` and fix every error.
-5. **Report to the researcher:** the check's output (files, topics, load-bearing
-   lines, contract), what was taught versus intended, and anything the recipe did not
-   cover. The researcher confirms the load-bearing designation and reviews the
-   brief or rubric.
-6. **Push only when the researcher asks:** `pixi run push-lecture -- <course> <lecture_id> --dry-run`,
-   then without `--dry-run`. It installs the lecture inactive. Use `--replace` only
-   when the researcher asked to replace that lecture.
-7. **Activation is the researcher's,** in the admin page, unless they explicitly
-   ask the agent to do it.
-8. Record the preparation in the journal (hashes of the installed files, no content).
+1. **Read what the tutor expects:** `<handshake> contract <course>`. It returns the
+   contract the course's tutor prompt declares, and the rules all contracts share.
+   The package you build must supply what the contract describes, and declare it
+   as `package_contract` in `lecture_config.json`.
+2. **Read the course's recipe,** `lecture_recipe.md`. It says where the sources are
+   and what the course emphasises. If you cannot find one, stop and ask the
+   researcher. The previous lecture's package is a useful example, if the recipe
+   says where it is; where it disagrees with the contract, follow the contract.
+3. **Build** the package in a folder of its own, wherever the recipe says. Keep
+   working files apart from it, with a `provenance.md` naming each source and its
+   commit or date. Do not publish course materials, transcripts or student data.
+4. **Check:** put only the package's files at the top level of a `.zip`, then run
+   `<handshake> check <course> <lecture_id> < package.zip`. Fix every error.
+5. **Report to the researcher:** the result (topics, load-bearing lines, contract),
+   what was taught versus intended, and anything the recipe did not cover. The
+   researcher confirms the load-bearing designation and reviews the package. `ok`
+   means the package loads and declares the right contract, not that it is good.
+6. **Install only when the researcher asks:**
+   `<handshake> install <course> <lecture_id> < package.zip`. It installs the lecture
+   switched off. Add `--replace` only when the researcher asked to replace that lecture.
+7. **Switching the lecture on is the researcher's,** on the admin page.
+8. **Record what you installed:** in the course's own records, or in your report if
+   it has none, give hashes of the installed files and no content.
 
 If the recipe was unclear or wrong, propose an edit to it; the researcher owns it.
+If you cannot reach the instance, hand the package to the researcher.

@@ -8,6 +8,8 @@
 
 They sit beside the [Backend–Tutor Runtime Contract](backend_tutor_contract.md), which says what the backend and a prompt exchange, and the [Tutor Specification Contract](tutor_specification_contract.md), which says what a tutor specification must contain. [Concept-tutor-contracts](https://github.com/opherdonchin/lecture-bot/wiki/Concept-tutor-contracts) explains how they fit together, and [Concept-lecture-package](https://github.com/opherdonchin/lecture-bot/wiki/Concept-lecture-package) explains packages.
 
+**An agent gets its contract through the [lecture package handshake](lecture_package_handshake.md).**
+
 **A contract is fulfilled by being read.** Whoever writes a tutor prompt, by hand or with the [generator](../prompts/tutor_generator_prompt.md), relies on it. Whoever prepares a package, normally a local agent following the [`prepare-lecture` skill](../.agents/skills/prepare-lecture/SKILL.md), supplies what it describes. [Decision 0002](../HILD/decisions/0002-lecture-package-contract.md) records why.
 
 ## Three levels

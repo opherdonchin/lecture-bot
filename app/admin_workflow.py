@@ -47,7 +47,7 @@ class LectureFileInfo:
 def list_lecture_dirs(lectures_dir: pathlib.Path) -> list[pathlib.Path]:
     if not lectures_dir.exists():
         return []
-    return sorted(path for path in lectures_dir.iterdir() if path.is_dir())
+    return sorted(path for path in lectures_dir.iterdir() if path.is_dir() and not path.name.startswith("."))
 
 
 def validate_lecture_id(lecture_id: str) -> str:
