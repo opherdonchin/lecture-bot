@@ -10,9 +10,10 @@ import shlex
 import threading
 import uuid
 import subprocess
+import zipfile
 
 import fastapi as fa
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, RedirectResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -27,6 +28,7 @@ import app.admin_generation as admin_generation_module
 import app.admin_sessions as admin_sessions
 import app.admin_workflow as workflow
 import app.config as config_module
+import app.lecture_packages as lecture_packages
 import app.db as db_module
 import app.moodle_grade_import as moodle_grade_import
 import app.root_path as root_path_module
@@ -762,6 +764,56 @@ async def export_sessions(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+def _render_lecture_packages(request: fa.Request, *, result: dict | None = None, lecture_id: str = ""):
+    expected = lecture_packages.describe_expectations(config_module.get_settings().tutor_prompt_template)
+    return templates.TemplateResponse(
+        request,
+        "admin_lecture_packages.html",
+        _template_context(request, {"expected": expected, "result": result, "lecture_id": lecture_id}),
+    )
+
+
+@app.get("/lecture-packages", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="admin_lecture_packages")
+def admin_lecture_packages(request: fa.Request):
+    return _render_lecture_packages(request)
+
+
+@app.get("/lecture-packages/expected.zip", dependencies=[fa.Depends(require_admin)], name="download_package_expectations")
+def download_package_expectations():
+    expected = lecture_packages.describe_expectations(config_module.get_settings().tutor_prompt_template)
+    if not expected["ok"]:
+        raise fa.HTTPException(status_code=404, detail=" ".join(expected["errors"]))
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(f"{expected['package_contract']}.md", expected["contract"])
+        archive.writestr("shared_rules.md", expected["shared_rules"])
+        archive.writestr("instructions.md", expected["instructions"])
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{expected["package_contract"]}-expected.zip"'},
+    )
+
+
+@app.post("/lecture-packages", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="submit_lecture_package")
+async def submit_lecture_package(
+    request: fa.Request,
+    lecture_id: str = fa.Form(""),
+    action: str = fa.Form("check"),
+    replace: str | None = fa.Form(None),
+    uploaded_file: fa.UploadFile = fa.File(...),
+):
+    lecture_id = lecture_id.strip()
+    # One byte over the limit is enough for the handshake to refuse it.
+    data = await uploaded_file.read(lecture_packages.MAX_ARCHIVE_BYTES + 1)
+    prompt = config_module.get_settings().tutor_prompt_template
+    if action == "install":
+        result = lecture_packages.install_archive(_lectures_dir(), lecture_id, data, prompt, replace=replace is not None)
+    else:
+        result = lecture_packages.check_archive(_lectures_dir(), lecture_id, data, prompt)
+    return _render_lecture_packages(request, result=result.to_dict(), lecture_id=lecture_id)
 
 
 @app.post("/lectures", response_class=HTMLResponse, dependencies=[fa.Depends(require_admin)], name="create_lecture")
