@@ -34,7 +34,7 @@ Only these:
 
 - **The topic headings** ([level 1](../lecture_package_contract.md#1-what-the-app-requires-of-every-package)).
 - **Formulas written as `$…$`,** because the prompt warns the tutor that the brief writes them that way and that it must not copy them.
-- **A line starting `- **Load-bearing:**`,** so that `check-lecture` can show it to the researcher to confirm. Without it the check reports none marked and still passes, and the tutor can still read the topics named elsewhere in the brief.
+- **A line starting `- **Load-bearing:**`,** so that the package check can show it to the researcher to confirm. Without it the check reports none marked and still passes, and the tutor can still read the topics named elsewhere in the brief.
 
 ## An example layout
 
