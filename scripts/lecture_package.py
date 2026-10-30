@@ -2,9 +2,11 @@
 
 A lecture package is the folder the student app reads for one lecture:
 ``lecture_config.json``, ``rubric.md`` (a rubric or a lecture brief) and the
-context files the course lists. A local agent prepares packages by following
-the course's recipe; this script checks them with the student app's own loader
-and installs them on the server. See the README's "Agent-prepared lectures".
+context files the course lists. A local agent prepares packages by reading the
+contract its course's tutor prompt declares (docs/lecture_package_contracts/)
+and following the course's recipe; this script checks them with the student
+app's own loader and installs them on the server. See the README's
+"Agent-prepared lectures".
 
     pixi run check-lecture ~/lecture-bot-instances/pml/lectures/lecture_02
     pixi run push-lecture -- pml lecture_02 --dry-run
@@ -33,11 +35,15 @@ if str(REPO_ROOT) not in sys_module.path:
 
 import app.bot_engine as bot_engine
 import app.lecture_loader as lecture_loader
+import app.prompt_loader as prompt_loader
 
 
 DEFAULT_INSTANCES_ROOT = pathlib_.Path.home() / "lecture-bot-instances"
 DEFAULT_REMOTE_INSTANCES_ROOT = "/srv/lecture-bot/instances"
 REMOTE_ENV_FILE = REPO_ROOT / "deploy" / "remote.env"
+INSTANCE_EXAMPLES_DIR = REPO_ROOT / "deploy" / "instances"
+PACKAGE_CONTRACTS_DIR = REPO_ROOT / "docs" / "lecture_package_contracts"
+PROMPT_TEMPLATE_RE = re_module.compile(r"^TUTOR_PROMPT_TEMPLATE=(\S+)", re_module.MULTILINE)
 LOAD_BEARING_RE = re_module.compile(r"^\s*-\s*\*\*Load-bearing:\*\*.*$", re_module.MULTILINE)
 
 
@@ -51,6 +57,7 @@ class CheckResult:
     load_bearing: list[str]
     errors: list[str]
     sizes: dict[str, int]
+    package_contract: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -78,12 +85,16 @@ def check_lecture(lecture_dir: pathlib_.Path) -> CheckResult:
             f"lecture_config.json has lecture_id {config.get('lecture_id')!r}, but the folder is {lecture_id!r}."
         )
 
+    result.package_contract = config.get("package_contract")
+    contract_problem = _package_contract_problem(
+        lecture_dir.parent.parent.name, result.package_contract, config.get("tutor_prompt_template")
+    )
+    if contract_problem:
+        result.errors.append(contract_problem)
+
     rubric_topics = bot_engine.parse_rubric_topics(package["rubric"])
     if not rubric_topics:
         result.errors.append("rubric.md has no '### T<n>. <name>' topic headings.")
-    missing_importance = [t["topic_id"] for t in rubric_topics if t["importance"] == "unknown"]
-    if missing_importance:
-        result.errors.append(f"Topics without an '- **Importance:**' line: {', '.join(missing_importance)}.")
 
     # The app uses the config's topic list in preference to rubric.md's
     # headings, so a stale list would silently override the brief.
@@ -110,6 +121,36 @@ def check_lecture(lecture_dir: pathlib_.Path) -> CheckResult:
     return result
 
 
+def _package_contract_problem(course: str, declared: str | None, lecture_template: str | None) -> str | None:
+    """Return why the package's contract does not match the one its tutor prompt declares.
+
+    The prompt is the lecture's own tutor_prompt_template if it sets one, as in
+    the app, and otherwise the one in the course's instance settings.
+    """
+    template = lecture_template
+    if template is None:
+        settings = INSTANCE_EXAMPLES_DIR / f"{course}.env.example"
+        match = PROMPT_TEMPLATE_RE.search(settings.read_text(encoding="utf-8")) if settings.exists() else None
+        if match is None:
+            return f"Cannot find the tutor prompt for course {course!r}: no TUTOR_PROMPT_TEMPLATE in {settings.name}."
+        template = match.group(1)
+    try:
+        expected = prompt_loader.declared_package_contract(prompt_loader.load_prompt_template(template))
+    except OSError as error:
+        return f"Cannot read tutor prompt {template!r}: {error}"
+    if expected is None:
+        return f"Tutor prompt {template} declares no lecture package contract."
+    contract_file = PACKAGE_CONTRACTS_DIR / f"{expected}.md"
+    if not contract_file.exists():
+        return f"Tutor prompt {template} declares contract {expected!r}, which has no file at {contract_file.name}."
+    if declared != expected:
+        return (
+            f"lecture_config.json declares package_contract {declared!r}, but tutor prompt {template} "
+            f"expects {expected!r}. See docs/lecture_package_contracts/{contract_file.name}."
+        )
+    return None
+
+
 def _topic_signature(topics: list[dict]) -> list[tuple[str, str, str]]:
     return [(t["topic_id"], t["label"], t["importance"]) for t in topics]
 
@@ -119,12 +160,14 @@ def format_check(result: CheckResult) -> str:
     lines = [f"Lecture {result.lecture_id}: {'OK' if result.ok else 'FAILED'}"]
     for error in result.errors:
         lines.append(f"  error: {error}")
+    if result.package_contract:
+        lines.append(f"Package contract: {result.package_contract}")
     if result.files:
         lines.append("Files to install:")
         lines.extend(f"  {name} ({result.sizes[name]:,} bytes)" for name in result.files)
     if result.topics:
         lines.append("Topics:")
-        lines.extend(f"  {t['topic_id']}. {t['label']} [{t['importance']}]" for t in result.topics)
+        lines.extend(f"  {t['topic_id']}. {t['label']}" for t in result.topics)
         lines.append("Load-bearing (for the researcher to confirm):")
         lines.extend(f"  {line}" for line in result.load_bearing or ["(none marked)"])
     return "\n".join(lines)
