@@ -5,6 +5,18 @@
 What result this work must achieve for the researcher, and which goal in the
 plan it serves. Describe the process objective, not merely the tools to use.
 
+## What this rests on
+
+Start with a short account of how the earlier decisions, specifications and
+wiki-defined concepts work together to give this scope its background, so that
+the reader does not have to remember them. Then list each one. Say so plainly
+when something has no record. This section does not replace links in the text
+above and below it (process, *Presentations*, the rule that a document stands alone).
+
+| Earlier decision or fact | Where it was decided | Where it is specified | Where it is explained |
+|---|---|---|---|
+| ... | Issue, PR or decision record | Document or code | Wiki page and its status |
+
 ## In scope
 
 How the work will be carried out using this project's agreed tools and records;

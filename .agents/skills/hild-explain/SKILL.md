@@ -22,7 +22,8 @@ do not assume a stacked PR targets `main`). Explain what **currently exists**, n
    decisions and dependent changes. Explain what remains for human approval;
    passing tests does not accept those decisions. Fill the template in
    conceptual order, not file order. Include mathematics **only if it helps explain this change**, load-bearing code permalinks, evidence, untested behavior and consequences. Add a **Surprises** section only when something unexpected happened; say whether follow-up work is needed. Omit sections that have nothing to say.
-5. **Wiki pages:** inspect the configured understanding map when available; list relevant pages and their statuses, then propose new/updated pages. Essential concept explanations precede review; code pages describing the merge commit follow it. If no wiki is configured, say so plainly rather than inventing links or statuses.
+5. **What this rests on:** link the scope issue's section, add what this change itself relies on, and link each thing where the text mentions it ([the rule](../../../HILD/process.md#presentations) that a document stands alone).
+6. **Wiki pages:** inspect the configured understanding map when available; list relevant pages and their statuses, then propose new/updated pages. Essential concept explanations precede review; code pages describing the merge commit follow it. If no wiki is configured, say so plainly rather than inventing links or statuses.
 
 ## Check and publish
 
