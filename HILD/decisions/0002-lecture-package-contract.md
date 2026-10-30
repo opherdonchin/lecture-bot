@@ -2,6 +2,8 @@
 
 **Date:** 2026-10-30 · **Status:** Accepted by the researcher, 2026-10-30 ([PR #45](https://github.com/opherdonchin/lecture-bot/pull/45))
 
+**Modified by [decision 0003](0003-lecture-package-handshake.md):** the comparison in item 4 is now made by the handshake's `check` and `install` as well as `check-lecture`. Everything else here still applies.
+
 **Relationship to earlier decisions:** None. [Decision 0001](0001-independent-hild-build.md) concerns the process and is unaffected.
 
 **Context:** Lecture packages used to come from lecture-bot's own pipeline. Under [scope issue #40](https://github.com/opherdonchin/lecture-bot/issues/40), local agents outside lecture-bot prepare them. The student app checks only that a package's files exist, and a tutor prompt [described the brief it expected in prose](https://github.com/opherdonchin/lecture-bot/blob/f8574e6/prompts/pml_tutor_prompt.md#L8), so an agent had no dependable way to know what was expected, and nothing noticed when a package and a prompt drifted apart. Both existing contracts leave this open: the [Backend–Tutor Runtime Contract](../../docs/backend_tutor_contract.md) only names the lecture inputs, and the [Tutor Specification Contract](../../docs/tutor_specification_contract.md) governs how a specification is written.
