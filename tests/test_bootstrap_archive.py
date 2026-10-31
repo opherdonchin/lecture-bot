@@ -17,7 +17,9 @@ BACKEND_CONTRACT = f"# Backend Contract\n\n**Contract version: {prompt_loader.BA
 GENERATOR_PROMPT = "# Generator Prompt\n\nGenerate a tutor."
 TUTOR_SPEC = "# Tutor Spec\n\nThis is the tutor specification."
 ARTIFACT_SCHEMA = json.dumps({"type": "object", "properties": {}})
-TUTOR_PROMPT = "# Tutor Prompt\n\nYou are a tutor."
+PACKAGE_CONTRACT = "# Lecture package contract `test-brief-1`\n\nThe contract."
+_DECLARATIONS = f"Backend contract: {prompt_loader.BACKEND_CONTRACT_VERSION}\n\nLecture package contract: test-brief-1\n\n"
+TUTOR_PROMPT = f"{_DECLARATIONS}# Tutor Prompt\n\nYou are a tutor."
 REPAIR_PROMPT = "# Repair Prompt\n\nRepair this spec."
 
 
@@ -40,6 +42,8 @@ def repo_root(tmp_path):
 
     (docs / "tutor_specification_contract.md").write_text(SPEC_CONTRACT, encoding="utf-8")
     (docs / "backend_tutor_contract.md").write_text(BACKEND_CONTRACT, encoding="utf-8")
+    (docs / "lecture_package_contracts").mkdir()
+    (docs / "lecture_package_contracts" / "test-brief-1.md").write_text(PACKAGE_CONTRACT, encoding="utf-8")
     (docs / "tutor_specification.md").write_text(TUTOR_SPEC, encoding="utf-8")
     (prompts / "tutor_generator_prompt.md").write_text(GENERATOR_PROMPT, encoding="utf-8")
     (prompts / "tutor_prompt_private_artifact_schema.json").write_text(ARTIFACT_SCHEMA, encoding="utf-8")
@@ -155,7 +159,7 @@ def test_bootstrap_skips_missing_files(db, tmp_path):
 
 def test_bootstrap_dry_run_does_not_write(db, repo_root):
     summary = bootstrap_archive(db, repo_root, version_key="2026-05-01", dry_run=True)
-    assert len(summary["imported"]) == 7
+    assert len(summary["imported"]) == 8
     count = db.query(models.ArchiveDocumentModel).count()
     assert count == 0
 
@@ -165,7 +169,7 @@ def test_bootstrap_sha256_match_skips_even_with_different_id(db, repo_root):
     # Second run with different version key but same file content
     summary = bootstrap_archive(db, repo_root, version_key="2026-05-02")
     assert len(summary["imported"]) == 0
-    assert len(summary["skipped"]) == 7
+    assert len(summary["skipped"]) == 8
 
 
 def test_bootstrap_updates_links_for_existing_content_when_contract_changes(db, repo_root):
@@ -188,7 +192,7 @@ def test_bootstrap_updates_links_for_existing_content_when_contract_changes(db, 
 def test_bootstrap_same_version_changed_content_uses_suffixed_id_and_real_links(db, repo_root):
     bootstrap_archive(db, repo_root, version_key="2026-05-01")
     (repo_root / "prompts" / "tutor_prompt.md").write_text(
-        "# Tutor Prompt\n\nUpdated tutor prompt.",
+        f"{_DECLARATIONS}# Tutor Prompt\n\nUpdated tutor prompt.",
         encoding="utf-8",
     )
 
@@ -206,7 +210,19 @@ def test_bootstrap_same_version_changed_content_uses_suffixed_id_and_real_links(
         "tutor_generator_prompt": "doc_tutor_generator_prompt_2026-05-01",
         "tutor_spec_contract": "doc_tutor_spec_contract_2026-05-01",
         "backend_contract": "doc_backend_contract_2026-05-01",
+        "lecture_package_contract": "doc_lecture_package_contract_2026-05-01",
     }
     activatable, reasons = helpers.is_activatable(new_prompt, db)
     assert activatable is True
     assert reasons == []
+
+
+def test_bootstrap_without_a_declared_package_contract_leaves_prompt_not_activatable(db, repo_root):
+    (repo_root / "prompts" / "tutor_prompt.md").write_text("# Tutor Prompt\n\nNo declarations.", encoding="utf-8")
+
+    bootstrap_archive(db, repo_root, version_key="2026-05-01")
+
+    prompt = helpers.get_active_document(db, "tutor_prompt")
+    activatable, reasons = helpers.is_activatable(prompt, db)
+    assert activatable is False
+    assert "missing required link: lecture_package_contract" in reasons

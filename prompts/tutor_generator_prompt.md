@@ -2,7 +2,7 @@ You are given these authoritative inputs:
 
 1. **Tutor Specification Contract**
 2. **Backend–Tutor Runtime Contract**
-3. **Lecture Package Contract**, when the course has one
+3. **Lecture Package Contract**
 4. **One concrete tutor specification**
 
 Your task is to decide whether the tutor specification can be turned into a valid runtime tutor prompt under these contracts, and to generate the runtime tutor prompt plus its private artifact JSON Schema **only if** both checks pass.
@@ -13,7 +13,7 @@ Use the following authority order:
 
 - The **Tutor Specification Contract** governs whether the specification is structurally valid.
 - The **Backend–Tutor Runtime Contract** governs runtime interface, ownership, state semantics, and lifecycle semantics.
-- The **Lecture Package Contract**, when given, governs what the tutor can rely on finding in the lecture material it receives through `rubric_text` and `lecture_context`.
+- The **Lecture Package Contract** governs what the tutor can rely on finding in the lecture material it receives through `rubric_text` and `lecture_context`.
 - The **Tutor specification** governs pedagogy, identity, priorities, evaluation philosophy, and success condition.
 
 If the tutor specification conflicts with any contract, treat that as a defect to report, not as a prompt-writing problem to silently solve.
@@ -65,7 +65,7 @@ At minimum, check for incompatible assumptions such as:
 
 Treat real conflicts with the backend contract as **Backend incompatibilities**.
 
-When a Lecture Package Contract is given, also check that the specification relies only on lecture material that contract lists. Report anything further as a **Backend incompatibility**, naming the Lecture Package Contract: the contract and the prompt change together, so the contract would have to change first.
+Also check that the specification relies only on lecture material that contract lists. Report anything further as a **Backend incompatibility**, naming the Lecture Package Contract: the contract and the prompt change together, so the contract would have to change first.
 
 You must **not** silently resolve incompatibilities by inventing backend behavior.
 
@@ -189,11 +189,11 @@ The generated runtime tutor prompt must begin with the declaration the backend c
 
 If the contract you were given states no version, report that as a **Backend incompatibility**.
 
-When a Lecture Package Contract is given, the next line of the prompt must be `Lecture package contract: ` followed by the name in that contract's title, then a blank line. Copy the name from that contract. When none is given, write no such line.
+The next line of the prompt must be `Lecture package contract: ` followed by the name in the title of the Lecture Package Contract you were given, then a blank line. Copy the name from that contract. If you were given no such contract, or it states no name, report that as a **Backend incompatibility**.
 
 ## Lecture material
 
-When a Lecture Package Contract is given, the generated prompt must tell the tutor what the lecture material holds, in terms of the sorts of information that contract lists, and must rely on nothing further. It must not describe any particular lecture's content.
+The generated prompt must tell the tutor what the lecture material holds, in terms of the sorts of information that contract lists, and must rely on nothing further. It must not describe any particular lecture's content.
 
 ## Ownership model that must be preserved
 
@@ -360,7 +360,7 @@ Be concrete. Do not use vague language like “could be improved” for blocking
 
 The runtime tutor prompt must be production-ready. It must tell the runtime tutor exactly how to behave under the backend contract. It should:
 
-- begin with the backend contract declaration, then the lecture package contract declaration when a Lecture Package Contract is given
+- begin with the backend contract declaration, then the lecture package contract declaration
 - be explicit about the tagged reply format, with no JSON response mode and the message outside the JSON object
 - explicitly name the allowed and forbidden `updated_state` keys
 - explicitly explain required-if-schema-present `private_artifact`

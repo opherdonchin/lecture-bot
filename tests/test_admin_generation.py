@@ -13,6 +13,12 @@ import app.prompt_loader as prompt_loader
 
 
 _BACKEND_CONTRACT_TEXT = f"**Contract version: {prompt_loader.BACKEND_CONTRACT_VERSION}.**\n\nbackend contract"
+_PACKAGE_CONTRACT_ID = "doc_lecture_package_contract_pml-brief-1"
+_DECLARED_PROMPT = (
+    f"Backend contract: {prompt_loader.BACKEND_CONTRACT_VERSION}\n\n"
+    "Lecture package contract: pml-brief-1\n\n"
+    "You are a tutor."
+)
 
 
 def _session():
@@ -39,7 +45,18 @@ def _make_doc(db, document_type, version_key, *, active=False, linked=None, cont
     return doc
 
 
+def _make_active_package_contract(db):
+    return _make_doc(
+        db,
+        "lecture_package_contract",
+        "pml-brief-1",
+        active=True,
+        content="# Lecture package contract `pml-brief-1`\n\nThe contract text.",
+    )
+
+
 def _make_active_generation_docs(db):
+    _make_active_package_contract(db)
     spec_contract = _make_doc(db, "tutor_spec_contract", "2026-05-11", active=True, content="spec contract")
     backend_contract = _make_doc(db, "backend_contract", "2026-05-11", active=True, content=_BACKEND_CONTRACT_TEXT)
     generator = _make_doc(
@@ -120,41 +137,46 @@ None.
     assert prompt_loader.declared_backend_contract(parsed["tutor_prompt"]) == "0.6.1"
 
 
-def test_build_user_message_includes_package_contract_only_when_given():
-    without = admin_generation._build_user_message("spec contract", "backend contract", "the spec")
-    with_contract = admin_generation._build_user_message(
-        "spec contract", "backend contract", "the spec", "the package contract"
-    )
-
-    assert "Lecture Package Contract" not in without
-    assert "# Lecture Package Contract\n\nthe package contract" in with_contract
-    assert with_contract.index("the package contract") < with_contract.index("the spec")
+def _make_spec(db, spec_contract, backend_contract):
+    return _make_doc(db, "tutor_spec", "saved", linked={
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
+    })
 
 
-def test_save_generated_prompt_links_active_package_contract_when_archive_has_one():
+def test_generation_refused_without_active_package_contract():
+    db = _session()
+    spec_contract = _make_doc(db, "tutor_spec_contract", "2026-05-11", active=True)
+    backend_contract = _make_doc(db, "backend_contract", "2026-05-11", active=True, content=_BACKEND_CONTRACT_TEXT)
+    _make_doc(db, "tutor_generator_prompt", "2026-05-11", active=True, linked={
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+    })
+
+    result = admin_generation.run_generation(db, "current spec", "Spec Title")
+
+    assert result["ok"] is False
+    assert "lecture_package_contract" in result["error"]
+
+
+def test_generation_refused_when_generator_links_no_contracts():
+    db = _session()
+    _make_active_package_contract(db)
+    _make_doc(db, "tutor_spec_contract", "2026-05-11", active=True)
+    _make_doc(db, "backend_contract", "2026-05-11", active=True, content=_BACKEND_CONTRACT_TEXT)
+    _make_doc(db, "tutor_generator_prompt", "2026-05-11", active=True)
+
+    result = admin_generation.run_generation(db, "current spec", "Spec Title")
+
+    assert result["ok"] is False
+    assert "does not link to" in result["error"]
+
+
+def test_generate_prompt_preview_sends_package_contract_before_the_specification(monkeypatch):
     db = _session()
     spec_contract, backend_contract, _generator = _make_active_generation_docs(db)
-    spec = _make_doc(db, "tutor_spec", "saved", linked={"tutor_spec_contract": spec_contract.document_id,
-                                                         "backend_contract": backend_contract.document_id})
-
-    without = admin_generation.save_generated_prompt_preview(db, spec.document_id, "prompt", '{"type":"object"}')
-    package_contract = _make_doc(db, "lecture_package_contract", "pml-brief-1", active=True, content="the contract")
-    with_contract = admin_generation.save_generated_prompt_preview(db, spec.document_id, "prompt", '{"type":"object"}')
-
-    def links_of(result):
-        doc = db.get(models.ArchiveDocumentModel, result["tutor_prompt_document_id"])
-        return helpers.parse_linked_documents(doc.linked_documents_json)
-
-    assert "lecture_package_contract" not in links_of(without)
-    assert links_of(with_contract)["lecture_package_contract"] == package_contract.document_id
-
-
-def test_generate_prompt_preview_sends_active_package_contract_to_the_model(monkeypatch):
-    db = _session()
-    spec_contract, backend_contract, _generator = _make_active_generation_docs(db)
-    spec = _make_doc(db, "tutor_spec", "saved", linked={"tutor_spec_contract": spec_contract.document_id,
-                                                         "backend_contract": backend_contract.document_id})
-    _make_doc(db, "lecture_package_contract", "pml-brief-1", active=True, content="the contract text")
+    spec = _make_spec(db, spec_contract, backend_contract)
     sent = {}
 
     def fake_call(_system_prompt, user_message):
@@ -164,7 +186,55 @@ def test_generate_prompt_preview_sends_active_package_contract_to_the_model(monk
     monkeypatch.setattr(admin_generation, "_call_openai", fake_call)
     admin_generation.generate_prompt_preview(db, spec.document_id)
 
-    assert "the contract text" in sent["user_message"]
+    message = sent["user_message"]
+    assert message.index("The contract text.") < message.index("# Tutor Specification\n")
+
+
+def test_save_generated_prompt_links_active_package_contract():
+    db = _session()
+    spec_contract, backend_contract, _generator = _make_active_generation_docs(db)
+    spec = _make_spec(db, spec_contract, backend_contract)
+
+    result = admin_generation.save_generated_prompt_preview(db, spec.document_id, "prompt", '{"type":"object"}')
+
+    doc = db.get(models.ArchiveDocumentModel, result["tutor_prompt_document_id"])
+    assert helpers.parse_linked_documents(doc.linked_documents_json)["lecture_package_contract"] == _PACKAGE_CONTRACT_ID
+
+
+def _active_spec_and_schema(db):
+    spec_contract, backend_contract, _generator = _make_active_generation_docs(db)
+    _make_doc(db, "tutor_spec", "active", active=True, linked={
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
+    })
+    _make_doc(db, "tutor_artifact_schema", "active", active=True, content='{"type":"object"}', content_format="json")
+
+
+def test_uploaded_prompt_refused_without_declarations(monkeypatch):
+    db = _session()
+    _active_spec_and_schema(db)
+    monkeypatch.setattr(admin_generation, "_call_openai_messages", lambda _messages: "should not be called")
+
+    validated = admin_generation.validate_prompt_against_active_spec(db, "You are a tutor.")
+    saved = admin_generation.save_validated_prompt(db, "You are a tutor.", "Uploaded Prompt")
+
+    assert validated["ok"] is False
+    assert any("backend contract" in failure for failure in validated["validation_failures"])
+    assert any("lecture package contract" in failure for failure in validated["validation_failures"])
+    assert saved["ok"] is False
+    assert "backend contract" in saved["error"]
+
+
+def test_uploaded_prompt_refused_when_it_declares_another_package_contract():
+    db = _session()
+    _active_spec_and_schema(db)
+    prompt = _DECLARED_PROMPT.replace("pml-brief-1", "pml-brief-2")
+
+    saved = admin_generation.save_validated_prompt(db, prompt, "Uploaded Prompt")
+
+    assert saved["ok"] is False
+    assert "pml-brief-2" in saved["error"]
 
 
 def test_generator_prompt_asks_for_the_current_contract():
@@ -311,6 +381,7 @@ def test_spec_validation_prompt_is_validation_only_and_uses_contract_sections():
     user_message = admin_generation._build_user_message(
         "spec contract text",
         "backend contract text",
+        "package contract text",
         "candidate spec text",
     )
 
@@ -333,6 +404,7 @@ def test_validate_spec_rejects_stale_active_generator_prompt(monkeypatch):
     db = _session()
     spec_contract = _make_doc(db, "tutor_spec_contract", "2026-05-11", active=True, content="spec contract")
     backend_contract = _make_doc(db, "backend_contract", "2026-05-11", active=True, content=_BACKEND_CONTRACT_TEXT)
+    _make_active_package_contract(db)
     old_spec_contract = _make_doc(db, "tutor_spec_contract", "2026-04-01", content="old spec contract")
     _make_doc(
         db,
@@ -370,6 +442,7 @@ def test_prompt_validation_prompt_uses_active_spec_and_contracts():
     user_message = admin_generation._build_prompt_validation_user_message(
         "spec contract",
         "backend contract",
+        "package contract",
         "active spec",
         "candidate prompt",
     )
@@ -431,6 +504,7 @@ def test_save_validated_spec_links_active_contracts():
     assert links == {
         "tutor_spec_contract": spec_contract.document_id,
         "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
     }
     assert doc.active is False
 
@@ -445,6 +519,7 @@ def test_list_validated_specs_requires_active_contract_links():
         linked={
             "tutor_spec_contract": spec_contract.document_id,
             "backend_contract": backend_contract.document_id,
+            "lecture_package_contract": _PACKAGE_CONTRACT_ID,
         },
     )
     _make_doc(db, "tutor_spec", "historical-without-links")
@@ -455,6 +530,7 @@ def test_list_validated_specs_requires_active_contract_links():
         linked={
             "tutor_spec_contract": "doc_tutor_spec_contract_old",
             "backend_contract": backend_contract.document_id,
+            "lecture_package_contract": _PACKAGE_CONTRACT_ID,
         },
     )
 
@@ -474,6 +550,7 @@ def test_activate_tutor_spec_marks_only_spec_active(tmp_path):
         linked={
             "tutor_spec_contract": spec_contract.document_id,
             "backend_contract": backend_contract.document_id,
+            "lecture_package_contract": _PACKAGE_CONTRACT_ID,
         },
         content="old spec",
     )
@@ -484,6 +561,7 @@ def test_activate_tutor_spec_marks_only_spec_active(tmp_path):
         linked={
             "tutor_spec_contract": spec_contract.document_id,
             "backend_contract": backend_contract.document_id,
+            "lecture_package_contract": _PACKAGE_CONTRACT_ID,
         },
         content="new spec",
     )
@@ -508,6 +586,7 @@ def test_save_validated_prompt_links_active_spec_and_contracts():
         linked={
             "tutor_spec_contract": spec_contract.document_id,
             "backend_contract": backend_contract.document_id,
+            "lecture_package_contract": _PACKAGE_CONTRACT_ID,
         },
         content="active spec",
     )
@@ -521,7 +600,7 @@ def test_save_validated_prompt_links_active_spec_and_contracts():
         content_format="json",
     )
 
-    result = admin_generation.save_validated_prompt(db, "uploaded prompt", "Uploaded Prompt")
+    result = admin_generation.save_validated_prompt(db, _DECLARED_PROMPT, "Uploaded Prompt")
 
     assert result["ok"] is True
     prompt_doc = db.get(models.ArchiveDocumentModel, result["tutor_prompt_document_id"])
@@ -532,6 +611,7 @@ def test_save_validated_prompt_links_active_spec_and_contracts():
         "tutor_generator_prompt": generator.document_id,
         "tutor_spec_contract": spec_contract.document_id,
         "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
     }
     assert prompt_doc.active is False
 
@@ -546,6 +626,7 @@ def test_save_generated_prompt_preview_can_activate(tmp_path, monkeypatch):
         linked={
             "tutor_spec_contract": spec_contract.document_id,
             "backend_contract": backend_contract.document_id,
+            "lecture_package_contract": _PACKAGE_CONTRACT_ID,
         },
         content="saved spec",
     )
@@ -559,7 +640,7 @@ def test_save_generated_prompt_preview_can_activate(tmp_path, monkeypatch):
     result = admin_generation.save_generated_prompt_preview(
         db,
         spec.document_id,
-        "generated prompt",
+        _DECLARED_PROMPT,
         '{"type":"object"}',
         activate=True,
     )
@@ -572,7 +653,7 @@ def test_save_generated_prompt_preview_can_activate(tmp_path, monkeypatch):
     assert links["tutor_spec_contract"] == spec_contract.document_id
     assert links["backend_contract"] == backend_contract.document_id
     assert prompt_doc.active is True
-    assert paths["tutor_prompt"].read_text(encoding="utf-8") == "generated prompt"
+    assert paths["tutor_prompt"].read_text(encoding="utf-8") == _DECLARED_PROMPT
 
 
 def test_activate_tutor_prompt_writes_canonical_files(tmp_path, monkeypatch):
@@ -603,8 +684,9 @@ def test_activate_tutor_prompt_writes_canonical_files(tmp_path, monkeypatch):
             "tutor_generator_prompt": generator.document_id,
             "tutor_spec_contract": spec_contract.document_id,
             "backend_contract": backend_contract.document_id,
+            "lecture_package_contract": _PACKAGE_CONTRACT_ID,
         },
-        content="generated prompt",
+        content=_DECLARED_PROMPT,
     )
     paths = {
         "tutor_prompt": tmp_path / "tutor_prompt.md",
@@ -617,7 +699,7 @@ def test_activate_tutor_prompt_writes_canonical_files(tmp_path, monkeypatch):
 
     assert ok is True
     assert "activated" in message
-    assert paths["tutor_prompt"].read_text(encoding="utf-8") == "generated prompt"
+    assert paths["tutor_prompt"].read_text(encoding="utf-8") == _DECLARED_PROMPT
     assert paths["tutor_artifact_schema"].read_text(encoding="utf-8") == '{"type":"object"}'
     assert paths["tutor_spec"].read_text(encoding="utf-8") == "generated spec"
     assert db.get(models.ArchiveDocumentModel, prompt.document_id).active is True

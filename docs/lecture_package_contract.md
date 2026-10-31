@@ -54,7 +54,7 @@ These come from the code and hold whatever the contract. The code is the authori
 
 A contract is valid if:
 
-1. **It has a name ending in a version,** such as `pml-brief-1`, and its own file, `docs/lecture_package_contracts/<name>.md`.
+1. **It has a name ending in a version,** such as `pml-brief-1`, its own file, `docs/lecture_package_contracts/<name>.md`, and the title ``# Lecture package contract `<name>` ``, from which the archive reads the name.
 2. **A tutor prompt declares it,** and the contract names that prompt. A prompt declares it after its backend contract line, and the backend removes both lines before the model sees the prompt:
 
    ```text

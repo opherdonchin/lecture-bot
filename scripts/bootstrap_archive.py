@@ -23,6 +23,7 @@ import sqlalchemy.orm as sqlalchemy_orm
 import app.archive_helpers as helpers
 import app.db as db_module
 import app.models as models  # noqa: F401 — registers models with Base
+import app.prompt_loader as prompt_loader
 
 
 DOCS_DIR = REPO_ROOT / "docs"
@@ -33,6 +34,20 @@ def _content_format(path: pathlib.Path) -> str:
     return "json" if path.suffix == ".json" else "markdown"
 
 
+def _package_contract_candidates(prompt_path: pathlib.Path, docs_dir: pathlib.Path) -> list[dict]:
+    """Return the lecture package contract the tutor prompt declares, if it declares one."""
+    if not prompt_path.exists():
+        return []
+    name = prompt_loader.declared_package_contract(prompt_path.read_text(encoding="utf-8"))
+    if name is None:
+        return []
+    return [{
+        "document_type": "lecture_package_contract",
+        "source_path": docs_dir / "lecture_package_contracts" / f"{name}.md",
+        "title": f"Lecture Package Contract {name}",
+    }]
+
+
 def _build_import_items(
     repo_root: pathlib.Path,
     version_key: str,
@@ -40,7 +55,7 @@ def _build_import_items(
     docs_dir = repo_root / "docs"
     prompts_dir = repo_root / "prompts"
 
-    candidates = [
+    candidates = _package_contract_candidates(prompts_dir / "tutor_prompt.md", docs_dir) + [
         {
             "document_type": "tutor_spec_contract",
             "source_path": docs_dir / "tutor_specification_contract.md",
@@ -112,13 +127,14 @@ def _build_linked_documents(items: list[dict]) -> dict[str, str | None]:
 
         if dt == "tutor_prompt":
             for link_type in ("tutor_spec", "tutor_artifact_schema", "tutor_generator_prompt",
-                              "tutor_spec_contract", "backend_contract"):
+                              "tutor_spec_contract", "backend_contract", "lecture_package_contract"):
                 if link_type in by_type:
                     links[link_type] = by_type[link_type]
 
         elif dt == "tutor_spec":
-            if "tutor_spec_contract" in by_type:
-                links["tutor_spec_contract"] = by_type["tutor_spec_contract"]
+            for link_type in ("tutor_spec_contract", "backend_contract", "lecture_package_contract"):
+                if link_type in by_type:
+                    links[link_type] = by_type[link_type]
 
         elif dt in ("tutor_generator_prompt", "spec_repair_prompt"):
             for link_type in ("tutor_spec_contract", "backend_contract"):
