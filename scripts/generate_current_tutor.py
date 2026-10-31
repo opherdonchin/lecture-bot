@@ -1,5 +1,6 @@
 """
-Generate a runtime tutor prompt from docs/tutor_specification.md.
+Generate a runtime tutor prompt from the specification of the configured tutor
+(TUTOR_PROMPT_TEMPLATE; pml_tutor_prompt.md reads docs/pml_tutor_specification.md).
 
 By default this records generated documents in the archive but leaves the live
 runtime files unchanged. Pass --activate to replace the current tutor prompt,

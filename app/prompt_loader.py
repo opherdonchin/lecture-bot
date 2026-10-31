@@ -11,7 +11,7 @@ _PLACEHOLDER_RE = re_.compile(r"{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}")
 # version in which the contract last changed (docs/backend_tutor_contract.md).
 # A tutor prompt declares the contract it was written for on its first line;
 # a prompt declaring another version, or none, is not loaded.
-BACKEND_CONTRACT_VERSION = "0.6.1"
+BACKEND_CONTRACT_VERSION = "0.7.0"
 _CONTRACT_DECLARATION_RE = re_.compile(r"\ABackend contract: *(\S+)[ \t]*\r?\n(?:[ \t]*\r?\n)?")
 # A prompt may also declare the lecture package it expects, next after that line
 # (docs/lecture_package_contracts/). The package check compares it with the
@@ -28,6 +28,17 @@ def load_prompt_template(template_name: str) -> str:
 def private_artifact_schema_path(template_name: str) -> pathlib_.Path:
     template_path = _PROMPTS_DIR / template_name
     return template_path.with_name(f"{template_path.stem}_private_artifact_schema.json")
+
+
+def tutor_document_paths(template_name: str, repo_root: pathlib_.Path) -> dict[str, pathlib_.Path]:
+    """Return where a tutor's prompt, schema and specification live, named after its prompt file."""
+    prompts_dir = repo_root / "prompts"
+    stem = pathlib_.Path(template_name).stem
+    return {
+        "tutor_prompt": prompts_dir / template_name,
+        "tutor_artifact_schema": prompts_dir / f"{stem}_private_artifact_schema.json",
+        "tutor_spec": repo_root / "docs" / f"{stem.replace('tutor_prompt', 'tutor_specification')}.md",
+    }
 
 
 def load_private_artifact_schema_json(template_name: str) -> str | None:

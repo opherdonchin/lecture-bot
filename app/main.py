@@ -111,16 +111,13 @@ def start_session(request: schema.StartSessionRequest, db: sqlalchemy_orm.Sessio
     if not _lecture_is_active(lecture_package["config"]):
         raise fa.HTTPException(status_code=404, detail=f"Lecture {request.lecture_id} is not open yet")
     _refuse_unusable_tutor_prompt(lecture_package)
+    _refuse_lecture_without_openings(lecture_package)
     
     # Create the session
     session = session_manager.create_session(db, request.student_id, request.lecture_id, lecture_package)
-    state = session_manager.load_state(db, session.session_id)
     
     # Generate opening message
-    opening_message = bot_engine.build_opening_message(
-        lecture_package,
-        sampled_topic_ids=state.get("topics_sampled", []),
-    )
+    opening_message = bot_engine.build_opening_message(lecture_package, session.session_id)
     
     # Save the opening message
     session_manager.append_message(db, session.session_id, "assistant", opening_message)
@@ -221,11 +218,6 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         "timing_reliable": True,
     }
 
-    normalized_user_message = bot_engine.rewrite_opening_topic_selection(
-        lecture_package=lecture_package,
-        state=state,
-        user_message=request.message,
-    )
     topic_defs = bot_engine.resolve_topic_defs(lecture_package)
     lecture_context = bot_engine.build_dialogue_context(
         lecture_package,
@@ -300,7 +292,7 @@ def send_message(request: schema.SendMessageRequest, db: sqlalchemy_orm.Session 
         turn_index=turn_index,
         state_before=state,
         recent_messages=recent_messages,
-        normalized_user_message=normalized_user_message,
+        normalized_user_message=request.message,
         rendered_system_prompt=rendered_system_prompt,
         prompt_template_name=bot_engine.get_tutor_prompt_template(lecture_package),
         settings=settings,
@@ -523,6 +515,13 @@ def _refuse_unusable_tutor_prompt(lecture_package: dict) -> None:
     problem = prompt_loader.prompt_contract_problem(bot_engine.get_tutor_prompt_template(lecture_package))
     if problem:
         _log.error("refusing tutor request for %s: %s", lecture_package.get("lecture_id"), problem)
+        raise fa.HTTPException(status_code=503, detail=TUTOR_UNAVAILABLE_MESSAGE)
+
+
+def _refuse_lecture_without_openings(lecture_package: dict) -> None:
+    """Stop the request when the lecture's package supplies no opening messages."""
+    if not lecture_package["config"].get("opening_messages"):
+        _log.error("refusing tutor request for %s: no opening_messages", lecture_package.get("lecture_id"))
         raise fa.HTTPException(status_code=503, detail=TUTOR_UNAVAILABLE_MESSAGE)
 
 
@@ -946,8 +945,9 @@ def restart_session(request: schema.RestartSessionRequest, db: sqlalchemy_orm.Se
     except lecture_loader.LectureNotFoundError as e:
         raise fa.HTTPException(status_code=404, detail=str(e))
 
+    _refuse_lecture_without_openings(lecture_package)
     new_session = session_manager.create_session(db, request.student_id, request.lecture_id, lecture_package)
-    opening_message = bot_engine.build_opening_message(lecture_package)
+    opening_message = bot_engine.build_opening_message(lecture_package, new_session.session_id)
     session_manager.append_message(db, new_session.session_id, "assistant", opening_message)
     db.commit()
 

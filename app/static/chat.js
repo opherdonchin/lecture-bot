@@ -389,9 +389,9 @@ function appendGradeMessage(data) {
   );
   appendInfoList(
     row,
-    "Not yet evidenced",
+    "Not part of this session so far",
     data.missing_topics || [],
-    "No unevidenced lecture topics listed."
+    "Every lecture topic has come up."
   );
 
   transcript.appendChild(row);

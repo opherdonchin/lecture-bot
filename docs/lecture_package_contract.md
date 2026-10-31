@@ -4,7 +4,7 @@
 
 | Contract | For |
 |---|---|
-| [`pml-brief-1`](lecture_package_contracts/pml-brief-1.md) | The PML tutor, [`prompts/pml_tutor_prompt.md`](../prompts/pml_tutor_prompt.md) |
+| [`pml-brief-2`](lecture_package_contracts/pml-brief-2.md) | The PML tutor, [`prompts/pml_tutor_prompt.md`](../prompts/pml_tutor_prompt.md) |
 
 They sit beside the [Backend–Tutor Runtime Contract](backend_tutor_contract.md), which says what the backend and a prompt exchange, and the [Tutor Specification Contract](tutor_specification_contract.md), which says what a tutor specification must contain. [Concept-tutor-contracts](https://github.com/opherdonchin/lecture-bot/wiki/Concept-tutor-contracts) explains how they fit together, and [Concept-lecture-package](https://github.com/opherdonchin/lecture-bot/wiki/Concept-lecture-package) explains packages.
 
@@ -16,7 +16,7 @@ They sit beside the [Backend–Tutor Runtime Contract](backend_tutor_contract.md
 |---|---|---|---|
 | [1. What the app requires](#1-what-the-app-requires-of-every-package) | What every package needs in order to run, whatever its contract | The code; this section only describes it | Exact |
 | [2. What makes a contract valid](#2-what-makes-a-contract-valid) | The rules any contract must follow | The researcher, by accepting this document | Exact |
-| 3. A contract, such as [`pml-brief-1`](lecture_package_contracts/pml-brief-1.md) | The sorts of information one tutor prompt expects about a lecture | The researcher, by accepting it with the prompt that uses it | The sorts of information, not their wording or layout |
+| 3. A contract, such as [`pml-brief-2`](lecture_package_contracts/pml-brief-2.md) | The sorts of information one tutor prompt expects about a lecture | The researcher, by accepting it with the prompt that uses it | The sorts of information, not their wording or layout |
 
 **Two things a contract does not decide:**
 
@@ -32,7 +32,8 @@ These come from the code and hold whatever the contract. The code is the authori
 - a folder named for the lecture;
 - `lecture_config.json`, valid JSON ([`load_lecture_package`](../app/lecture_loader.py));
 - `rubric.md`, which the backend sends to the tutor as `rubric_text`;
-- every context file marked required in the course's `lectures/config.json`.
+- every context file marked required in the course's `lectures/config.json`;
+- `opening_messages` in `lecture_config.json`: a non-empty list of the messages a session can open with. The backend picks one at random, seeded by the session, and refuses to start a session without any.
 
 **Topic headings in `rubric.md`,** the one place the code reads the text itself. A heading is `### T<n>. <name>` or `### T<n> — <name>` ([`parse_rubric_topics`](../app/bot_engine.py)). The app would still open a session with no headings, but it keeps scores only for known topics, so nothing could be scored. The [package check](#comparing-declarations) therefore fails without them.
 
@@ -54,13 +55,13 @@ These come from the code and hold whatever the contract. The code is the authori
 
 A contract is valid if:
 
-1. **It has a name ending in a version,** such as `pml-brief-1`, its own file, `docs/lecture_package_contracts/<name>.md`, and the title ``# Lecture package contract `<name>` ``, from which the archive reads the name.
+1. **It has a name ending in a version,** such as `pml-brief-2`, its own file, `docs/lecture_package_contracts/<name>.md`, and the title ``# Lecture package contract `<name>` ``, from which the archive reads the name.
 2. **A tutor prompt declares it,** and the contract names that prompt. A prompt declares it after its backend contract line, and the backend removes both lines before the model sees the prompt:
 
    ```text
-   Backend contract: 0.6.1
+   Backend contract: 0.7.0
 
-   Lecture package contract: pml-brief-1
+   Lecture package contract: pml-brief-2
    ```
 
 3. **It fits level 1.** The tutor receives only `rubric_text` and the context files, so everything a contract expects must arrive through them, and the topic headings must be there.

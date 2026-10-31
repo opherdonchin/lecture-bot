@@ -14,10 +14,10 @@ import app.admin_documents as admin_documents
 import app.archive_helpers as helpers
 import app.config as config_module
 import app.models as models
+import app.prompt_loader as prompt_loader
 
 
 REPO_ROOT = pathlib.Path(__file__).parent.parent
-CURRENT_SPEC_PATH = REPO_ROOT / "docs" / "tutor_specification.md"
 
 
 REQUIRED_GENERATION_DOCUMENTS = (
@@ -530,7 +530,9 @@ def activate_tutor_spec(
     if not spec_is_validated_against_active_contracts(db, doc):
         return False, "Tutor spec is not validated against the active contracts."
 
-    spec_path = repo_root / "docs" / "tutor_specification.md"
+    spec_path = prompt_loader.tutor_document_paths(
+        config_module.get_settings().tutor_prompt_template, repo_root
+    )["tutor_spec"]
     spec_path.parent.mkdir(parents=True, exist_ok=True)
     spec_path.write_text(doc.content_text, encoding="utf-8")
     db.query(models.ArchiveDocumentModel).filter(
@@ -891,7 +893,9 @@ def run_generation_from_current_spec(
     spec_title: str = "Current Tutor Specification",
     activate: bool = False,
 ) -> dict:
-    spec_path = repo_root / "docs" / "tutor_specification.md"
+    spec_path = prompt_loader.tutor_document_paths(
+        config_module.get_settings().tutor_prompt_template, repo_root
+    )["tutor_spec"]
     spec_text = spec_path.read_text(encoding="utf-8")
     result = run_generation(db, spec_text=spec_text, spec_title=spec_title)
     if not result.get("ok") or not activate:

@@ -4,17 +4,17 @@ This contract defines the runtime interface between the backend and the model-ba
 
 The tutor specification governs pedagogy. This runtime contract governs how a tutoring turn is called, what the tutor may return, and which parts of that return become state, messages, logs, grades, or lifecycle effects.
 
-**Contract version: 0.6.1.** A contract version is the development version in which the contract last changed. It stays the same across releases that leave the contract alone. The code states the version it implements (`BACKEND_CONTRACT_VERSION` in `app/prompt_loader.py`).
+**Contract version: 0.7.0.** A contract version is the development version in which the contract last changed. It stays the same across releases that leave the contract alone. The code states the version it implements (`BACKEND_CONTRACT_VERSION` in `app/prompt_loader.py`).
 
 **What invalidates this contract.** A change to what the backend provides or requires always does, and the contract then gets a new version. A change to a tutor specification or to the prompt generator may: a specification may come to need something the backend doesn't provide, and a generator may change how this contract is specified or what's required of it. A pull request changing either of those says whether it invalidates this contract.
 
 A runtime tutor prompt must declare the contract it was written for on its first line, followed by a blank line:
 
 ```text
-Backend contract: 0.6.1
+Backend contract: 0.7.0
 ```
 
-The backend removes that line before sending the prompt to the model. It refuses to start or continue a session, with HTTP 503 and a logged reason, when the lecture's prompt declares another version or none. Version 0.6.1 introduced the tagged reply format (§3); earlier prompts asked for JSON only and do not run under this contract.
+The backend removes that line before sending the prompt to the model. It refuses to start or continue a session, with HTTP 503 and a logged reason, when the lecture's prompt declares another version or none. Version 0.6.1 introduced the tagged reply format (§3). Version 0.7.0 changed the opening, the order of `sampled_topics`, the grade policy and the meaning of `tutor_comment`.
 
 ---
 
@@ -24,8 +24,8 @@ Ordinary model-backed tutor calls happen during `/send_message`.
 
 The backend owns:
 
-- session creation and opening message behavior,
-- topic sampling,
+- session creation and the opening message, chosen at random, seeded by the session, from those the lecture package supplies,
+- topic sampling; `sampled_topics` arrive in lecture order,
 - recent-message selection,
 - runtime prompt rendering,
 - timing metadata,
@@ -52,9 +52,9 @@ For each ordinary tutoring turn, the backend injects runtime data into the tutor
 - `rubric_text`
 - `lecture_context`
 
-`current_tutoring_state` includes backend-computed strategic guidance. `grade_impact_deltas` is a JSON object mapping each sampled topic ID to the integer calibrated ΔGrade the student-facing session credit would gain if the next probe on that topic succeeds. The backend computes this under policy `ranked-target-saturation-v1` as the actual trial difference between the current calibrated grade and the calibrated grade after a projected successful probe, with full re-ranking. The backend does not force a topic's delta to zero merely because it already satisfies its current ranked target; a target-satisfied topic may still have a small positive delta when re-ranking would raise the grade.
+`current_tutoring_state` includes backend-computed strategic guidance. `grade_impact_deltas` is a JSON object mapping each sampled topic ID to the integer calibrated ΔGrade the student-facing session credit would gain if the next probe on that topic succeeds. The backend computes this under policy `ranked-target-saturation-v2` as the actual trial difference between the current calibrated grade and the calibrated grade after a projected successful probe, with full re-ranking. The backend does not force a topic's delta to zero merely because it already satisfies its current ranked target; a target-satisfied topic may still have a small positive delta when re-ranking would raise the grade.
 
-The same state may include `session_credit_status` (`"in_progress"` or `"full_credit_reached"`), `grade_relevant_next_move` (the sampled topic ID with the largest positive calibrated delta, or `null`), and `ranked_credit_state` (a per-ranked-slot diagnostic breakdown of raw mastery, full-credit target, credit completion, credit contribution, and raw mastery gap). When `session_credit_status == "full_credit_reached"` and no re-ranking can raise the grade, `grade_relevant_next_move` is `null` and all grade-relevant deltas are zero. The tutor reads these values for move selection and must not recompute or modify them. The tutor must not infer a required number of completed sampled topics from these deltas or expose ranked-slot arithmetic to the student.
+The same state may include `session_credit_status` (`"in_progress"` or `"full_credit_reached"`), `grade_relevant_next_move` (the sampled topic ID with the largest positive calibrated delta, or `null`), and `ranked_credit_state` (a per-ranked-slot diagnostic breakdown of raw mastery, full-credit target, credit completion, credit contribution, and raw mastery gap). When `session_credit_status == "full_credit_reached"` and no re-ranking can raise the grade, `grade_relevant_next_move` is `null` and all grade-relevant deltas are zero. The tutor must not recompute or modify these values; what they mean is stated here, and how the tutor uses them is for its specification. The tutor must not infer a required number of completed sampled topics from these deltas or expose ranked-slot arithmetic to the student.
 
 `chat_language` is the course's chat-language setting, `"english"` or `"any"`, fixed for the instance. Under `"english"` the backend refuses non-English student messages before the tutor is called and replaces non-English tutor replies; under `"any"` it does neither. Final reports are required to be English under both values. The tutor uses `chat_language` only to choose the language of its reply.
 
@@ -96,7 +96,7 @@ When `private_artifact_schema_json` exists for the session:
 {"updated_state": {}, "private_artifact": {}}
 ```
 
-The message carries LaTeX in its ordinary form, with single backslashes. The JSON object should contain no LaTeX or backslashes. The backend does not request a JSON response mode.
+The message carries LaTeX in its ordinary form, with single backslashes. The chat renders mathematics only between `\( ... \)` inline and `\[ ... \]` for display; it does not render `$...$`. The JSON object should contain no LaTeX or backslashes. The backend does not request a JSON response mode.
 
 **Why the message is outside JSON:** inside a JSON string every backslash must be escaped, and the model sometimes writes a garbled escape instead (`\u0018` for `\u2018`, `\b` for the start of `\beta`). The student then sees a control character in place of a symbol ([scope issue #31, PR E](https://github.com/opherdonchin/lecture-bot/issues/31#user-content-pr-e)).
 
@@ -186,6 +186,10 @@ Calibration guidance (tutor-facing, for inclusion in generated runtime prompts):
 `evidence_notes` must be a JSON object mapping canonical topic IDs to short plain-text strings describing observed evidence for that topic. Values that are not strings are coerced to strings.
 
 The tutor must not return backend-owned fields as proposed updates. The backend ignores unknown or disallowed state keys.
+
+### 4.4 tutor_comment field format
+
+`tutor_comment` is free text that the tutor writes for its own use. The backend returns it unchanged in `current_tutoring_state` on the next turn and doesn't otherwise read it. Students never see it. A value replaces the previous one whole, and omitting the field keeps the previous one. The backend sets no length limit on it. Like the rest of the JSON object, it should contain no LaTeX or backslashes.
 
 ### 4.1 Private artifact separation
 

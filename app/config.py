@@ -28,7 +28,6 @@ class Settings(ps.BaseSettings):
     max_dialogue_context_chars: int = 45000
     max_grading_context_chars: int = 70000
     sampled_topic_count: int = 5
-    opening_topic_choice_count: int = 3
     tutor_prompt_template: str = "tutor_prompt.md"  # Default prompt template name
     student_restart_command: str = "sudo -n systemctl restart lecture-bot.service"
     # Languages students and the tutor may write in: "english" (the default) or "any".

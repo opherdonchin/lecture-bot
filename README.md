@@ -159,7 +159,6 @@ Use [.env.example](.env.example) as the committed starting point for local or de
 | `MAX_DIALOGUE_CONTEXT_CHARS` | No | Context character cap for dialogue prompts. Defaults to `45000`. |
 | `MAX_GRADING_CONTEXT_CHARS` | No | Context character cap for grading/report context. Defaults to `70000`. |
 | `SAMPLED_TOPIC_COUNT` | No | Number of sampled candidate focus topics per session. Defaults to `5`; this is opportunity space, not the number of ranked scoring slots. |
-| `OPENING_TOPIC_CHOICE_COUNT` | No | Number of sampled topics shown in the opening prompt. Defaults to `3`. |
 | `APP_NAME`, `APP_ENV` | No | Metadata/environment labels; not used for routing. |
 
 Do not commit `.env` or secret values.

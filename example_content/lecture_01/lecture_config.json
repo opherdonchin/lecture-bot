@@ -3,6 +3,9 @@
   "title": "Lecture 1: Probabilities",
   "course": "Statistics 367-1-4361",
   "active": true,
+  "opening_messages": [
+    "Is there something you'd like to focus on, or would you like to begin at the beginning, such as at what probabilities are for?"
+  ],
   "files": {
     "slides": {
       "source": "Lecture 1 Probabilities.pptx",
