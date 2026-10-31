@@ -23,10 +23,8 @@ is in Git and the [journal](journal/).
 - **Where state lives:** at the researcher's direction (2026-10-21), the plan
   and journal are updated by direct commits to `main` only, so work branches
   carry product changes alone.
-- **Production runs `v0.6.1` for PML and `v0.6.0` for Statistics.**
-  - `v0.6.1` ([PR #36](https://github.com/opherdonchin/lecture-bot/pull/36), [PR #37](https://github.com/opherdonchin/lecture-bot/pull/37), [PR #38](https://github.com/opherdonchin/lecture-bot/pull/38)) brings: renderable math, one question per turn, conservative scoring, the five-minute warning, the tagged reply format, and backend contract `0.6.1`, which each prompt must declare.
+- **Production runs [PR #53](https://github.com/opherdonchin/lecture-bot/pull/53) (commit `f39d96e`, backend contract `0.7.0`) for PML and `v0.6.0` for Statistics.** L01 and L02 are live on the generated tutor from 2026-10-31, with packages under `pml-brief-2`.
   - **Statistics is pinned** to `/srv/lecture-bot/code-v0.6.0` by systemd drop-ins (`pin-v0.6.0.conf`). Its prompt declares no contract, so the new code would refuse it. The pin comes off under [catch-up scope issue #51](https://github.com/opherdonchin/lecture-bot/issues/51).
-  - **PML L01 is live**, with brief v2. Its bonus window closes on **2026-10-28**.
 - **Scopes:**
   - **In progress:** [scope issue #31](https://github.com/opherdonchin/lecture-bot/issues/31), the PML tutor from compact briefs; PRs #36 to #38 are merged. [Scope issue #39](https://github.com/opherdonchin/lecture-bot/issues/39), PML's tutor generated for contract 0.6.1 and archived with provenance: PR A is merged ([PR #50](https://github.com/opherdonchin/lecture-bot/pull/50)), and PR B is next.
   - **In progress:** [scope issue #40](https://github.com/opherdonchin/lecture-bot/issues/40), agent-prepared lecture packages ([PR #41](https://github.com/opherdonchin/lecture-bot/pull/41)), superseding scope issue #18 (closed).
@@ -44,8 +42,8 @@ is in Git and the [journal](journal/).
 
 ## Next steps
 
-1. **Watch the first live PML sessions on `v0.6.1`:** fallbacks, control characters, scoring and the five-minute warning. Then review score calibration on real answers.
-2. **[Scope issue #39, PR B](https://github.com/opherdonchin/lecture-bot/issues/39#user-content-pr-b), [PR #53](https://github.com/opherdonchin/lecture-bot/pull/53):** the tutor is working in simulation. The researcher tries L02 and then L01 locally and reviews the routes and openings, then reviews and merges the PR. **Launch, at the researcher's go-ahead after merge:** check that no session is active, install the PML archive, deploy the new code, set `RECENT_MESSAGE_LIMIT=14`, push the briefs and make L02 active, leaving L01 inactive until ready. The researcher tells students about the grading change when L02 goes active. L03 follows once the transcript of the 2026-11-04 lecture exists.
+1. **The researcher posts the announcement to students.**
+2. **Watch the first real sessions on the new tutor:** whether scoring is too strict for careful, slow students; how many topics sessions reach; false faults; quizzing on notation. **Then** fix [the missing prompt link](https://github.com/opherdonchin/lecture-bot/issues/54), put the redo rule in the Moodle import before any grades are imported, and prepare L03 once the transcript of the 2026-11-04 lecture exists.
 3. **[Scope issue #46](https://github.com/opherdonchin/lecture-bot/issues/46)** (approved): one handshake between course agents and an instance, over SSH now, for Lecture 3 onward. [PR #47](https://github.com/opherdonchin/lecture-bot/pull/47), then [PR #48](https://github.com/opherdonchin/lecture-bot/pull/48) and [PR #49](https://github.com/opherdonchin/lecture-bot/pull/49), are in review. Then a deploy, PML's recipe moved to its repository, and a fresh agent preparing Lecture 3.
 4. The researcher reviews the wiki page [Concept-tutor-json-replies](https://github.com/opherdonchin/lecture-bot/wiki/Concept-tutor-json-replies), updated for the tagged format and now `needs-review`.
 5. **[Scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20):** create `develop`; from then on, work merges there and `v0.7.0` is the next release.
@@ -54,5 +52,6 @@ is in Git and the [journal](journal/).
 
 ## Open decisions
 
-- Whether to keep the tutor's message, rather than showing the fallback, when the retry still lacks a valid private note. The contract currently says fallback.
+- Whether to keep the tutor's message, rather than showing the fallback, when the retry still lacks a valid private note. The contract currently says fallback. It didn't occur in the last 480 simulated turns.
+- Whether the grade fills too fast: one topic at 60 and three near developing gives about 88.
 - The PML Moodle grade-import setup (course ID, deadlines), which must also apply the researcher's rule for redoing a tutor after its deadline ([journal](journal/2026-10-31.md)). The L01 submissions go to the [tutor assignment](https://moodle.bgu.ac.il/moodle/mod/assign/view.php?id=3454021); full credit before the lecture at 11:00 on Wednesday 2026-10-28, half credit before the final exam.
