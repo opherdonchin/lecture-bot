@@ -183,7 +183,7 @@ The runtime prompt must explicitly state that:
 - canonical topic IDs are backend-defined and must not be invented by the tutor
 - the tutor must not compute authoritative grades, reports, routing outputs, or backend control flow
 
-## Backend contract declaration
+## Contract declaractions
 
 The generated runtime tutor prompt must begin with the declaration the backend contract requires: on its first line, `Backend contract: ` followed by the version in the **Contract version** statement of the Backend–Tutor Runtime Contract you were given, then a blank line. Copy the version from that contract, never from memory or from an example. The backend refuses to run a prompt that declares another version or none.
 
