@@ -1,4 +1,5 @@
 import json
+import pathlib
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -8,6 +9,10 @@ import app.admin_generation as admin_generation
 import app.archive_helpers as helpers
 import app.db as db_module
 import app.models as models
+import app.prompt_loader as prompt_loader
+
+
+_BACKEND_CONTRACT_TEXT = f"**Contract version: {prompt_loader.BACKEND_CONTRACT_VERSION}.**\n\nbackend contract"
 
 
 def _session():
@@ -36,7 +41,7 @@ def _make_doc(db, document_type, version_key, *, active=False, linked=None, cont
 
 def _make_active_generation_docs(db):
     spec_contract = _make_doc(db, "tutor_spec_contract", "2026-05-11", active=True, content="spec contract")
-    backend_contract = _make_doc(db, "backend_contract", "2026-05-11", active=True, content="backend contract")
+    backend_contract = _make_doc(db, "backend_contract", "2026-05-11", active=True, content=_BACKEND_CONTRACT_TEXT)
     generator = _make_doc(
         db,
         "tutor_generator_prompt",
@@ -81,6 +86,49 @@ Return JSON only.
         "additionalProperties": False,
     }
     assert parsed["tutor_prompt"] == "Return JSON only."
+
+
+def test_parse_generator_output_keeps_declaration_and_tagged_format():
+    prompt = (
+        "Backend contract: 0.6.1\n\n"
+        "Reply as:\n<assistant_message>\n...\n</assistant_message>\n"
+        '{"updated_state": {}}'
+    )
+    raw = f"""### Conformance failures
+None.
+
+### Backend incompatibilities
+None.
+
+### Recommended omissions
+None.
+
+### Private artifact schema
+```json
+{{"type":"object"}}
+```
+
+### Runtime tutor prompt
+```text
+{prompt}
+```
+"""
+
+    parsed = admin_generation.parse_generator_output(raw)
+
+    assert parsed["tutor_prompt"] == prompt
+    assert prompt_loader.declared_backend_contract(parsed["tutor_prompt"]) == "0.6.1"
+
+
+def test_generator_prompt_asks_for_the_current_contract():
+    generator = pathlib.Path("prompts/tutor_generator_prompt.md").read_text(encoding="utf-8")
+
+    assert "<assistant_message>" in generator
+    assert "`Backend contract: `" in generator
+    assert "JSON only" not in generator
+    assert "JSON-only" not in generator
+    # The version comes from the contract the generator is given, not from its own text.
+    assert prompt_loader.BACKEND_CONTRACT_VERSION not in generator
 
 
 def test_parse_generator_output_failed_sections_do_not_require_prompt():
@@ -235,7 +283,7 @@ def test_spec_validation_prompt_is_validation_only_and_uses_contract_sections():
 def test_validate_spec_rejects_stale_active_generator_prompt(monkeypatch):
     db = _session()
     spec_contract = _make_doc(db, "tutor_spec_contract", "2026-05-11", active=True, content="spec contract")
-    backend_contract = _make_doc(db, "backend_contract", "2026-05-11", active=True, content="backend contract")
+    backend_contract = _make_doc(db, "backend_contract", "2026-05-11", active=True, content=_BACKEND_CONTRACT_TEXT)
     old_spec_contract = _make_doc(db, "tutor_spec_contract", "2026-04-01", content="old spec contract")
     _make_doc(
         db,
@@ -279,6 +327,8 @@ def test_prompt_validation_prompt_uses_active_spec_and_contracts():
 
     assert "validate an uploaded runtime tutor prompt" in prompt
     assert "updated_state as a sparse delta" in prompt
+    assert "<assistant_message>" in prompt
+    assert "JSON-only" not in prompt
     assert "### Validation failures" in prompt
     assert "### Recommended notes" in prompt
     assert "spec contract" in user_message

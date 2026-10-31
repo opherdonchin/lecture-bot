@@ -210,7 +210,7 @@ The section must state the specification's position on each of the following:
 
 - **evaluative state schemas**: defined in specification, delegated to runtime, partly delegated to runtime, or not applicable (per §6.2).
 - **input-variable handling**: whether the specification constrains how specific runtime inputs are used, or leaves this to the generator and runtime.
-- **output shape and state update rules**: by default delegated to the generator and backend/runtime contract; the specification may constrain them only pedagogically.
+- **output shape and state update rules**: by default delegated to the generator and backend/runtime contract; the specification may constrain them only pedagogically. This includes the tagged reply format and the prompt's `Backend contract:` declaration, which the [backend contract](backend_tutor_contract.md) defines and a specification does not restate.
 - **inspectability / self-verification**: governed by C5 if present; implicitly delegated to prompt generation and runtime if C5 is absent.
 - **transport of private artifacts, schema for private artifacts, storage and persistence, validation, and visibility**: delegated to the backend/runtime contract unless explicitly overridden by a higher-level project decision outside the tutor specification.
 - **any B1, C1, or C2 subsection marked as delegated**.

@@ -56,7 +56,7 @@ At minimum, check for incompatible assumptions such as:
 - assuming grades, reports, routing outputs, merge logic, persistence, or lifecycle control belong to the tutor rather than the backend
 - assuming runtime inputs the backend contract does not provide
 - assuming the tutor may invent canonical topic IDs or structured topic labels
-- assuming unsupported output shapes or non-JSON runtime behavior
+- assuming an output shape other than the tagged reply format, or a JSON response mode
 - assuming private artifacts may be put inside `updated_state`, messages, grading state, lifecycle state, or student-facing text
 - assuming timing or lifecycle semantics that the tutor must infer rather than receive from backend context
 - assuming extra runtime fields not permitted by the backend contract
@@ -119,6 +119,7 @@ The runtime tutor prompt you generate must assume the backend contract exactly, 
 The prompt must treat the backend as providing runtime inputs such as:
 
 - `lecture_title`
+- `chat_language`
 - `sampled_topics`
 - `topic_structure_note`
 - `current_tutoring_state`
@@ -144,29 +145,30 @@ Do not assume any additional runtime inputs unless explicitly allowed by the bac
 
 ## Runtime output shape
 
-The generated runtime tutor prompt must require the tutor to return **JSON only**.
+The generated runtime tutor prompt must require the tutor to reply in the **tagged format** defined by the backend contract: the student-facing message as plain text between an `<assistant_message>` line and an `</assistant_message>` line, then one JSON object.
 
-When no `private_artifact_schema_json` is present, the tutor should omit `private_artifact` and return this top-level shape:
+When no `private_artifact_schema_json` is present, the tutor should omit `private_artifact` and reply in this shape:
 
-```json
-{
-  "assistant_message": "string",
-  "updated_state": {}
-}
+```text
+<assistant_message>
+...
+</assistant_message>
+{"updated_state": {}}
 ```
 
-When `private_artifact_schema_json` is present, the tutor must return this top-level shape:
+When `private_artifact_schema_json` is present, the tutor must reply in this shape:
 
-```json
-{
-  "assistant_message": "string",
-  "updated_state": {},
-  "private_artifact": {}
-}
+```text
+<assistant_message>
+...
+</assistant_message>
+{"updated_state": {}, "private_artifact": {}}
 ```
 
 The runtime prompt must explicitly state that:
 
+- the message is written exactly as the student should see it, with LaTeX in its ordinary form and single backslashes
+- the JSON object contains no LaTeX and no backslashes
 - `updated_state` is a **sparse delta**
 - `updated_state` is **not** a full replacement for session state
 - only the exact tutor-updatable fields permitted by the backend contract may appear inside `updated_state`
@@ -176,6 +178,12 @@ The runtime prompt must explicitly state that:
 - backend-owned fields must not be modified by the tutor
 - canonical topic IDs are backend-defined and must not be invented by the tutor
 - the tutor must not compute authoritative grades, reports, routing outputs, or backend control flow
+
+## Backend contract declaration
+
+The generated runtime tutor prompt must begin with the declaration the backend contract requires: on its first line, `Backend contract: ` followed by the version in the **Contract version** statement of the Backend–Tutor Runtime Contract you were given, then a blank line. Copy the version from that contract, never from memory or from an example. The backend refuses to run a prompt that declares another version or none.
+
+If the contract you were given states no version, report that as a **Backend incompatibility**.
 
 ## Ownership model that must be preserved
 
@@ -326,6 +334,8 @@ Then provide the private artifact JSON Schema in one fenced `json` code block.
 
 Then provide the full runtime tutor prompt in one fenced code block and nothing else after it.
 
+The output is read by a program that ends the prompt at the first closing code fence and at the first line beginning with `###`. So the runtime tutor prompt itself must contain no code fences and no line beginning with `###`; show its reply format and examples as plain lines.
+
 # Standards for defect reporting
 
 For each conformance failure or backend incompatibility:
@@ -340,7 +350,8 @@ Be concrete. Do not use vague language like “could be improved” for blocking
 
 The runtime tutor prompt must be production-ready. It must tell the runtime tutor exactly how to behave under the backend contract. It should:
 
-- be explicit about JSON-only output
+- begin with the backend contract declaration
+- be explicit about the tagged reply format, with no JSON response mode and the message outside the JSON object
 - explicitly name the allowed and forbidden `updated_state` keys
 - explicitly explain required-if-schema-present `private_artifact`
 - explicitly keep `private_artifact` out of `assistant_message` and `updated_state`
