@@ -90,6 +90,7 @@ That runtime tutor prompt must:
 
 - faithfully encode the pedagogical commitments of the tutor specification
 - carry over every specific rule, scenario, description of the students and piece of suggested wording from the specification's sections A through E; the tutor never sees the specification, so anything left out of the prompt is lost to it. Shorten only by removing repetition, never by dropping a rule or merging away its detail
+- if the specification names rules to keep in view on every turn, end with a section headed exactly `## Turn reminder` that holds those rules and nothing else, in short imperative wording
 - conform to the Backend–Tutor Runtime Contract exactly, naming runtime fields as the contract names them wherever a rule depends on one: in particular, the warning-turn rule says the student is told `session_timing.minutes_remaining`
 - preserve the priority ordering established by the specification
 - preserve the role of evaluation exactly as specified

@@ -178,18 +178,22 @@ _STRAY_TAG_RE = re_.compile(r"<\\?/?assistant_message>")
 _STATE_OBJECT_START_RE = re_.compile(r'\{\s*"(?:updated_state|private_artifact)"')
 
 
-def _format_reminder(private_artifact_schema_json: str | None) -> str:
-    """Restate the reply format after the history, whose tutor messages are plain text."""
+def _turn_message(private_artifact_schema_json: str | None, turn_reminder: str | None) -> str:
+    """Build what the tutor reads last: its reply format and the prompt's turn reminder.
+
+    The format is restated because tutor messages in the history are plain text.
+    """
     json_object = (
         '{"private_artifact": {...}, "updated_state": {...}}'
         if private_artifact_schema_json
         else '{"updated_state": {...}}'
     )
-    return (
+    reply_format = (
         "Reply in the tagged format: the student's message between <assistant_message> and "
         f"</assistant_message>, then the JSON object {json_object}. Never stop after the message, "
         "even though earlier tutor messages above appear as plain text."
     )
+    return f"{turn_reminder}\n\n{reply_format}" if turn_reminder else reply_format
 
 
 def _decode_state_object(text: str) -> dict:
@@ -272,7 +276,17 @@ def generate_reply(
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(recent_messages)
     messages.append({"role": "user", "content": user_message})
-    messages.append({"role": "system", "content": _format_reminder(private_artifact_schema_json)})
+    messages.append(
+        {
+            "role": "system",
+            "content": _turn_message(
+                private_artifact_schema_json,
+                prompt_loader.turn_reminder(
+                    prompt_loader.load_prompt_template(get_tutor_prompt_template(lecture_package))
+                ),
+            ),
+        }
+    )
 
     try:
         client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)

@@ -1260,6 +1260,38 @@ def test_pml_tutor_prompt_handles_the_five_minute_warning():
         assert required in prompt, required
 
 
+def test_turn_reminder_is_the_prompts_final_section():
+    prompt = "Rules.\n\n## Turn reminder\n\n- One step.\n"
+    assert prompt_loader.turn_reminder(prompt) == "- One step."
+    assert prompt_loader.turn_reminder("Rules.\n") is None
+
+
+def test_pml_tutor_prompt_has_a_turn_reminder():
+    prompt = prompt_loader.load_prompt_template(PML_PROMPT)
+    assert prompt_loader.turn_reminder(prompt)
+
+
+def test_turn_message_comes_after_the_students_message():
+    with mock.patch("openai.OpenAI") as mock_openai, mock.patch.object(
+        prompt_loader, "turn_reminder", return_value="- One step."
+    ):
+        client = mock_openai.return_value
+        client.chat.completions.create.return_value.choices = [
+            mock.Mock(message=mock.Mock(content="<assistant_message>Hi</assistant_message>"))
+        ]
+        bot_engine.generate_reply(
+            lecture_package=_CACHING_LECTURE_PACKAGE,
+            recent_messages=[],
+            state={},
+            user_message="hello",
+        )
+    messages = client.chat.completions.create.call_args.kwargs["messages"]
+    assert messages[-2] == {"role": "user", "content": "hello"}
+    assert messages[-1]["role"] == "system"
+    assert "- One step." in messages[-1]["content"]
+    assert "<assistant_message>" in messages[-1]["content"]
+
+
 def test_pml_tutor_prompt_has_a_valid_private_artifact_schema():
     schema_json = prompt_loader.load_private_artifact_schema_json(PML_PROMPT)
     assert schema_json is not None

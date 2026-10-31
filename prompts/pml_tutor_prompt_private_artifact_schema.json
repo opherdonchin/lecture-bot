@@ -1,27 +1,40 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "student_message_assessment",
-    "turn_pedagogical_decision",
-    "route_position",
-    "help_level",
-    "self_check"
-  ],
   "properties": {
     "student_message_assessment": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "what_student_did",
-        "evidence_strength",
-        "evidence_independence"
-      ],
       "properties": {
-        "what_student_did": {
+        "message_type": {
           "type": "string",
-          "description": "Brief private account of what the student's message did: e.g. used an idea, explained it, repeated it, avoided it, answered or redirected."
+          "description": "What kind of message this was in the tutor's terms."
+        },
+        "what_the_student_did_with_the_idea": {
+          "type": "string",
+          "description": "Whether the student used, explained, repeated, avoided, or otherwise worked with the idea."
+        },
+        "independence_of_work": {
+          "type": "string",
+          "enum": [
+            "independent",
+            "partly_assisted",
+            "assisted",
+            "unclear"
+          ],
+          "description": "How much of the student's work was their own rather than following what the tutor supplied."
+        },
+        "response_to_prompt": {
+          "type": "string",
+          "description": "Whether and how the student responded to what was asked, including when they productively went elsewhere."
+        },
+        "error_or_skipped_step": {
+          "type": "string",
+          "description": "Whether there was a real misunderstanding that matters, a skipped step, or neither."
+        },
+        "student_state": {
+          "type": "string",
+          "description": "Observed engagement, impatience, tiredness, confusion, frustration, or other relevant state."
         },
         "evidence_strength": {
           "type": "string",
@@ -33,112 +46,78 @@
             "strong",
             "robust"
           ],
-          "description": "Private judgment of how strong the evidence in this turn was."
+          "description": "Overall strength of evidence shown on this turn, judged conservatively."
         },
-        "evidence_independence": {
+        "evidence_basis": {
           "type": "string",
-          "enum": [
-            "assisted",
-            "mixed",
-            "independent"
-          ],
-          "description": "Whether the evidence depended mainly on tutor-supplied setup, method, or reasoning."
-        },
-        "response_fit": {
-          "type": "string",
-          "description": "Optional note on whether the student responded to what was asked or productively went elsewhere."
-        },
-        "salient_issue": {
-          "type": "string",
-          "description": "Optional note on a real misunderstanding, skipped step, affective state, or procedural/off-task issue that mattered this turn."
+          "description": "Why the evidence was judged at that strength, including whether it was recall, assisted, independent, interpretive, connective, or otherwise."
         }
-      }
+      },
+      "required": [
+        "message_type",
+        "what_the_student_did_with_the_idea",
+        "independence_of_work",
+        "response_to_prompt",
+        "error_or_skipped_step",
+        "student_state",
+        "evidence_strength",
+        "evidence_basis"
+      ]
     },
-    "turn_pedagogical_decision": {
+    "turn_decision": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "next_move",
-        "why_this_move"
-      ],
       "properties": {
-        "next_move": {
+        "route_and_stop": {
           "type": "string",
-          "description": "What the tutor chose to do next on this turn."
-        },
-        "why_this_move": {
-          "type": "string",
-          "description": "Why that move was chosen, in light of the student's message, route, time, and priorities."
+          "description": "Current route and stop, in ordinary words rather than internal IDs."
         },
         "student_steered": {
           "type": "boolean",
-          "description": "Whether the student set the direction for this turn."
-        }
-      }
-    },
-    "route_position": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "route_or_focus",
-        "current_stop"
-      ],
-      "properties": {
-        "route_or_focus": {
-          "type": "string",
-          "description": "Private description of the route being followed or the current student-chosen focus."
+          "description": "Whether the student determined the direction of this turn."
         },
-        "current_stop": {
+        "next_move": {
           "type": "string",
-          "description": "Private description of the current stop or local target."
+          "description": "The next pedagogical move chosen for this turn."
         },
-        "movement": {
+        "why_this_move": {
+          "type": "string",
+          "description": "Why this move was chosen, including relevance to the student's message, route position, time, and evaluation guidance where applicable."
+        },
+        "interaction_mode": {
           "type": "string",
           "enum": [
-            "stayed",
-            "advanced",
-            "branched",
-            "landed"
-          ],
-          "description": "How the conversation moved relative to the route or focus."
-        }
-      }
-    },
-    "help_level": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "amount",
-        "why_that_much"
-      ],
-      "properties": {
-        "amount": {
-          "type": "string",
-          "enum": [
-            "minimal_prompt",
-            "hint",
-            "structured_scaffold",
-            "direct_explanation",
-            "direct_answer",
-            "move_on_offer"
-          ],
-          "description": "How much help the tutor gave."
+            "working_a_step",
+            "teaching",
+            "answering",
+            "unsticking",
+            "offering_a_way_on",
+            "exploring",
+            "landing"
+          ]
         },
-        "why_that_much": {
+        "help_level_given": {
           "type": "string",
-          "description": "Why this amount of help was appropriate."
+          "description": "How much help the tutor gave on this turn."
+        },
+        "why_this_help_level": {
+          "type": "string",
+          "description": "Why that amount of help was appropriate."
         }
-      }
+      },
+      "required": [
+        "route_and_stop",
+        "student_steered",
+        "next_move",
+        "why_this_move",
+        "interaction_mode",
+        "help_level_given",
+        "why_this_help_level"
+      ]
     },
     "self_check": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "at_most_one_question",
-        "student_has_needed_context",
-        "no_completion_or_student_verdict",
-        "no_above_developing_from_only_assisted_evidence"
-      ],
       "properties": {
         "at_most_one_question": {
           "type": "boolean"
@@ -146,17 +125,29 @@
         "student_has_needed_context": {
           "type": "boolean"
         },
-        "no_completion_or_student_verdict": {
+        "no_verdict_on_student_or_completion": {
           "type": "boolean"
         },
-        "no_above_developing_from_only_assisted_evidence": {
+        "no_topic_above_developing_from_assisted_only": {
           "type": "boolean"
         },
-        "note": {
+        "notes": {
           "type": "string",
-          "description": "Optional brief note if any self-check item was close, required care, or constrained the turn."
+          "description": "Brief note only when useful to explain a failed or delicate check."
         }
-      }
+      },
+      "required": [
+        "at_most_one_question",
+        "student_has_needed_context",
+        "no_verdict_on_student_or_completion",
+        "no_topic_above_developing_from_assisted_only",
+        "notes"
+      ]
     }
-  }
+  },
+  "required": [
+    "student_message_assessment",
+    "turn_decision",
+    "self_check"
+  ]
 }

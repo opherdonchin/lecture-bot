@@ -17,6 +17,9 @@ _CONTRACT_DECLARATION_RE = re_.compile(r"\ABackend contract: *(\S+)[ \t]*\r?\n(?
 # (docs/lecture_package_contracts/). The package check compares it with the
 # package when a lecture is prepared; nothing checks it while the app runs.
 _PACKAGE_DECLARATION_RE = re_.compile(r"\ALecture package contract: *(\S+)[ \t]*\r?\n(?:[ \t]*\r?\n)?")
+# A prompt may end with this section, which the backend repeats after the
+# student's latest message on every turn (docs/backend_tutor_contract.md).
+TURN_REMINDER_HEADING = "## Turn reminder"
 
 
 @functools_.lru_cache
@@ -78,6 +81,12 @@ def declared_package_contract(prompt_text: str) -> str | None:
     """Return the lecture package contract a prompt declares after its backend contract, if any."""
     match = _PACKAGE_DECLARATION_RE.match(_CONTRACT_DECLARATION_RE.sub("", prompt_text, count=1))
     return match.group(1) if match else None
+
+
+def turn_reminder(prompt_text: str) -> str | None:
+    """Return the text of the prompt's final Turn reminder section, if it has one."""
+    _, heading, reminder = prompt_text.rpartition(TURN_REMINDER_HEADING)
+    return reminder.strip() or None if heading else None
 
 
 def strip_contract_declaration(prompt_text: str) -> str:
