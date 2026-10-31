@@ -25,7 +25,7 @@ is in Git and the [journal](journal/).
   carry product changes alone.
 - **Production runs `v0.6.1` for PML and `v0.6.0` for Statistics.**
   - `v0.6.1` ([PR #36](https://github.com/opherdonchin/lecture-bot/pull/36), [PR #37](https://github.com/opherdonchin/lecture-bot/pull/37), [PR #38](https://github.com/opherdonchin/lecture-bot/pull/38)) brings: renderable math, one question per turn, conservative scoring, the five-minute warning, the tagged reply format, and backend contract `0.6.1`, which each prompt must declare.
-  - **Statistics is pinned** to `/srv/lecture-bot/code-v0.6.0` by systemd drop-ins (`pin-v0.6.0.conf`). Its prompt declares no contract, so the new code would refuse it. The pin comes off when [scope issue #39, PR C](https://github.com/opherdonchin/lecture-bot/issues/39) regenerates that prompt.
+  - **Statistics is pinned** to `/srv/lecture-bot/code-v0.6.0` by systemd drop-ins (`pin-v0.6.0.conf`). Its prompt declares no contract, so the new code would refuse it. The pin comes off under [catch-up scope issue #51](https://github.com/opherdonchin/lecture-bot/issues/51).
   - **PML L01 is live**, with brief v2. Its bonus window closes on **2026-10-28**.
 - **Scopes:**
   - **In progress:** [scope issue #31](https://github.com/opherdonchin/lecture-bot/issues/31), the PML tutor from compact briefs; PRs #36 to #38 are merged. [Scope issue #39](https://github.com/opherdonchin/lecture-bot/issues/39), PML's tutor generated for contract 0.6.1 and archived with provenance: PR A is merged ([PR #50](https://github.com/opherdonchin/lecture-bot/pull/50)), and PR B is next.
