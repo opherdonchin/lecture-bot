@@ -48,6 +48,9 @@ What becomes possible, or what future work does this constrain?
 failure or surprising limitation. Explain its effect and whether it needs a
 fix or follow-up issue. Otherwise omit the section. -->
 
+<!-- If a catch-up scope is open (see the plan) and this change adds to what its
+target must catch up with, add the item to that scope and say so here. -->
+
 ## Wiki pages
 
 If there is no understanding map yet, state that explicitly.

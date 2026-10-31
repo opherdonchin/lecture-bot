@@ -172,6 +172,20 @@ proposed change is linked to the original issue; the earlier approval does
 not automatically extend to it. External actions that cannot be recovered
 are not made safe merely by a provisional label.
 
+### Catch-up scopes
+
+**Process:** When a course or other target deliberately stays behind the current
+code, what it must catch up with is recorded as the code moves, rather than
+reconstructed later.
+
+**Implementation:** A *catch-up scope* is a scope issue that stays open and keeps
+changing. It lists what the target needs, and each pull request that adds to that
+list adds its item as part of its work and says so in its explanation. Adding an
+item records a fact and needs no new approval. The researcher approves the scope
+as usual, and starting the work still needs their go-ahead, as any
+implementation does. The scope closes when the target has caught up. The
+[plan](plan.md) names any that are open.
+
 ### Develop scopes through dialogue
 
 A scope agreement covers four questions: **goal** (what and why),

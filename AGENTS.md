@@ -54,6 +54,12 @@ process rules here.
    [pixi.toml](pixi.toml) and the [README](README.md). Run `pixi run test`
    before proposing a change for review.
 
+5. **Backward compatibility is not a goal by default.** Code on `main` serves
+   the current contracts. Do not add optional paths, fallbacks or tolerance for
+   older prompts, packages or documents unless the researcher asks. A course
+   that isn't ready stays on its pinned code, and what it must catch up with
+   goes in a [catch-up scope](HILD/process.md#catch-up-scopes).
+
 ## Python import style
 
 **Always use `import module as alias`; never `from module import name`.**
