@@ -53,7 +53,6 @@ process rules here.
 4. **Run commands through Pixi from the repository root**, using the tasks in
    [pixi.toml](pixi.toml) and the [README](README.md). Run `pixi run test`
    before proposing a change for review.
-
 5. **Backward compatibility is not a goal by default.** Code on `main` serves
    the current contracts. Do not add optional paths, fallbacks or tolerance for
    older prompts, packages or documents unless the researcher asks. A course
