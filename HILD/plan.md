@@ -18,7 +18,7 @@ is in Git and the [journal](journal/).
    with speaker notes, solved and student notebooks, Zoom transcripts) and to
    a more mathematical, graduate course, without degrading Statistics.
 
-## Current state — 2026-10-25
+## Current state — 2026-10-31
 
 - **Where state lives:** at the researcher's direction (2026-10-21), the plan
   and journal are updated by direct commits to `main` only, so work branches
@@ -28,9 +28,10 @@ is in Git and the [journal](journal/).
   - **Statistics is pinned** to `/srv/lecture-bot/code-v0.6.0` by systemd drop-ins (`pin-v0.6.0.conf`). Its prompt declares no contract, so the new code would refuse it. The pin comes off when [scope issue #39, PR C](https://github.com/opherdonchin/lecture-bot/issues/39) regenerates that prompt.
   - **PML L01 is live**, with brief v2. Its bonus window closes on **2026-10-28**.
 - **Scopes:**
-  - **In progress:** [scope issue #31](https://github.com/opherdonchin/lecture-bot/issues/31), the PML tutor from compact briefs; PRs #36 to #38 are merged. [Scope issue #39](https://github.com/opherdonchin/lecture-bot/issues/39), both tutors generated for contract 0.6.1 and archived with provenance, is approved but not started.
+  - **In progress:** [scope issue #31](https://github.com/opherdonchin/lecture-bot/issues/31), the PML tutor from compact briefs; PRs #36 to #38 are merged. [Scope issue #39](https://github.com/opherdonchin/lecture-bot/issues/39), PML's tutor generated for contract 0.6.1 and archived with provenance: PR A is merged ([PR #50](https://github.com/opherdonchin/lecture-bot/pull/50)), and PR B is next.
   - **In progress:** [scope issue #40](https://github.com/opherdonchin/lecture-bot/issues/40), agent-prepared lecture packages ([PR #41](https://github.com/opherdonchin/lecture-bot/pull/41)), superseding scope issue #18 (closed).
   - **Approved and not started:**
+    - [catch-up scope issue #51](https://github.com/opherdonchin/lecture-bot/issues/51), bringing Statistics to the current version. **This is the open catch-up scope:** each PR that adds to what Statistics must catch up with adds its item there.
     - [scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20), a `develop` branch, with `v0.7.0` as the next release.
   - **Delivered but still open:**
     - [scope issue #16](https://github.com/opherdonchin/lecture-bot/issues/16), separate instances; PRs 2b and 2c remain;
@@ -44,7 +45,7 @@ is in Git and the [journal](journal/).
 ## Next steps
 
 1. **Watch the first live PML sessions on `v0.6.1`:** fallbacks, control characters, scoring and the five-minute warning. Then review score calibration on real answers.
-2. **[Scope issue #39](https://github.com/opherdonchin/lecture-bot/issues/39):** PR A (the generator and archive under the contracts; [PR #50](https://github.com/opherdonchin/lecture-bot/pull/50), in review), then PR B (a PML specification and generated prompt, compared in simulation). Then install PML's archive. Statistics' work is now in [catch-up scope issue #51](https://github.com/opherdonchin/lecture-bot/issues/51), approved and not started; each PR that adds to its list updates it. The rule for that is in [PR #52](https://github.com/opherdonchin/lecture-bot/pull/52), in review.
+2. **[Scope issue #39, PR B](https://github.com/opherdonchin/lecture-bot/issues/39#user-content-pr-b):** write `docs/pml_tutor_specification.md`, make the generation tooling take PML's files, generate PML's prompt and compare it in simulation with the hand-tuned one. This is the first run of the updated generator by a real model. Then install PML's archive.
 3. **Activate PML L02, [scope issue #40](https://github.com/opherdonchin/lecture-bot/issues/40):** L02 is [installed on the server, switched off](journal/2026-10-30.md#session-14--l02-pushed-not-yet-active). The researcher activates it in the admin page. Window 2026-10-28 to 11-04. The Moodle setup for L02 is still open.
 4. **[Scope issue #46](https://github.com/opherdonchin/lecture-bot/issues/46)** (approved): one handshake between course agents and an instance, over SSH now, for Lecture 3 onward. [PR #47](https://github.com/opherdonchin/lecture-bot/pull/47), then [PR #48](https://github.com/opherdonchin/lecture-bot/pull/48) and [PR #49](https://github.com/opherdonchin/lecture-bot/pull/49), are in review. Then a deploy, PML's recipe moved to its repository, and a fresh agent preparing Lecture 3.
 5. The researcher reviews the wiki page [Concept-tutor-json-replies](https://github.com/opherdonchin/lecture-bot/wiki/Concept-tutor-json-replies), updated for the tagged format and now `needs-review`.
