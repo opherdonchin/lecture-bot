@@ -20,6 +20,14 @@ REPO_ROOT = pathlib.Path(__file__).parent.parent
 CURRENT_SPEC_PATH = REPO_ROOT / "docs" / "tutor_specification.md"
 
 
+REQUIRED_GENERATION_DOCUMENTS = (
+    "tutor_spec_contract",
+    "backend_contract",
+    "lecture_package_contract",
+    "tutor_generator_prompt",
+)
+
+
 class GenerationOutputError(ValueError):
     pass
 
@@ -33,7 +41,7 @@ def _get_required_active_docs(
 ) -> tuple[dict[str, models.ArchiveDocumentModel] | None, str | None]:
     docs: dict[str, models.ArchiveDocumentModel] = {}
     missing: list[str] = []
-    for doc_type in ("tutor_spec_contract", "backend_contract", "tutor_generator_prompt"):
+    for doc_type in REQUIRED_GENERATION_DOCUMENTS:
         doc = helpers.get_active_document(db, doc_type)
         if doc is None:
             missing.append(doc_type)
@@ -41,6 +49,14 @@ def _get_required_active_docs(
             docs[doc_type] = doc
     if missing:
         return None, f"No active document(s) in archive: {', '.join(missing)}"
+    generator_links = helpers.parse_linked_documents(docs["tutor_generator_prompt"].linked_documents_json)
+    unlinked = sorted(t for t in helpers.CONTRACT_TYPES if t not in generator_links)
+    if unlinked:
+        return (
+            None,
+            f"Active tutor_generator_prompt does not link to: {', '.join(unlinked)}"
+            ". Activate or upload a generator prompt validated against the current contracts.",
+        )
     generator_reasons = helpers.contract_compatibility_reasons(docs["tutor_generator_prompt"], db)
     if generator_reasons:
         return (
@@ -55,7 +71,7 @@ def _get_required_active_docs(
 def get_generation_context(db: sqlalchemy_orm.Session) -> dict:
     """Return info about what docs will be used, for displaying on the generate form."""
     result = {}
-    for doc_type in ("tutor_spec_contract", "backend_contract", "tutor_generator_prompt"):
+    for doc_type in REQUIRED_GENERATION_DOCUMENTS:
         doc = helpers.get_active_document(db, doc_type)
         result[doc_type] = {
             "document_id": doc.document_id if doc else None,
@@ -68,16 +84,20 @@ def get_generation_context(db: sqlalchemy_orm.Session) -> dict:
 def _build_user_message(
     spec_contract_text: str,
     backend_contract_text: str,
+    package_contract_text: str,
     spec_text: str,
 ) -> str:
     return (
-        "# 1. Tutor Specification Contract\n\n"
+        "# Tutor Specification Contract\n\n"
         f"{spec_contract_text}\n\n"
         "---\n\n"
-        "# 2. Backend-Tutor Runtime Contract\n\n"
+        "# Backend-Tutor Runtime Contract\n\n"
         f"{backend_contract_text}\n\n"
         "---\n\n"
-        "# 3. Tutor Specification\n\n"
+        "# Lecture Package Contract\n\n"
+        f"{package_contract_text}\n\n"
+        "---\n\n"
+        "# Tutor Specification\n\n"
         f"{spec_text}\n"
     )
 
@@ -121,9 +141,9 @@ def _prompt_generation_system_prompt(generator_prompt_text: str) -> str:
         "### Recommended omissions\n"
         "Use bullet points for non-blocking recommended omissions. Use None. if there are none.\n\n"
         "### Private artifact schema\n"
-        "Return one fenced json code block containing the per-turn private_artifact JSON Schema.\n\n"
+        "Return the per-turn private_artifact JSON Schema between a <private_artifact_schema> line and a </private_artifact_schema> line.\n\n"
         "### Runtime tutor prompt\n"
-        "Return one fenced code block containing the runtime tutor prompt.\n\n"
+        "Return the runtime tutor prompt between a <runtime_tutor_prompt> line and a </runtime_tutor_prompt> line.\n\n"
         "Generator instructions:\n\n"
         f"{generator_prompt_text}"
     )
@@ -133,9 +153,10 @@ def _prompt_validation_system_prompt() -> str:
     return (
         "You validate an uploaded runtime tutor prompt before it is saved into the document archive.\n\n"
         "The prompt must be checked against the active tutor specification, the tutor specification contract, "
-        "and the backend runtime contract. Do not rewrite the prompt. Do not generate a replacement prompt.\n\n"
+        "the backend runtime contract and the lecture package contract. Do not rewrite the prompt. Do not generate a replacement prompt.\n\n"
         "A valid prompt must faithfully operationalize the active tutor specification and must obey the backend "
-        "runtime interface exactly. In particular, check that it requires JSON-only output; treats updated_state "
+        "runtime interface exactly. In particular, check that it declares the backend contract version on its first "
+        "line and its lecture package contract on the next; relies only on the lecture material that contract lists; requires the tagged reply format (the message between <assistant_message> tags, then one JSON object); treats updated_state "
         "as a sparse delta rather than full replacement; limits updated_state to the exact tutor-updatable keys; "
         "keeps backend-owned fields read-only; does not put private artifacts in student-facing text or updated_state; "
         "does not invent topic IDs, grades, reports, persistence, routing, lifecycle control, or unsupported runtime "
@@ -151,20 +172,24 @@ def _prompt_validation_system_prompt() -> str:
 def _build_prompt_validation_user_message(
     spec_contract_text: str,
     backend_contract_text: str,
+    package_contract_text: str,
     spec_text: str,
     prompt_text: str,
 ) -> str:
     return (
-        "# 1. Tutor Specification Contract\n\n"
+        "# Tutor Specification Contract\n\n"
         f"{spec_contract_text}\n\n"
         "---\n\n"
-        "# 2. Backend-Tutor Runtime Contract\n\n"
+        "# Backend-Tutor Runtime Contract\n\n"
         f"{backend_contract_text}\n\n"
         "---\n\n"
-        "# 3. Active Tutor Specification\n\n"
+        "# Lecture Package Contract\n\n"
+        f"{package_contract_text}\n\n"
+        "---\n\n"
+        "# Active Tutor Specification\n\n"
         f"{spec_text}\n\n"
         "---\n\n"
-        "# 4. Candidate Runtime Tutor Prompt\n\n"
+        "# Candidate Runtime Tutor Prompt\n\n"
         f"{prompt_text}\n"
     )
 
@@ -291,22 +316,30 @@ def _display_items(section: str) -> list[str]:
     return [_strip_item_label(item) for item in _bullet_items(section)]
 
 
-def _first_fenced_block(section: str, language: str | None = None) -> str:
-    lang_pattern = re.escape(language) if language else r"[A-Za-z0-9_-]*"
-    pattern = re.compile(
-        rf"```{lang_pattern}\s*\n(?P<body>.*?)\n```",
-        re.DOTALL,
-    )
-    match = pattern.search(section)
-    if not match:
-        raise GenerationOutputError("Expected a fenced code block in generator output.")
-    return match.group("body").strip()
+def _extract_tagged_block(raw_output: str, tag: str) -> tuple[str, str | None]:
+    """Return the output without the block between a tag's own lines, and the block's text.
+
+    Free text can contain code fences and headings, so a block ends only at its
+    closing tag. The block's text is None if neither tag is there; any other
+    arrangement than one opening line and then one closing line is refused,
+    so that a block is never cut short silently.
+    """
+    openings = list(re.finditer(rf"^[ \t]*<{tag}>[ \t]*$", raw_output, re.MULTILINE))
+    closings = list(re.finditer(rf"^[ \t]*</{tag}>[ \t]*$", raw_output, re.MULTILINE))
+    if not openings and not closings:
+        return raw_output, None
+    if len(openings) != 1 or len(closings) != 1 or openings[0].end() > closings[0].start():
+        raise GenerationOutputError(f"Expected one <{tag}> line followed by one </{tag}> line in generator output.")
+    text = raw_output[openings[0].end():closings[0].start()].strip()
+    return raw_output[:openings[0].start()] + raw_output[closings[0].end():], text
 
 
 def parse_generator_output(raw_output: str) -> dict:
-    conformance_failures = _blocking_items(_section_text(raw_output, "Conformance failures"))
-    backend_incompatibilities = _blocking_backend_incompatibilities(_section_text(raw_output, "Backend incompatibilities"))
-    recommended_omissions = _display_items(_section_text(raw_output, "Recommended omissions"))
+    remaining_output, tutor_prompt = _extract_tagged_block(raw_output, "runtime_tutor_prompt")
+    remaining_output, schema_text = _extract_tagged_block(remaining_output, "private_artifact_schema")
+    conformance_failures = _blocking_items(_section_text(remaining_output, "Conformance failures"))
+    backend_incompatibilities = _blocking_backend_incompatibilities(_section_text(remaining_output, "Backend incompatibilities"))
+    recommended_omissions = _display_items(_section_text(remaining_output, "Recommended omissions"))
 
     if conformance_failures or backend_incompatibilities:
         return {
@@ -318,13 +351,9 @@ def parse_generator_output(raw_output: str) -> dict:
             "tutor_prompt": None,
         }
 
-    schema_section = _section_text(raw_output, "Private artifact schema")
-    prompt_section = _section_text(raw_output, "Runtime tutor prompt")
-    if not schema_section or not prompt_section:
-        raise GenerationOutputError("Generator output is missing the schema or runtime prompt section.")
+    if not schema_text or not tutor_prompt:
+        raise GenerationOutputError("Generator output is missing the schema or runtime prompt.")
 
-    schema_text = _first_fenced_block(schema_section, "json")
-    tutor_prompt = _first_fenced_block(prompt_section)
     return {
         "status": "success",
         "conformance_failures": [],
@@ -392,7 +421,7 @@ def _unique_version_key(db: sqlalchemy_orm.Session, document_type: str) -> str:
 def _active_docs_for_prompt(db: sqlalchemy_orm.Session) -> tuple[dict[str, models.ArchiveDocumentModel] | None, str | None]:
     docs: dict[str, models.ArchiveDocumentModel] = {}
     missing: list[str] = []
-    for doc_type in ("tutor_spec", "tutor_artifact_schema", "tutor_generator_prompt", "tutor_spec_contract", "backend_contract"):
+    for doc_type in ("tutor_spec", "tutor_artifact_schema", *REQUIRED_GENERATION_DOCUMENTS):
         doc = helpers.get_active_document(db, doc_type)
         if doc is None:
             missing.append(doc_type)
@@ -410,7 +439,7 @@ def spec_is_validated_against_active_contracts(
     if doc.document_type != "tutor_spec":
         return False
     links = helpers.parse_linked_documents(doc.linked_documents_json)
-    for contract_type in ("tutor_spec_contract", "backend_contract"):
+    for contract_type in helpers.CONTRACT_TYPES:
         active_id = helpers.get_active_document_id(db, contract_type)
         if active_id is None or links.get(contract_type) != active_id:
             return False
@@ -472,10 +501,7 @@ def save_validated_spec(
     assert active_docs is not None
 
     version_key = _unique_version_key(db, "tutor_spec")
-    links = {
-        "tutor_spec_contract": active_docs["tutor_spec_contract"].document_id,
-        "backend_contract": active_docs["backend_contract"].document_id,
-    }
+    links = {doc_type: active_docs[doc_type].document_id for doc_type in helpers.CONTRACT_TYPES}
     doc = _insert_doc(
         db,
         "tutor_spec",
@@ -534,6 +560,7 @@ def generate_prompt_preview(db: sqlalchemy_orm.Session, spec_document_id: str) -
     user_message = _build_user_message(
         active_docs["tutor_spec_contract"].content_text,
         active_docs["backend_contract"].content_text,
+        active_docs["lecture_package_contract"].content_text,
         spec_doc.content_text,
     )
     try:
@@ -592,6 +619,7 @@ def save_generated_prompt_preview(
         "tutor_generator_prompt": active_docs["tutor_generator_prompt"].document_id,
         "tutor_spec_contract": active_docs["tutor_spec_contract"].document_id,
         "backend_contract": active_docs["backend_contract"].document_id,
+        "lecture_package_contract": active_docs["lecture_package_contract"].document_id,
     }
     prompt_doc = _insert_doc(
         db,
@@ -623,6 +651,11 @@ def validate_prompt_against_active_spec(db: sqlalchemy_orm.Session, prompt_text:
     if missing_error:
         return {"ok": False, "error": missing_error}
     assert active_docs is not None
+    declaration_reasons = helpers.prompt_declaration_reasons(
+        prompt_text, active_docs["lecture_package_contract"].content_text
+    )
+    if declaration_reasons:
+        return {"ok": False, "validation_failures": declaration_reasons, "recommended_notes": []}
     messages = [
         {"role": "system", "content": _prompt_validation_system_prompt()},
         {
@@ -630,6 +663,7 @@ def validate_prompt_against_active_spec(db: sqlalchemy_orm.Session, prompt_text:
             "content": _build_prompt_validation_user_message(
                 active_docs["tutor_spec_contract"].content_text,
                 active_docs["backend_contract"].content_text,
+                active_docs["lecture_package_contract"].content_text,
                 active_docs["tutor_spec"].content_text,
                 prompt_text,
             ),
@@ -663,6 +697,7 @@ def save_validated_prompt(
         "tutor_generator_prompt": active_docs["tutor_generator_prompt"].document_id,
         "tutor_spec_contract": active_docs["tutor_spec_contract"].document_id,
         "backend_contract": active_docs["backend_contract"].document_id,
+        "lecture_package_contract": active_docs["lecture_package_contract"].document_id,
     }
     prompt_doc = _insert_doc(
         db,
@@ -739,6 +774,7 @@ def run_generation(
     user_message = _build_user_message(
         spec_contract_doc.content_text,
         backend_contract_doc.content_text,
+        active_docs["lecture_package_contract"].content_text,
         spec_text,
     )
 
@@ -797,6 +833,7 @@ def run_generation(
         linked_documents_json=json.dumps({
             "tutor_spec_contract": spec_contract_doc.document_id,
             "backend_contract": backend_contract_doc.document_id,
+            "lecture_package_contract": active_docs["lecture_package_contract"].document_id,
         }),
         run_id=run_id,
     )
@@ -818,6 +855,7 @@ def run_generation(
         "tutor_generator_prompt": generator_doc.document_id,
         "tutor_spec_contract": spec_contract_doc.document_id,
         "backend_contract": backend_contract_doc.document_id,
+        "lecture_package_contract": active_docs["lecture_package_contract"].document_id,
     }
     prompt_doc = _insert_doc(
         db, "tutor_prompt", version_key,

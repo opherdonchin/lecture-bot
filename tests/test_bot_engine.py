@@ -1127,7 +1127,7 @@ def test_tutor_prompt_keeps_private_artifacts_out_of_state_and_message():
 
 def test_tutor_generator_prompt_validates_contracts_and_sparse_delta():
     loaded = prompt_loader.load_prompt_template("tutor_generator_prompt.md")
-    assert "You are given three authoritative inputs" in loaded
+    assert "You are given these authoritative inputs" in loaded
     assert "Tutor Specification Contract" in loaded
     assert "Backend–Tutor Runtime Contract" in loaded
     assert "Step 1 — Check tutor-spec conformance" in loaded

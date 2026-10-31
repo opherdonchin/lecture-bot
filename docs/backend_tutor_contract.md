@@ -6,6 +6,8 @@ The tutor specification governs pedagogy. This runtime contract governs how a tu
 
 **Contract version: 0.6.1.** A contract version is the development version in which the contract last changed. It stays the same across releases that leave the contract alone. The code states the version it implements (`BACKEND_CONTRACT_VERSION` in `app/prompt_loader.py`).
 
+**What invalidates this contract.** A change to what the backend provides or requires always does, and the contract then gets a new version. A change to a tutor specification or to the prompt generator may: a specification may come to need something the backend doesn't provide, and a generator may change how this contract is specified or what's required of it. A pull request changing either of those says whether it invalidates this contract.
+
 A runtime tutor prompt must declare the contract it was written for on its first line, followed by a blank line:
 
 ```text

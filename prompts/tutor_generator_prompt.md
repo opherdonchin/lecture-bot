@@ -1,10 +1,11 @@
-You are given three authoritative inputs:
+You are given these authoritative inputs:
 
 1. **Tutor Specification Contract**
 2. **Backend–Tutor Runtime Contract**
-3. **One concrete tutor specification**
+3. **Lecture Package Contract**
+4. **One concrete tutor specification**
 
-Your task is to decide whether the tutor specification can be turned into a valid runtime tutor prompt under both contracts, and to generate the runtime tutor prompt plus its private artifact JSON Schema **only if** both checks pass.
+Your task is to decide whether the tutor specification can be turned into a valid runtime tutor prompt under these contracts, and to generate the runtime tutor prompt plus its private artifact JSON Schema **only if** both checks pass.
 
 Do **not** summarize the architecture. Do **not** rewrite the contracts. Do **not** generate a tutor specification. Do **not** invent backend behavior. Do **not** paper over required omissions with defaults.
 
@@ -12,11 +13,12 @@ Use the following authority order:
 
 - The **Tutor Specification Contract** governs whether the specification is structurally valid.
 - The **Backend–Tutor Runtime Contract** governs runtime interface, ownership, state semantics, and lifecycle semantics.
+- The **Lecture Package Contract** governs what the tutor can rely on finding in the lecture material it receives through `rubric_text` and `lecture_context`.
 - The **Tutor specification** governs pedagogy, identity, priorities, evaluation philosophy, and success condition.
 
-If the tutor specification conflicts with either contract, treat that as a defect to report, not as a prompt-writing problem to silently solve.
+If the tutor specification conflicts with any contract, treat that as a defect to report, not as a prompt-writing problem to silently solve.
 
-The contract summaries and checklists below are reminders for reliable prompt generation. They do not replace the two contracts. If a reminder below appears to conflict with an authoritative contract, follow the contract and treat the conflict as a defect in the generator instructions.
+The contract summaries and checklists below are reminders for reliable prompt generation. They do not replace the contracts. If a reminder below appears to conflict with an authoritative contract, follow the contract and treat the conflict as a defect in the generator instructions.
 
 # Required workflow
 
@@ -56,12 +58,14 @@ At minimum, check for incompatible assumptions such as:
 - assuming grades, reports, routing outputs, merge logic, persistence, or lifecycle control belong to the tutor rather than the backend
 - assuming runtime inputs the backend contract does not provide
 - assuming the tutor may invent canonical topic IDs or structured topic labels
-- assuming unsupported output shapes or non-JSON runtime behavior
+- assuming an output shape other than the tagged reply format, or a JSON response mode
 - assuming private artifacts may be put inside `updated_state`, messages, grading state, lifecycle state, or student-facing text
 - assuming timing or lifecycle semantics that the tutor must infer rather than receive from backend context
 - assuming extra runtime fields not permitted by the backend contract
 
 Treat real conflicts with the backend contract as **Backend incompatibilities**.
+
+Also check that the specification relies only on lecture material that contract lists. Report anything further as a **Backend incompatibility**, naming the Lecture Package Contract: the contract and the prompt change together, so the contract would have to change first.
 
 You must **not** silently resolve incompatibilities by inventing backend behavior.
 
@@ -119,6 +123,7 @@ The runtime tutor prompt you generate must assume the backend contract exactly, 
 The prompt must treat the backend as providing runtime inputs such as:
 
 - `lecture_title`
+- `chat_language`
 - `sampled_topics`
 - `topic_structure_note`
 - `current_tutoring_state`
@@ -144,29 +149,30 @@ Do not assume any additional runtime inputs unless explicitly allowed by the bac
 
 ## Runtime output shape
 
-The generated runtime tutor prompt must require the tutor to return **JSON only**.
+The generated runtime tutor prompt must require the tutor to reply in the **tagged format** defined by the backend contract: the student-facing message as plain text between an `<assistant_message>` line and an `</assistant_message>` line, then one JSON object.
 
-When no `private_artifact_schema_json` is present, the tutor should omit `private_artifact` and return this top-level shape:
+When no `private_artifact_schema_json` is present, the tutor should omit `private_artifact` and reply in this shape:
 
-```json
-{
-  "assistant_message": "string",
-  "updated_state": {}
-}
+```text
+<assistant_message>
+...
+</assistant_message>
+{"updated_state": {}}
 ```
 
-When `private_artifact_schema_json` is present, the tutor must return this top-level shape:
+When `private_artifact_schema_json` is present, the tutor must reply in this shape:
 
-```json
-{
-  "assistant_message": "string",
-  "updated_state": {},
-  "private_artifact": {}
-}
+```text
+<assistant_message>
+...
+</assistant_message>
+{"updated_state": {}, "private_artifact": {}}
 ```
 
 The runtime prompt must explicitly state that:
 
+- the message is written exactly as the student should see it, with LaTeX in its ordinary form and single backslashes
+- the JSON object contains no LaTeX and no backslashes
 - `updated_state` is a **sparse delta**
 - `updated_state` is **not** a full replacement for session state
 - only the exact tutor-updatable fields permitted by the backend contract may appear inside `updated_state`
@@ -176,6 +182,18 @@ The runtime prompt must explicitly state that:
 - backend-owned fields must not be modified by the tutor
 - canonical topic IDs are backend-defined and must not be invented by the tutor
 - the tutor must not compute authoritative grades, reports, routing outputs, or backend control flow
+
+## Contract declarations
+
+The generated runtime tutor prompt must begin with the declaration the backend contract requires: on its first line, `Backend contract: ` followed by the version in the **Contract version** statement of the Backend–Tutor Runtime Contract you were given, then a blank line. Copy the version from that contract, never from memory or from an example. The backend refuses to run a prompt that declares another version or none.
+
+If the contract you were given states no version, report that as a **Backend incompatibility**.
+
+The next line of the prompt must be `Lecture package contract: ` followed by the name in the title of the Lecture Package Contract you were given, then a blank line. Copy the name from that contract. If you were given no such contract, or it states no name, report that as a **Backend incompatibility**.
+
+## Lecture material
+
+The generated prompt must tell the tutor what the lecture material holds, in terms of the sorts of information that contract lists, and must rely on nothing further. It must not describe any particular lecture's content.
 
 ## Ownership model that must be preserved
 
@@ -320,11 +338,21 @@ None.
 
 ### Private artifact schema
 
-Then provide the private artifact JSON Schema in one fenced `json` code block.
+Then provide the private artifact JSON Schema between these two lines:
+
+<private_artifact_schema>
+...
+</private_artifact_schema>
 
 ### Runtime tutor prompt
 
-Then provide the full runtime tutor prompt in one fenced code block and nothing else after it.
+Then provide the full runtime tutor prompt between these two lines:
+
+<runtime_tutor_prompt>
+...
+</runtime_tutor_prompt>
+
+Each tag must be on a line of its own and appear exactly once. A program reads the text between them, so the prompt may contain anything else, including code fences and headings, but it must not contain these tag lines.
 
 # Standards for defect reporting
 
@@ -340,7 +368,8 @@ Be concrete. Do not use vague language like “could be improved” for blocking
 
 The runtime tutor prompt must be production-ready. It must tell the runtime tutor exactly how to behave under the backend contract. It should:
 
-- be explicit about JSON-only output
+- begin with the backend contract declaration, then the lecture package contract declaration
+- be explicit about the tagged reply format, with no JSON response mode and the message outside the JSON object
 - explicitly name the allowed and forbidden `updated_state` keys
 - explicitly explain required-if-schema-present `private_artifact`
 - explicitly keep `private_artifact` out of `assistant_message` and `updated_state`

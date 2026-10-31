@@ -1,12 +1,19 @@
 import datetime
 import hashlib
 import json
+import re as re_
 
 import sqlalchemy.orm as sqlalchemy_orm
 
 import app.models as models
+import app.prompt_loader as prompt_loader
 
 CONTRACT_TYPES: frozenset[str] = models.CONTRACT_TYPES
+
+# How a backend contract document states its version (docs/backend_tutor_contract.md).
+_CONTRACT_VERSION_RE = re_.compile(r"\*\*Contract version: *(\d+(?:\.\d+)*)\.\*\*")
+# How a lecture package contract states its name (docs/lecture_package_contract.md).
+_PACKAGE_CONTRACT_NAME_RE = re_.compile(r"^# Lecture package contract `([^`]+)`", re_.MULTILINE)
 
 TUTOR_PROMPT_REQUIRED_LINKS: frozenset[str] = frozenset({
     "tutor_spec",
@@ -14,6 +21,7 @@ TUTOR_PROMPT_REQUIRED_LINKS: frozenset[str] = frozenset({
     "tutor_generator_prompt",
     "tutor_spec_contract",
     "backend_contract",
+    "lecture_package_contract",
 })
 
 
@@ -89,6 +97,34 @@ def contract_compatibility_reasons(
     return reasons
 
 
+def prompt_declaration_reasons(prompt_text: str, package_contract_text: str) -> list[str]:
+    """Return what is wrong with a tutor prompt's declaration lines, or an empty list.
+
+    A prompt starts by naming its contracts ("Backend contract: 0.6.1", then
+    "Lecture package contract: pml-brief-1"). The backend line must name the
+    version this code implements, and the package line must name the given
+    contract. Reads only the prompt's own text, so it catches a prompt that
+    links the right documents but says something else. Used before an uploaded
+    prompt reaches the model, and whenever is_activatable judges a prompt.
+    """
+    reasons: list[str] = []
+    declared_backend = prompt_loader.declared_backend_contract(prompt_text)
+    if declared_backend != prompt_loader.BACKEND_CONTRACT_VERSION:
+        reasons.append(
+            f"prompt declares backend contract {declared_backend!r}; "
+            f"this backend implements {prompt_loader.BACKEND_CONTRACT_VERSION!r}"
+        )
+    name_match = _PACKAGE_CONTRACT_NAME_RE.search(package_contract_text)
+    package_contract_name = name_match.group(1) if name_match else None
+    declared_package = prompt_loader.declared_package_contract(prompt_text)
+    if package_contract_name is None or declared_package != package_contract_name:
+        reasons.append(
+            f"prompt declares lecture package contract {declared_package!r}; "
+            f"its package contract is {package_contract_name!r}"
+        )
+    return reasons
+
+
 def is_activatable(
     doc: models.ArchiveDocumentModel,
     db: sqlalchemy_orm.Session,
@@ -112,15 +148,25 @@ def is_activatable(
     if reasons:
         return False, reasons
 
-    for contract_type in ("tutor_spec_contract", "backend_contract"):
-        active_id = get_active_document_id(db, contract_type)
-        if active_id is None:
-            reasons.append(f"no active {contract_type} in archive")
-        elif links[contract_type] != active_id:
+    reasons.extend(contract_compatibility_reasons(doc, db))
+
+    backend_contract = db.get(models.ArchiveDocumentModel, links["backend_contract"])
+    if backend_contract is None:
+        reasons.append(f"linked backend_contract {links['backend_contract']!r} not found in archive")
+    else:
+        version_match = _CONTRACT_VERSION_RE.search(backend_contract.content_text)
+        linked_version = version_match.group(1) if version_match else None
+        if linked_version != prompt_loader.BACKEND_CONTRACT_VERSION:
             reasons.append(
-                f"linked {contract_type} ({links[contract_type]!r}) "
-                f"does not match active ({active_id!r})"
+                f"linked backend_contract declares version {linked_version!r}; "
+                f"this backend implements {prompt_loader.BACKEND_CONTRACT_VERSION!r}"
             )
+
+    package_contract = db.get(models.ArchiveDocumentModel, links["lecture_package_contract"])
+    if package_contract is None:
+        reasons.append(f"linked lecture_package_contract {links['lecture_package_contract']!r} not found in archive")
+    else:
+        reasons.extend(prompt_declaration_reasons(doc.content_text, package_contract.content_text))
 
     tutor_spec_id = links.get("tutor_spec")
     if tutor_spec_id:

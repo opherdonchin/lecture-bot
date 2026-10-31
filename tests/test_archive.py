@@ -1,5 +1,6 @@
 import datetime
 import json
+import pathlib
 
 import pytest
 from sqlalchemy import create_engine
@@ -8,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 import app.archive_helpers as helpers
 import app.db as db_module
 import app.models as models
+import app.prompt_loader as prompt_loader
 
 
 @pytest.fixture
@@ -156,9 +158,25 @@ def test_compatible_no_active_contract(db):
 
 # --- is_activatable ---
 
+_PACKAGE_CONTRACT_ID = "doc_lecture_package_contract_pml-brief-1"
+_PACKAGE_CONTRACT_TEXT = "# Lecture package contract `pml-brief-1`\n\nThe contract."
+_DECLARED_PROMPT = (
+    f"Backend contract: {prompt_loader.BACKEND_CONTRACT_VERSION}\n\n"
+    "Lecture package contract: pml-brief-1\n\n"
+    "You are a tutor."
+)
+
+
 def _setup_full_active_contracts(db):
     spec_contract = _make_doc(db, "tutor_spec_contract", "2026-05-01", active=True)
-    backend_contract = _make_doc(db, "backend_contract", "2026-05-01", active=True)
+    backend_contract = _make_doc(
+        db,
+        "backend_contract",
+        "2026-05-01",
+        active=True,
+        content=f"**Contract version: {prompt_loader.BACKEND_CONTRACT_VERSION}.**",
+    )
+    _make_doc(db, "lecture_package_contract", "pml-brief-1", active=True, content=_PACKAGE_CONTRACT_TEXT)
     return spec_contract, backend_contract
 
 
@@ -192,6 +210,7 @@ def test_is_activatable_no_active_contracts(db):
         "tutor_generator_prompt": gen_doc.document_id,
         "tutor_spec_contract": "doc_tutor_spec_contract_2026-05-01",
         "backend_contract": "doc_backend_contract_2026-05-01",
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
     }
     doc = _make_doc(db, "tutor_prompt", "2026-05-01", linked=linked)
     ok, reasons = helpers.is_activatable(doc, db)
@@ -212,6 +231,7 @@ def test_is_activatable_contract_mismatch(db):
         "tutor_generator_prompt": gen_doc.document_id,
         "tutor_spec_contract": "doc_tutor_spec_contract_OLD",
         "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
     }
     doc = _make_doc(db, "tutor_prompt", "2026-05-01", linked=linked)
     ok, reasons = helpers.is_activatable(doc, db)
@@ -237,6 +257,7 @@ def test_is_activatable_generator_contract_mismatch_names_documents(db):
         "tutor_generator_prompt": gen_doc.document_id,
         "tutor_spec_contract": spec_contract.document_id,
         "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
     }
     doc = _make_doc(db, "tutor_prompt", "2026-05-01", linked=linked)
 
@@ -260,6 +281,7 @@ def test_is_activatable_linked_tutor_spec_not_found(db):
         "tutor_generator_prompt": gen_doc.document_id,
         "tutor_spec_contract": spec_contract.document_id,
         "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
     }
     doc = _make_doc(db, "tutor_prompt", "2026-05-01", linked=linked)
     ok, reasons = helpers.is_activatable(doc, db)
@@ -283,6 +305,7 @@ def test_is_activatable_invalid_schema_json(db):
         "tutor_generator_prompt": gen_doc.document_id,
         "tutor_spec_contract": spec_contract.document_id,
         "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
     }
     doc = _make_doc(db, "tutor_prompt", "2026-05-01", linked=linked)
     ok, reasons = helpers.is_activatable(doc, db)
@@ -306,8 +329,97 @@ def test_is_activatable_happy_path(db):
         "tutor_generator_prompt": gen_doc.document_id,
         "tutor_spec_contract": spec_contract.document_id,
         "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
     }
-    doc = _make_doc(db, "tutor_prompt", "2026-05-01", linked=linked)
+    doc = _make_doc(db, "tutor_prompt", "2026-05-01", linked=linked, content=_DECLARED_PROMPT)
     ok, reasons = helpers.is_activatable(doc, db)
     assert ok
     assert reasons == []
+
+
+def _fully_linked_prompt(db, contract_text=None, prompt_text=_DECLARED_PROMPT):
+    """Return a fully linked tutor prompt; contract_text is its active backend contract's text."""
+    contract_text = contract_text or f"**Contract version: {prompt_loader.BACKEND_CONTRACT_VERSION}.**"
+    spec_contract = _make_doc(db, "tutor_spec_contract", "2026-05-01", active=True)
+    backend_contract = _make_doc(db, "backend_contract", "2026-05-01", active=True, content=contract_text)
+    package_contract = _make_doc(
+        db, "lecture_package_contract", "pml-brief-1", active=True, content=_PACKAGE_CONTRACT_TEXT
+    )
+    schema_doc = _make_schema_doc(db)
+    spec_doc = _make_doc(db, "tutor_spec", "2026-05-01", active=True, linked={
+        "tutor_spec_contract": spec_contract.document_id,
+    })
+    gen_doc = _make_doc(db, "tutor_generator_prompt", "2026-05-01", active=True, linked={
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+    })
+    return _make_doc(db, "tutor_prompt", "2026-05-01", content=prompt_text, linked={
+        "tutor_spec": spec_doc.document_id,
+        "tutor_artifact_schema": schema_doc.document_id,
+        "tutor_generator_prompt": gen_doc.document_id,
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": package_contract.document_id,
+    })
+
+
+def test_is_activatable_rejects_backend_contract_of_another_version(db):
+    doc = _fully_linked_prompt(db, "**Contract version: 0.5.0.**")
+    ok, reasons = helpers.is_activatable(doc, db)
+    assert not ok
+    assert any("declares version '0.5.0'" in r for r in reasons)
+
+
+def test_is_activatable_rejects_backend_contract_without_a_version(db):
+    doc = _fully_linked_prompt(db, "A contract from before versions.")
+    ok, reasons = helpers.is_activatable(doc, db)
+    assert not ok
+    assert any("declares version None" in r for r in reasons)
+
+
+def test_repository_backend_contract_declares_the_code_version(db):
+    contract_text = pathlib.Path("docs/backend_tutor_contract.md").read_text(encoding="utf-8")
+    ok, reasons = helpers.is_activatable(_fully_linked_prompt(db, contract_text), db)
+    assert ok, reasons
+
+
+def test_is_activatable_requires_a_package_contract_link(db):
+    doc = _fully_linked_prompt(db)
+    links = helpers.parse_linked_documents(doc.linked_documents_json)
+    del links["lecture_package_contract"]
+    doc.linked_documents_json = json.dumps(links)
+    ok, reasons = helpers.is_activatable(doc, db)
+    assert not ok
+    assert "missing required link: lecture_package_contract" in reasons
+
+
+def test_is_activatable_rejects_prompt_linked_to_inactive_package_contract(db):
+    doc = _fully_linked_prompt(db)
+    old = _make_doc(db, "lecture_package_contract", "pml-brief-0", content="# Lecture package contract `pml-brief-0`")
+    links = helpers.parse_linked_documents(doc.linked_documents_json)
+    doc.linked_documents_json = json.dumps({**links, "lecture_package_contract": old.document_id})
+    ok, reasons = helpers.is_activatable(doc, db)
+    assert not ok
+    assert any("linked lecture_package_contract" in r for r in reasons)
+
+
+@pytest.mark.parametrize("prompt_text, expected", [
+    ("You are a tutor.", "prompt declares backend contract None"),
+    ("Backend contract: 0.5.0\n\nLecture package contract: pml-brief-1\n\nYou are a tutor.", "backend contract '0.5.0'"),
+    (f"Backend contract: {prompt_loader.BACKEND_CONTRACT_VERSION}\n\nYou are a tutor.", "lecture package contract None"),
+    (
+        f"Backend contract: {prompt_loader.BACKEND_CONTRACT_VERSION}\n\nLecture package contract: pml-brief-2\n\nYou are a tutor.",
+        "lecture package contract 'pml-brief-2'",
+    ),
+])
+def test_is_activatable_reads_the_prompts_own_declarations(db, prompt_text, expected):
+    doc = _fully_linked_prompt(db, prompt_text=prompt_text)
+    ok, reasons = helpers.is_activatable(doc, db)
+    assert not ok
+    assert any(expected in r for r in reasons)
+
+
+def test_repository_package_contract_names_match_their_files():
+    for path in pathlib.Path("docs/lecture_package_contracts").glob("*.md"):
+        prompt = f"Backend contract: {prompt_loader.BACKEND_CONTRACT_VERSION}\n\nLecture package contract: {path.stem}\n\nx"
+        assert helpers.prompt_declaration_reasons(prompt, path.read_text(encoding="utf-8")) == []
