@@ -3,27 +3,28 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "turn_read",
-    "turn_decision",
-    "turn_checks"
+    "student_message_assessment",
+    "next_move",
+    "route_position",
+    "help_given",
+    "self_check"
   ],
   "properties": {
-    "turn_read": {
+    "student_message_assessment": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "student_message_type",
+        "message_type",
         "what_student_did_with_idea",
-        "independence_of_evidence",
         "response_alignment",
-        "error_vs_skipped_step",
-        "student_state",
-        "route_position",
-        "student_steered"
+        "evidence_strength",
+        "evidence_independence",
+        "affect_or_state"
       ],
       "properties": {
-        "student_message_type": {
+        "message_type": {
           "type": "string",
+          "description": "What kind of message this was for tutoring purposes.",
           "enum": [
             "content",
             "procedure",
@@ -32,81 +33,53 @@
           ]
         },
         "what_student_did_with_idea": {
-          "type": "string"
-        },
-        "independence_of_evidence": {
           "type": "string",
-          "enum": [
-            "none",
-            "weak_or_unclear",
-            "assisted",
-            "partly_independent",
-            "independent"
-          ]
+          "description": "Brief account of whether the student used, explained, repeated, avoided, or otherwise worked with the idea."
         },
         "response_alignment": {
           "type": "string",
+          "description": "Whether and how the student's message responded to what was asked, including if it went somewhere useful instead."
+        },
+        "evidence_strength": {
+          "type": "string",
+          "description": "How strong the evidence in this turn was.",
           "enum": [
-            "answered_what_was_asked",
-            "did_not_answer_but_went_somewhere_good",
-            "did_not_answer_and_needs_redirection",
+            "none",
+            "weak",
+            "developing",
+            "solid",
+            "strong",
+            "robust"
+          ]
+        },
+        "evidence_independence": {
+          "type": "string",
+          "description": "How independent the evidence was.",
+          "enum": [
+            "assisted",
+            "partly_independent",
+            "independent",
             "not_applicable"
           ]
         },
-        "error_vs_skipped_step": {
+        "affect_or_state": {
           "type": "string",
-          "enum": [
-            "real_error",
-            "skipped_step",
-            "both",
-            "neither_or_not_applicable"
-          ]
-        },
-        "student_state": {
-          "type": "string",
-          "enum": [
-            "engaged",
-            "impatient",
-            "tired",
-            "lost",
-            "frustrated",
-            "mixed_or_unclear"
-          ]
-        },
-        "route_position": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "route_name_or_status",
-            "current_stop_or_focus"
-          ],
-          "properties": {
-            "route_name_or_status": {
-              "type": "string"
-            },
-            "current_stop_or_focus": {
-              "type": "string"
-            }
-          }
-        },
-        "student_steered": {
-          "type": "boolean"
+          "description": "Observed engagement, impatience, tiredness, confusion, frustration, or other relevant student state."
         }
       }
     },
-    "turn_decision": {
+    "next_move": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "interaction_mode",
-        "next_move",
-        "why_this_move",
-        "help_level",
-        "why_this_help_level"
+        "chosen_mode",
+        "move_description",
+        "why_chosen"
       ],
       "properties": {
-        "interaction_mode": {
+        "chosen_mode": {
           "type": "string",
+          "description": "Interaction mode chosen for this turn.",
           "enum": [
             "working_a_step",
             "teaching",
@@ -117,54 +90,96 @@
             "landing"
           ]
         },
-        "next_move": {
-          "type": "string"
-        },
-        "why_this_move": {
-          "type": "string"
-        },
-        "help_level": {
+        "move_description": {
           "type": "string",
-          "enum": [
-            "minimal_nudge",
-            "hint",
-            "multiple_choice",
-            "one_piece_of_path",
-            "brief_explanation",
-            "full_answer_or_explanation",
-            "recap_or_landing"
-          ]
+          "description": "What the tutor chose to do next."
         },
-        "why_this_help_level": {
-          "type": "string"
+        "why_chosen": {
+          "type": "string",
+          "description": "Why this move was chosen, including relation to the student's message, route, time, or evidence."
         }
       }
     },
-    "turn_checks": {
+    "route_position": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "question_count_ok",
-        "context_sufficient",
-        "no_completion_verdict",
-        "no_above_developing_from_assisted_only",
-        "evidence_strength_summary"
+        "route_or_focus",
+        "current_stop",
+        "student_steered"
       ],
       "properties": {
-        "question_count_ok": {
+        "route_or_focus": {
+          "type": "string",
+          "description": "Current route, route fragment, or student-chosen focus."
+        },
+        "current_stop": {
+          "type": "string",
+          "description": "Current stop or immediate conceptual location."
+        },
+        "student_steered": {
+          "type": "boolean",
+          "description": "Whether the student determined the direction of this turn."
+        }
+      }
+    },
+    "help_given": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "help_level",
+        "help_description",
+        "why_this_much"
+      ],
+      "properties": {
+        "help_level": {
+          "type": "string",
+          "description": "How much help the tutor gave.",
+          "enum": [
+            "none",
+            "minimal_nudge",
+            "hint",
+            "partial_path",
+            "full_explanation",
+            "full_answer"
+          ]
+        },
+        "help_description": {
+          "type": "string",
+          "description": "What help was actually given."
+        },
+        "why_this_much": {
+          "type": "string",
+          "description": "Why this amount of help was appropriate."
+        }
+      }
+    },
+    "self_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "at_most_one_question",
+        "student_has_needed_context",
+        "no_verdict_on_student_or_completion",
+        "no_above_developing_from_assisted_only",
+        "notes"
+      ],
+      "properties": {
+        "at_most_one_question": {
           "type": "boolean"
         },
-        "context_sufficient": {
+        "student_has_needed_context": {
           "type": "boolean"
         },
-        "no_completion_verdict": {
+        "no_verdict_on_student_or_completion": {
           "type": "boolean"
         },
         "no_above_developing_from_assisted_only": {
           "type": "boolean"
         },
-        "evidence_strength_summary": {
-          "type": "string"
+        "notes": {
+          "type": "string",
+          "description": "Short note on any self-check concern, repair, or confirmation."
         }
       }
     }
