@@ -178,8 +178,12 @@ _STRAY_TAG_RE = re_.compile(r"<\\?/?assistant_message>")
 _STATE_OBJECT_START_RE = re_.compile(r'\{\s*"(?:updated_state|private_artifact)"')
 
 
-def _turn_message(private_artifact_schema_json: str | None, turn_reminder: str | None) -> str:
-    """Build what the tutor reads last: its reply format and the prompt's turn reminder.
+def _turn_message(
+    private_artifact_schema_json: str | None,
+    turn_reminder: str | None,
+    timing_context: dict | None,
+) -> str:
+    """Build what the tutor reads last: the prompt's turn reminder, any warning, its reply format.
 
     The format is restated because tutor messages in the history are plain text.
     """
@@ -193,7 +197,14 @@ def _turn_message(private_artifact_schema_json: str | None, turn_reminder: str |
         f"</assistant_message>, then the JSON object {json_object}. Never stop after the message, "
         "even though earlier tutor messages above appear as plain text."
     )
-    return f"{turn_reminder}\n\n{reply_format}" if turn_reminder else reply_format
+    parts = [turn_reminder] if turn_reminder else []
+    if timing_context and timing_context.get("closing_mode") and not timing_context.get("timeout_warning_sent"):
+        parts.append(
+            "This is the warning turn: tell the student in one short sentence that about "
+            f"{timing_context.get('minutes_remaining')} minutes remain, and start landing."
+        )
+    parts.append(reply_format)
+    return "\n\n".join(parts)
 
 
 def _decode_state_object(text: str) -> dict:
@@ -284,6 +295,7 @@ def generate_reply(
                 prompt_loader.turn_reminder(
                     prompt_loader.load_prompt_template(get_tutor_prompt_template(lecture_package))
                 ),
+                timing_context,
             ),
         }
     )
@@ -537,6 +549,12 @@ def _normalize_malformed_math_text(text: str) -> str:
     return normalized.replace(_BELL_CHAR, "")
 
 
+def _replace_topic_ids(text: str, topic_defs: list[dict]) -> str:
+    """Replace internal topic IDs such as T1 with the topic's label."""
+    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
+    return _BARE_TOPIC_ID_RE.sub(lambda match: topic_id_to_label.get(match.group(1), "this topic"), text)
+
+
 def sanitize_assistant_message(
     assistant_message: str,
     *,
@@ -545,14 +563,8 @@ def sanitize_assistant_message(
     chat_language: str = language_policy.CHAT_LANGUAGE_ENGLISH,
 ) -> str:
     """Apply hard guardrails to the student-facing tutor message."""
-    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
-
-    def replace_topic_id(match):
-        topic_id = match.group(1)
-        return topic_id_to_label.get(topic_id, "this topic")
-
     sanitized = _normalize_malformed_math_text(assistant_message)
-    sanitized = _BARE_TOPIC_ID_RE.sub(replace_topic_id, sanitized).strip()
+    sanitized = _replace_topic_ids(sanitized, topic_defs).strip()
     if not timing_context or not timing_context.get("timing_reliable", False):
         sanitized = _TIME_CLAIM_RE.sub("time left", sanitized)
     if not language_policy.chat_is_english_only(chat_language):
@@ -1083,7 +1095,7 @@ def generate_report(
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
         report_text = language_policy.ensure_english_text(
-            str(parsed["report_text"]),
+            _replace_topic_ids(str(parsed["report_text"]), resolve_topic_defs(lecture_package)),
             language_policy.ENGLISH_ONLY_REPORT_FALLBACK,
         )
     except openai_.AuthenticationError:

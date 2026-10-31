@@ -1266,6 +1266,19 @@ def test_turn_reminder_is_the_prompts_final_section():
     assert prompt_loader.turn_reminder("Rules.\n") is None
 
 
+def test_turn_message_names_the_warning_turn_only_on_that_turn():
+    warning = {"closing_mode": True, "timeout_warning_sent": False, "minutes_remaining": 5}
+    assert "warning turn" in bot_engine._turn_message(None, None, warning)
+    assert "about 5 minutes" in bot_engine._turn_message(None, None, warning)
+    for timing in (None, {"closing_mode": False}, {"closing_mode": True, "timeout_warning_sent": True}):
+        assert "warning turn" not in bot_engine._turn_message(None, None, timing)
+
+
+def test_replace_topic_ids_uses_labels():
+    topic_defs = [{"topic_id": "T3", "label": "Moments from A"}]
+    assert bot_engine._replace_topic_ids("the key T3 step", topic_defs) == "the key Moments from A step"
+
+
 def test_pml_tutor_prompt_has_a_turn_reminder():
     prompt = prompt_loader.load_prompt_template(PML_PROMPT)
     assert prompt_loader.turn_reminder(prompt)

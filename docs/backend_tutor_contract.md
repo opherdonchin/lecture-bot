@@ -106,7 +106,7 @@ The message carries LaTeX in its ordinary form, with single backslashes. The cha
 
 **Format reminder:** tutor messages in the recent history appear as plain text, without the tags or the JSON object, and the model sometimes copies that and stops after the message. So the backend adds a short system message after the student's latest message, restating the reply format.
 
-**Turn reminder:** a prompt may end with a section headed exactly `## Turn reminder`, holding the few rules its specification keeps in view on every turn. The backend sends that section's text in the same system message, so the tutor reads it last on each turn.
+**Turn reminder:** a prompt may end with a section headed exactly `## Turn reminder`, holding the few rules its specification keeps in view on every turn. The backend sends that section's text in the same system message, so the tutor reads it last on each turn. On the warning turn, the same message also says that this is the warning turn and gives `minutes_remaining`.
 
 **Tolerant parsing:** the backend parses the reply as follows.
 - If the tags are missing, the message is the text before the JSON object.
