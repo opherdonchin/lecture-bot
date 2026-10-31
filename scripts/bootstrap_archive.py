@@ -137,7 +137,7 @@ def _build_linked_documents(items: list[dict]) -> dict[str, str | None]:
                     links[link_type] = by_type[link_type]
 
         elif dt in ("tutor_generator_prompt", "spec_repair_prompt"):
-            for link_type in ("tutor_spec_contract", "backend_contract"):
+            for link_type in ("tutor_spec_contract", "backend_contract", "lecture_package_contract"):
                 if link_type in by_type:
                     links[link_type] = by_type[link_type]
 

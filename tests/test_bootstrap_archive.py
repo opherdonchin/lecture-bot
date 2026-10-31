@@ -188,6 +188,7 @@ def test_bootstrap_updates_links_for_existing_content_when_contract_changes(db, 
     generator = db.get(models.ArchiveDocumentModel, "doc_tutor_generator_prompt_2026-05-01")
     links = helpers.parse_linked_documents(generator.linked_documents_json)
     assert links["backend_contract"] == new_backend_id
+    assert links["lecture_package_contract"] == "doc_lecture_package_contract_2026-05-01"
 
 
 def test_bootstrap_same_version_changed_content_uses_suffixed_id_and_real_links(db, repo_root):

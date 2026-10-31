@@ -68,6 +68,8 @@ A contract is valid if:
 5. **It describes sorts of information, not a lecture's content.** It requires exact wording only where the code or the prompt depends on that wording, and says so. Any layout it shows is an example.
 6. **It changes with its prompt.** When a prompt starts or stops relying on some kind of information, the contract and the prompt change in the same pull request, and the contract gets a new version and a new file.
 
+**What invalidates a contract.** A change to what packages actually supply, in the sorts of information rather than one lecture's content, always does, and the contract then gets a new version. A change to a tutor specification or to the prompt generator may: a specification may come to need information the contract doesn't list, and a generator may change how contracts are specified or what's required of them. A pull request changing either of those says whether it invalidates the contract.
+
 <a id="comparing-declarations"></a>
 **Comparing declarations.** A package declares the contract it was built for, as `"package_contract"` in `lecture_config.json`. The **package check**, which is [`check-lecture`](../README.md#agent-prepared-lectures), compares that with the prompt's declaration and fails if they differ or if the contract has no file. So packages built for an old version fail the check until they are rebuilt; lectures already installed are not affected. The backend does not compare them while running, because a mismatch makes a poorer tutor, not a broken one, and refusing could take a live lecture down when a prompt changes.
 

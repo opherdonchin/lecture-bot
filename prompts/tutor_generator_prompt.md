@@ -338,13 +338,21 @@ None.
 
 ### Private artifact schema
 
-Then provide the private artifact JSON Schema in one fenced `json` code block.
+Then provide the private artifact JSON Schema between these two lines:
+
+<private_artifact_schema>
+...
+</private_artifact_schema>
 
 ### Runtime tutor prompt
 
-Then provide the full runtime tutor prompt in one fenced code block and nothing else after it.
+Then provide the full runtime tutor prompt between these two lines:
 
-The output is read by a program that ends the prompt at the first closing code fence and at the first line beginning with `###`. So the runtime tutor prompt itself must contain no code fences and no line beginning with `###`; show its reply format and examples as plain lines.
+<runtime_tutor_prompt>
+...
+</runtime_tutor_prompt>
+
+Each tag must be on a line of its own and appear exactly once. A program reads the text between them, so the prompt may contain anything else, including code fences and headings, but it must not contain these tag lines.
 
 # Standards for defect reporting
 

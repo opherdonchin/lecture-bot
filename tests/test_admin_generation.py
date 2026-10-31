@@ -1,6 +1,7 @@
 import json
 import pathlib
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -67,6 +68,7 @@ def _make_active_generation_docs(db):
         linked={
             "tutor_spec_contract": spec_contract.document_id,
             "backend_contract": backend_contract.document_id,
+            "lecture_package_contract": _PACKAGE_CONTRACT_ID,
         },
         content="generator prompt",
     )
@@ -84,14 +86,14 @@ None.
 - Add more examples.
 
 ### Private artifact schema
-```json
+<private_artifact_schema>
 {"type":"object","additionalProperties":false}
-```
+</private_artifact_schema>
 
 ### Runtime tutor prompt
-```
+<runtime_tutor_prompt>
 Return JSON only.
-```
+</runtime_tutor_prompt>
 """
 
     parsed = admin_generation.parse_generator_output(raw)
@@ -121,14 +123,14 @@ None.
 None.
 
 ### Private artifact schema
-```json
+<private_artifact_schema>
 {{"type":"object"}}
-```
+</private_artifact_schema>
 
 ### Runtime tutor prompt
-```text
+<runtime_tutor_prompt>
 {prompt}
-```
+</runtime_tutor_prompt>
 """
 
     parsed = admin_generation.parse_generator_output(raw)
@@ -152,12 +154,13 @@ def test_generation_refused_without_active_package_contract():
     _make_doc(db, "tutor_generator_prompt", "2026-05-11", active=True, linked={
         "tutor_spec_contract": spec_contract.document_id,
         "backend_contract": backend_contract.document_id,
+        "lecture_package_contract": _PACKAGE_CONTRACT_ID,
     })
 
     result = admin_generation.run_generation(db, "current spec", "Spec Title")
 
     assert result["ok"] is False
-    assert "lecture_package_contract" in result["error"]
+    assert "No active document(s) in archive: lecture_package_contract" in result["error"]
 
 
 def test_generation_refused_when_generator_links_no_contracts():
@@ -171,6 +174,33 @@ def test_generation_refused_when_generator_links_no_contracts():
 
     assert result["ok"] is False
     assert "does not link to" in result["error"]
+
+
+def test_generation_refused_when_generator_does_not_link_the_package_contract():
+    db = _session()
+    spec_contract, backend_contract, generator = _make_active_generation_docs(db)
+    generator.linked_documents_json = json.dumps({
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+    })
+
+    result = admin_generation.run_generation(db, "current spec", "Spec Title")
+
+    assert result["ok"] is False
+    assert "does not link to: lecture_package_contract" in result["error"]
+
+
+def test_a_new_package_contract_invalidates_the_generator_like_a_new_backend_contract():
+    db = _session()
+    _make_active_generation_docs(db)
+    db.get(models.ArchiveDocumentModel, _PACKAGE_CONTRACT_ID).active = False
+    _make_doc(db, "lecture_package_contract", "pml-brief-2", active=True, content="# Lecture package contract `pml-brief-2`")
+
+    result = admin_generation.run_generation(db, "current spec", "Spec Title")
+
+    assert result["ok"] is False
+    assert "lecture_package_contract" in result["error"]
+    assert "does not match active" in result["error"]
 
 
 def test_generate_prompt_preview_sends_package_contract_before_the_specification(monkeypatch):
@@ -248,6 +278,49 @@ def test_generator_prompt_asks_for_the_current_contract():
     assert "JSON-only" not in generator
     # The version comes from the contract the generator is given, not from its own text.
     assert prompt_loader.BACKEND_CONTRACT_VERSION not in generator
+
+
+def _generator_output(prompt_block: str, schema_block: str = '<private_artifact_schema>\n{"type":"object"}\n</private_artifact_schema>') -> str:
+    return (
+        "### Conformance failures\nNone.\n\n### Backend incompatibilities\nNone.\n\n### Recommended omissions\nNone.\n\n"
+        f"### Private artifact schema\n{schema_block}\n\n### Runtime tutor prompt\n{prompt_block}\n"
+    )
+
+
+@pytest.mark.parametrize("prompt", [
+    "Line one.\nReply like this:\n```text\n<assistant_message>\nhi\n</assistant_message>\n```\nLine last.",
+    "Line one.\n### TIMING\nLine last.",
+    "Line one.\n```text\nx\n```\nmore\n### TIMING\nLine last.",
+    "Line one.\n````\n```text\nx\n```\n````\nLine last.",
+    "Line one.\n### Conformance failures\n- not a real failure\nLine last.",
+])
+def test_parse_generator_output_keeps_the_whole_prompt_whatever_it_contains(prompt):
+    raw = _generator_output(f"<runtime_tutor_prompt>\n{prompt}\n</runtime_tutor_prompt>")
+
+    parsed = admin_generation.parse_generator_output(raw)
+
+    assert parsed["status"] == "success"
+    assert parsed["tutor_prompt"] == prompt
+
+
+@pytest.mark.parametrize("prompt_block", [
+    "```\nA prompt in the old form.\n```",
+    "<runtime_tutor_prompt>\nNo closing tag.",
+    "No opening tag.\n</runtime_tutor_prompt>",
+    "</runtime_tutor_prompt>\nBackwards.\n<runtime_tutor_prompt>",
+    "<runtime_tutor_prompt>\nOne.\n</runtime_tutor_prompt>\n<runtime_tutor_prompt>\nTwo.\n</runtime_tutor_prompt>",
+    "<runtime_tutor_prompt>\n</runtime_tutor_prompt>",
+])
+def test_parse_generator_output_refuses_a_malformed_prompt_block(prompt_block):
+    with pytest.raises(admin_generation.GenerationOutputError):
+        admin_generation.parse_generator_output(_generator_output(prompt_block))
+
+
+def test_parse_generator_output_refuses_a_missing_schema_block():
+    raw = _generator_output("<runtime_tutor_prompt>\nA prompt.\n</runtime_tutor_prompt>", schema_block='```json\n{}\n```')
+
+    with pytest.raises(admin_generation.GenerationOutputError):
+        admin_generation.parse_generator_output(raw)
 
 
 def test_parse_generator_output_failed_sections_do_not_require_prompt():
@@ -414,6 +487,7 @@ def test_validate_spec_rejects_stale_active_generator_prompt(monkeypatch):
         linked={
             "tutor_spec_contract": old_spec_contract.document_id,
             "backend_contract": backend_contract.document_id,
+            "lecture_package_contract": _PACKAGE_CONTRACT_ID,
         },
         content="generator prompt",
     )
@@ -433,7 +507,8 @@ def test_prompt_generation_prompt_requires_schema_and_prompt_sections():
     assert "already validated tutor specification" in prompt
     assert "### Private artifact schema" in prompt
     assert "### Runtime tutor prompt" in prompt
-    assert "fenced json code block" in prompt
+    assert "<private_artifact_schema>" in prompt
+    assert "<runtime_tutor_prompt>" in prompt
     assert "generator rules" in prompt
 
 
@@ -472,14 +547,14 @@ None.
 None.
 
 ### Private artifact schema
-```json
+<private_artifact_schema>
 {"type":"object","additionalProperties":false}
-```
+</private_artifact_schema>
 
 ### Runtime tutor prompt
-```
+<runtime_tutor_prompt>
 generated prompt
-```
+</runtime_tutor_prompt>
 """
     monkeypatch.setattr(admin_generation, "_call_openai", lambda _system, _user: raw)
 

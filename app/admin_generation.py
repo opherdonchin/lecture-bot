@@ -50,7 +50,7 @@ def _get_required_active_docs(
     if missing:
         return None, f"No active document(s) in archive: {', '.join(missing)}"
     generator_links = helpers.parse_linked_documents(docs["tutor_generator_prompt"].linked_documents_json)
-    unlinked = [t for t in ("tutor_spec_contract", "backend_contract") if t not in generator_links]
+    unlinked = sorted(t for t in helpers.CONTRACT_TYPES if t not in generator_links)
     if unlinked:
         return (
             None,
@@ -141,9 +141,9 @@ def _prompt_generation_system_prompt(generator_prompt_text: str) -> str:
         "### Recommended omissions\n"
         "Use bullet points for non-blocking recommended omissions. Use None. if there are none.\n\n"
         "### Private artifact schema\n"
-        "Return one fenced json code block containing the per-turn private_artifact JSON Schema.\n\n"
+        "Return the per-turn private_artifact JSON Schema between a <private_artifact_schema> line and a </private_artifact_schema> line.\n\n"
         "### Runtime tutor prompt\n"
-        "Return one fenced code block containing the runtime tutor prompt.\n\n"
+        "Return the runtime tutor prompt between a <runtime_tutor_prompt> line and a </runtime_tutor_prompt> line.\n\n"
         "Generator instructions:\n\n"
         f"{generator_prompt_text}"
     )
@@ -316,22 +316,30 @@ def _display_items(section: str) -> list[str]:
     return [_strip_item_label(item) for item in _bullet_items(section)]
 
 
-def _first_fenced_block(section: str, language: str | None = None) -> str:
-    lang_pattern = re.escape(language) if language else r"[A-Za-z0-9_-]*"
-    pattern = re.compile(
-        rf"```{lang_pattern}\s*\n(?P<body>.*?)\n```",
-        re.DOTALL,
-    )
-    match = pattern.search(section)
-    if not match:
-        raise GenerationOutputError("Expected a fenced code block in generator output.")
-    return match.group("body").strip()
+def _extract_tagged_block(raw_output: str, tag: str) -> tuple[str, str | None]:
+    """Return the output without the block between a tag's own lines, and the block's text.
+
+    Free text can contain code fences and headings, so a block ends only at its
+    closing tag. The block's text is None if neither tag is there; any other
+    arrangement than one opening line and then one closing line is refused,
+    so that a block is never cut short silently.
+    """
+    openings = list(re.finditer(rf"^[ \t]*<{tag}>[ \t]*$", raw_output, re.MULTILINE))
+    closings = list(re.finditer(rf"^[ \t]*</{tag}>[ \t]*$", raw_output, re.MULTILINE))
+    if not openings and not closings:
+        return raw_output, None
+    if len(openings) != 1 or len(closings) != 1 or openings[0].end() > closings[0].start():
+        raise GenerationOutputError(f"Expected one <{tag}> line followed by one </{tag}> line in generator output.")
+    text = raw_output[openings[0].end():closings[0].start()].strip()
+    return raw_output[:openings[0].start()] + raw_output[closings[0].end():], text
 
 
 def parse_generator_output(raw_output: str) -> dict:
-    conformance_failures = _blocking_items(_section_text(raw_output, "Conformance failures"))
-    backend_incompatibilities = _blocking_backend_incompatibilities(_section_text(raw_output, "Backend incompatibilities"))
-    recommended_omissions = _display_items(_section_text(raw_output, "Recommended omissions"))
+    remaining_output, tutor_prompt = _extract_tagged_block(raw_output, "runtime_tutor_prompt")
+    remaining_output, schema_text = _extract_tagged_block(remaining_output, "private_artifact_schema")
+    conformance_failures = _blocking_items(_section_text(remaining_output, "Conformance failures"))
+    backend_incompatibilities = _blocking_backend_incompatibilities(_section_text(remaining_output, "Backend incompatibilities"))
+    recommended_omissions = _display_items(_section_text(remaining_output, "Recommended omissions"))
 
     if conformance_failures or backend_incompatibilities:
         return {
@@ -343,13 +351,9 @@ def parse_generator_output(raw_output: str) -> dict:
             "tutor_prompt": None,
         }
 
-    schema_section = _section_text(raw_output, "Private artifact schema")
-    prompt_section = _section_text(raw_output, "Runtime tutor prompt")
-    if not schema_section or not prompt_section:
-        raise GenerationOutputError("Generator output is missing the schema or runtime prompt section.")
+    if not schema_text or not tutor_prompt:
+        raise GenerationOutputError("Generator output is missing the schema or runtime prompt.")
 
-    schema_text = _first_fenced_block(schema_section, "json")
-    tutor_prompt = _first_fenced_block(prompt_section)
     return {
         "status": "success",
         "conformance_failures": [],
