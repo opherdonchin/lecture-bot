@@ -8,11 +8,12 @@ from sqlalchemy.orm import sessionmaker
 import app.archive_helpers as helpers
 import app.db as db_module
 import app.models as models
+import app.prompt_loader as prompt_loader
 from scripts.bootstrap_archive import bootstrap_archive
 
 
 SPEC_CONTRACT = "# Spec Contract\n\nThis is the spec contract."
-BACKEND_CONTRACT = "# Backend Contract\n\nThis is the backend contract."
+BACKEND_CONTRACT = f"# Backend Contract\n\n**Contract version: {prompt_loader.BACKEND_CONTRACT_VERSION}.**"
 GENERATOR_PROMPT = "# Generator Prompt\n\nGenerate a tutor."
 TUTOR_SPEC = "# Tutor Spec\n\nThis is the tutor specification."
 ARTIFACT_SCHEMA = json.dumps({"type": "object", "properties": {}})

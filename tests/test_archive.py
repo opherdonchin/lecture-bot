@@ -1,5 +1,6 @@
 import datetime
 import json
+import pathlib
 
 import pytest
 from sqlalchemy import create_engine
@@ -8,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 import app.archive_helpers as helpers
 import app.db as db_module
 import app.models as models
+import app.prompt_loader as prompt_loader
 
 
 @pytest.fixture
@@ -158,7 +160,13 @@ def test_compatible_no_active_contract(db):
 
 def _setup_full_active_contracts(db):
     spec_contract = _make_doc(db, "tutor_spec_contract", "2026-05-01", active=True)
-    backend_contract = _make_doc(db, "backend_contract", "2026-05-01", active=True)
+    backend_contract = _make_doc(
+        db,
+        "backend_contract",
+        "2026-05-01",
+        active=True,
+        content=f"**Contract version: {prompt_loader.BACKEND_CONTRACT_VERSION}.**",
+    )
     return spec_contract, backend_contract
 
 
@@ -311,3 +319,45 @@ def test_is_activatable_happy_path(db):
     ok, reasons = helpers.is_activatable(doc, db)
     assert ok
     assert reasons == []
+
+
+def _prompt_linked_to_active_backend_contract(db, contract_text):
+    """Return a fully linked tutor prompt whose active backend contract has the given text."""
+    spec_contract = _make_doc(db, "tutor_spec_contract", "2026-05-01", active=True)
+    backend_contract = _make_doc(db, "backend_contract", "2026-05-01", active=True, content=contract_text)
+    schema_doc = _make_schema_doc(db)
+    spec_doc = _make_doc(db, "tutor_spec", "2026-05-01", active=True, linked={
+        "tutor_spec_contract": spec_contract.document_id,
+    })
+    gen_doc = _make_doc(db, "tutor_generator_prompt", "2026-05-01", active=True, linked={
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+    })
+    return _make_doc(db, "tutor_prompt", "2026-05-01", linked={
+        "tutor_spec": spec_doc.document_id,
+        "tutor_artifact_schema": schema_doc.document_id,
+        "tutor_generator_prompt": gen_doc.document_id,
+        "tutor_spec_contract": spec_contract.document_id,
+        "backend_contract": backend_contract.document_id,
+    })
+
+
+def test_is_activatable_rejects_backend_contract_of_another_version(db):
+    doc = _prompt_linked_to_active_backend_contract(db, "**Contract version: 0.5.0.**")
+    ok, reasons = helpers.is_activatable(doc, db)
+    assert not ok
+    assert any("declares version '0.5.0'" in r for r in reasons)
+
+
+def test_is_activatable_rejects_backend_contract_without_a_version(db):
+    doc = _prompt_linked_to_active_backend_contract(db, "A contract from before versions.")
+    ok, reasons = helpers.is_activatable(doc, db)
+    assert not ok
+    assert any("declares version None" in r for r in reasons)
+
+
+def test_repository_backend_contract_declares_the_code_version(db):
+    contract_text = pathlib.Path("docs/backend_tutor_contract.md").read_text(encoding="utf-8")
+    doc = _prompt_linked_to_active_backend_contract(db, contract_text)
+    ok, reasons = helpers.is_activatable(doc, db)
+    assert ok, reasons

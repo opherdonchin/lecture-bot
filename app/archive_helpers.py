@@ -1,12 +1,17 @@
 import datetime
 import hashlib
 import json
+import re as re_
 
 import sqlalchemy.orm as sqlalchemy_orm
 
 import app.models as models
+import app.prompt_loader as prompt_loader
 
 CONTRACT_TYPES: frozenset[str] = models.CONTRACT_TYPES
+
+# How a backend contract document states its version (docs/backend_tutor_contract.md).
+_CONTRACT_VERSION_RE = re_.compile(r"\*\*Contract version: *(\d+(?:\.\d+)*)\.\*\*")
 
 TUTOR_PROMPT_REQUIRED_LINKS: frozenset[str] = frozenset({
     "tutor_spec",
@@ -120,6 +125,18 @@ def is_activatable(
             reasons.append(
                 f"linked {contract_type} ({links[contract_type]!r}) "
                 f"does not match active ({active_id!r})"
+            )
+
+    backend_contract = db.get(models.ArchiveDocumentModel, links["backend_contract"])
+    if backend_contract is None:
+        reasons.append(f"linked backend_contract {links['backend_contract']!r} not found in archive")
+    else:
+        version_match = _CONTRACT_VERSION_RE.search(backend_contract.content_text)
+        linked_version = version_match.group(1) if version_match else None
+        if linked_version != prompt_loader.BACKEND_CONTRACT_VERSION:
+            reasons.append(
+                f"linked backend_contract declares version {linked_version!r}; "
+                f"this backend implements {prompt_loader.BACKEND_CONTRACT_VERSION!r}"
             )
 
     tutor_spec_id = links.get("tutor_spec")
