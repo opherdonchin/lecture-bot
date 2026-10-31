@@ -19,6 +19,7 @@ This directory now keeps only current operating and design references. The older
 - [`tutor_specification_contract.md`](tutor_specification_contract.md) - authoring contract for tutor specifications.
 - [`backend_tutor_contract.md`](backend_tutor_contract.md) - current runtime contract between backend, prompt, and state sanitizer.
 - [`lecture_package_contract.md`](lecture_package_contract.md) - what the app requires of every lecture package and what makes a package contract valid; the contracts themselves are in [`lecture_package_contracts/`](lecture_package_contracts/).
+- [`lecture_package_handshake.md`](lecture_package_handshake.md) - how an agent or instructor gets what's expected and installs a package.
 - [`error_policy.md`](error_policy.md) - current error-handling and fallback policy.
 
 ## Prompt Sources

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# The lecture package handshake on the server: contract, check, install.
+# See docs/lecture_package_handshake.md.
+set -euo pipefail
+
+code_dir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+cd "$code_dir"
+exec "${LECTURE_BOT_REMOTE_PIXI_BIN:-$HOME/.pixi/bin/pixi}" run --as-is python scripts/lecture_package_server.py "$@"

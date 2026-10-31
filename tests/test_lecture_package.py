@@ -3,6 +3,7 @@ import pathlib as pathlib_
 
 import pytest
 
+import app.lecture_packages as lecture_packages
 import scripts.lecture_package as lecture_package
 
 
@@ -101,7 +102,7 @@ def test_check_uses_a_lectures_own_tutor_prompt(tmp_path):
 
 
 def test_check_fails_when_the_declared_contract_has_no_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(lecture_package, "PACKAGE_CONTRACTS_DIR", tmp_path / "no_contracts")
+    monkeypatch.setattr(lecture_packages, "PACKAGE_CONTRACTS_DIR", tmp_path / "no_contracts")
 
     result = lecture_package.check_lecture(make_instance(tmp_path))
 
@@ -127,79 +128,27 @@ def test_check_fails_when_config_topics_override_the_brief(tmp_path):
     assert any("differ from rubric.md" in error for error in result.errors)
 
 
-def push(tmp_path, target, **kwargs) -> int:
-    return lecture_package.push_lecture(
-        "pml", "lecture_02", instances_root=tmp_path, target_dir=target, env={}, **kwargs
-    )
-
-
-def test_push_installs_runtime_files_inactive(tmp_path):
-    make_instance(tmp_path, active=True)
-    target = tmp_path / "server" / "lectures"
-    target.mkdir(parents=True)
-
-    assert push(tmp_path, target) == 0
-
-    installed = target / "lecture_02"
-    assert sorted(p.name for p in installed.iterdir()) == ["bot_notes.md", "lecture_config.json", "rubric.md"]
-    assert j.loads((installed / "lecture_config.json").read_text())["active"] is False
-    assert [p.name for p in target.iterdir()] == ["lecture_02"]
-
-
-def test_push_dry_run_installs_nothing(tmp_path):
-    make_instance(tmp_path)
-    target = tmp_path / "server" / "lectures"
-    target.mkdir(parents=True)
-
-    assert push(tmp_path, target, dry_run=True) == 0
-    assert list(target.iterdir()) == []
-
-
-def test_push_refuses_to_overwrite_without_replace_and_backs_up_with_it(tmp_path):
-    make_instance(tmp_path)
-    target = tmp_path / "server" / "lectures"
-    target.mkdir(parents=True)
-    assert push(tmp_path, target) == 0
-
-    assert push(tmp_path, target) != 0
-    assert push(tmp_path, target, replace=True) == 0
-    backups = list((tmp_path / "server" / "lecture_backups").iterdir())
-    assert len(backups) == 1 and backups[0].name.startswith("lecture_02-")
-
-
-def test_push_never_replaces_an_active_lecture(tmp_path):
-    make_instance(tmp_path)
-    target = tmp_path / "server" / "lectures"
-    (target / "lecture_02").mkdir(parents=True)
-    (target / "lecture_02" / "lecture_config.json").write_text(j.dumps({"active": True}), encoding="utf-8")
-
-    assert push(tmp_path, target, replace=True) != 0
-    assert j.loads((target / "lecture_02" / "lecture_config.json").read_text())["active"] is True
-
-
-def test_push_treats_a_lecture_with_no_active_setting_as_active(tmp_path):
-    make_instance(tmp_path)
-    target = tmp_path / "server" / "lectures"
-    (target / "lecture_02").mkdir(parents=True)
-    (target / "lecture_02" / "lecture_config.json").write_text(j.dumps({"title": "Old"}), encoding="utf-8")
-
-    assert push(tmp_path, target, replace=True) != 0
-    assert j.loads((target / "lecture_02" / "lecture_config.json").read_text()) == {"title": "Old"}
-
-
-def test_push_refuses_a_failing_package(tmp_path):
-    lecture_dir = make_instance(tmp_path)
-    (lecture_dir / "bot_notes.md").unlink()
-    target = tmp_path / "server" / "lectures"
-    target.mkdir(parents=True)
-
-    assert push(tmp_path, target) == 1
-    assert list(target.iterdir()) == []
-
-
 def test_ssh_command_uses_remote_settings():
     env = {"LECTURE_BOT_REMOTE_HOST": "example.org", "LECTURE_BOT_REMOTE_USER": "ops", "LECTURE_BOT_SSH_OPTS": "-p 2222"}
 
-    assert lecture_package.push_command(env, None) == ["ssh", "-p", "2222", "ops@example.org"]
+    assert lecture_package.push_command(env) == ["ssh", "-p", "2222", "ops@example.org"]
     with pytest.raises(SystemExit):
-        lecture_package.push_command({}, None)
+        lecture_package.push_command({})
+
+
+def test_remote_command_names_the_handshake_operation():
+    env = {"LECTURE_BOT_REMOTE_ROOT": "/code"}
+
+    assert lecture_package.remote_command(env, "pml", "lecture_02", replace=False, dry_run=True) == (
+        "/code/scripts/lecture-package check pml lecture_02"
+    )
+    assert lecture_package.remote_command(env, "pml", "lecture_02", replace=True, dry_run=False) == (
+        "/code/scripts/lecture-package install pml lecture_02 --replace"
+    )
+
+
+def test_push_refuses_a_failing_package_before_contacting_the_server(tmp_path):
+    lecture_dir = make_instance(tmp_path)
+    (lecture_dir / "bot_notes.md").unlink()
+
+    assert lecture_package.push_lecture("pml", "lecture_02", instances_root=tmp_path, env={}) == 1

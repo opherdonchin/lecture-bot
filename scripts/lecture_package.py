@@ -1,12 +1,8 @@
-"""Check a lecture package and push it, inactive, to a course instance.
+"""Check a lecture folder locally, and send it to a course's instance over SSH.
 
-A lecture package is the folder the student app reads for one lecture:
-``lecture_config.json``, ``rubric.md`` (a rubric or a lecture brief) and the
-context files the course lists. A local agent prepares packages by reading the
-contract its course's tutor prompt declares (docs/lecture_package_contracts/)
-and following the course's recipe; this script checks them with the student
-app's own loader and installs them on the server. See the README's
-"Agent-prepared lectures".
+A lecture package is the folder the student app reads for one lecture. These are
+conveniences for someone working in a lecture-bot clone; an agent elsewhere uses
+the handshake directly. See docs/lecture_package_handshake.md.
 
     pixi run check-lecture ~/lecture-bot-instances/pml/lectures/lecture_02
     pixi run push-lecture -- pml lecture_02 --dry-run
@@ -15,8 +11,6 @@ app's own loader and installs them on the server. See the README's
 from __future__ import annotations
 
 import argparse as ap_module
-import dataclasses as dc
-import io as io_module
 import json as j
 import os as os_module
 import pathlib as pathlib_
@@ -24,8 +18,6 @@ import re as re_module
 import shlex as shlex_module
 import subprocess as subprocess_module
 import sys as sys_module
-import tarfile as tarfile_module
-import time as time_module
 
 
 SCRIPT_DIR = pathlib_.Path(__file__).resolve().parent
@@ -33,129 +25,30 @@ REPO_ROOT = SCRIPT_DIR.parent
 if str(REPO_ROOT) not in sys_module.path:
     sys_module.path.insert(0, str(REPO_ROOT))
 
-import app.bot_engine as bot_engine
-import app.lecture_loader as lecture_loader
-import app.prompt_loader as prompt_loader
+import app.lecture_packages as lecture_packages
 
 
 DEFAULT_INSTANCES_ROOT = pathlib_.Path.home() / "lecture-bot-instances"
-DEFAULT_REMOTE_INSTANCES_ROOT = "/srv/lecture-bot/instances"
+DEFAULT_REMOTE_ROOT = "/srv/lecture-bot/code"
 REMOTE_ENV_FILE = REPO_ROOT / "deploy" / "remote.env"
 INSTANCE_EXAMPLES_DIR = REPO_ROOT / "deploy" / "instances"
-PACKAGE_CONTRACTS_DIR = REPO_ROOT / "docs" / "lecture_package_contracts"
 PROMPT_TEMPLATE_RE = re_module.compile(r"^TUTOR_PROMPT_TEMPLATE=(\S+)", re_module.MULTILINE)
-LOAD_BEARING_RE = re_module.compile(r"^\s*-\s*\*\*Load-bearing:\*\*.*$", re_module.MULTILINE)
 
 
-@dc.dataclass
-class CheckResult:
-    """What check_lecture found: the files to install, topics and problems."""
-
-    lecture_id: str
-    files: list[str]
-    topics: list[dict]
-    load_bearing: list[str]
-    errors: list[str]
-    sizes: dict[str, int]
-    package_contract: str | None = None
-
-    @property
-    def ok(self) -> bool:
-        return not self.errors
+def instance_prompt(course: str) -> str | None:
+    """Return the tutor prompt in a course's example settings, the local stand-in for its real settings."""
+    settings = INSTANCE_EXAMPLES_DIR / f"{course}.env.example"
+    match = PROMPT_TEMPLATE_RE.search(settings.read_text(encoding="utf-8")) if settings.exists() else None
+    return match.group(1) if match else None
 
 
-def check_lecture(lecture_dir: pathlib_.Path) -> CheckResult:
-    """Check a lecture folder the way the student app will load it.
-
-    The folder's parent is the course's lectures folder, whose config.json
-    supplies the default context files.
-    """
+def check_lecture(lecture_dir: pathlib_.Path) -> lecture_packages.PackageResult:
+    """Check a local lecture folder, <course>/lectures/<lecture_id>."""
     lecture_dir = lecture_dir.resolve()
-    lecture_id = lecture_dir.name
-    result = CheckResult(lecture_id, [], [], [], [], {})
-    try:
-        package = lecture_loader.load_lecture_package(lecture_dir.parent, lecture_id)
-    except (FileNotFoundError, ValueError, j.JSONDecodeError) as exc:
-        result.errors.append(str(exc))
-        return result
-
-    config = package["config"]
-    if config.get("lecture_id", lecture_id) != lecture_id:
-        result.errors.append(
-            f"lecture_config.json has lecture_id {config.get('lecture_id')!r}, but the folder is {lecture_id!r}."
-        )
-
-    result.package_contract = config.get("package_contract")
-    contract_problem = _package_contract_problem(
-        lecture_dir.parent.parent.name, result.package_contract, config.get("tutor_prompt_template")
-    )
-    if contract_problem:
-        result.errors.append(contract_problem)
-
-    rubric_topics = bot_engine.parse_rubric_topics(package["rubric"])
-    if not rubric_topics:
-        result.errors.append("rubric.md has no '### T<n>. <name>' topic headings.")
-
-    # The app uses the config's topic list in preference to rubric.md's
-    # headings, so a stale list would silently override the brief.
-    config_topics = package["topics"]
-    if config_topics:
-        normalized = bot_engine.normalize_topic_defs(config_topics)
-        if _topic_signature(normalized) != _topic_signature(rubric_topics):
-            result.errors.append(
-                "lecture_config.json's 'topics' differ from rubric.md's headings; the app would use the config's. "
-                "Remove 'topics' from the config or make them match."
-            )
-
-    result.topics = rubric_topics
-    result.load_bearing = [line.strip() for line in LOAD_BEARING_RE.findall(package["rubric"])]
-    context_paths = [
-        item["path"]
-        for item in lecture_loader.resolve_context_files(
-            lecture_loader.load_lectures_defaults(lecture_dir.parent), config
-        )
-        if (lecture_dir / item["path"]).exists()
-    ]
-    result.files = ["lecture_config.json", "rubric.md", *context_paths]
-    result.sizes = {name: (lecture_dir / name).stat().st_size for name in result.files}
-    return result
+    return lecture_packages.check_package(lecture_dir, instance_prompt(lecture_dir.parent.parent.name))
 
 
-def _package_contract_problem(course: str, declared: str | None, lecture_template: str | None) -> str | None:
-    """Return why the package's contract does not match the one its tutor prompt declares.
-
-    The prompt is the lecture's own tutor_prompt_template if it sets one, as in
-    the app, and otherwise the one in the course's instance settings.
-    """
-    template = lecture_template
-    if template is None:
-        settings = INSTANCE_EXAMPLES_DIR / f"{course}.env.example"
-        match = PROMPT_TEMPLATE_RE.search(settings.read_text(encoding="utf-8")) if settings.exists() else None
-        if match is None:
-            return f"Cannot find the tutor prompt for course {course!r}: no TUTOR_PROMPT_TEMPLATE in {settings.name}."
-        template = match.group(1)
-    try:
-        expected = prompt_loader.declared_package_contract(prompt_loader.load_prompt_template(template))
-    except OSError as error:
-        return f"Cannot read tutor prompt {template!r}: {error}"
-    if expected is None:
-        return f"Tutor prompt {template} declares no lecture package contract."
-    contract_file = PACKAGE_CONTRACTS_DIR / f"{expected}.md"
-    if not contract_file.exists():
-        return f"Tutor prompt {template} declares contract {expected!r}, which has no file at {contract_file.name}."
-    if declared != expected:
-        return (
-            f"lecture_config.json declares package_contract {declared!r}, but tutor prompt {template} "
-            f"expects {expected!r}. See docs/lecture_package_contracts/{contract_file.name}."
-        )
-    return None
-
-
-def _topic_signature(topics: list[dict]) -> list[tuple[str, str, str]]:
-    return [(t["topic_id"], t["label"], t["importance"]) for t in topics]
-
-
-def format_check(result: CheckResult) -> str:
+def format_check(result: lecture_packages.PackageResult) -> str:
     """Render a check result for the researcher and the agent."""
     lines = [f"Lecture {result.lecture_id}: {'OK' if result.ok else 'FAILED'}"]
     for error in result.errors:
@@ -173,74 +66,6 @@ def format_check(result: CheckResult) -> str:
     return "\n".join(lines)
 
 
-def build_archive(lecture_dir: pathlib_.Path, files: list[str]) -> bytes:
-    """Tar the package's files, with the lecture always marked inactive."""
-    buffer = io_module.BytesIO()
-    with tarfile_module.open(fileobj=buffer, mode="w:gz") as tar:
-        for name in files:
-            data = (lecture_dir / name).read_bytes()
-            if name == "lecture_config.json":
-                config = j.loads(data)
-                config["active"] = False
-                data = (j.dumps(config, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-            info = tarfile_module.TarInfo(name)
-            info.size = len(data)
-            info.mode = 0o660
-            info.mtime = int(time_module.time())
-            tar.addfile(info, io_module.BytesIO(data))
-    return buffer.getvalue()
-
-
-def remote_install_script(lectures_dir: str, lecture_id: str, *, replace: bool, group: str, dry_run: bool) -> str:
-    """Shell script that installs the tar on stdin as <lectures_dir>/<lecture_id>.
-
-    It refuses to overwrite an existing lecture without replace, and replaces
-    one only if its config says it is off, because the app treats a lecture with
-    no "active" setting as on. A replaced lecture is moved to
-    <instance>/lecture_backups/, outside the folder the app lists.
-    """
-    q = shlex_module.quote
-    return f"""set -euo pipefail
-lectures={q(lectures_dir)}
-lecture_id={q(lecture_id)}
-replace={1 if replace else 0}
-dry_run={1 if dry_run else 0}
-group={q(group)}
-target="$lectures/$lecture_id"
-if [[ ! -d "$lectures" ]]; then
-  echo "No lectures folder at $lectures." >&2; exit 1
-fi
-if [[ -e "$target" ]]; then
-  if [[ $replace -ne 1 ]]; then
-    echo "Refusing: $target already exists. Use --replace to replace it." >&2; exit 1
-  fi
-  if ! grep -Eq '"active"[[:space:]]*:[[:space:]]*false' "$target/lecture_config.json" 2>/dev/null; then
-    echo "Refusing: $target is not marked as off. Switch it off in the admin page first." >&2; exit 1
-  fi
-fi
-staging=$(mktemp -d "$lectures/.push-$lecture_id.XXXXXX")
-trap 'rm -rf "$staging"' EXIT
-tar -xzf - -C "$staging"
-if [[ $dry_run -eq 1 ]]; then
-  echo "Dry run: would install into $target:"; ls -l "$staging"; exit 0
-fi
-if [[ -n "$group" ]] && getent group "$group" >/dev/null; then
-  chgrp -R "$group" "$staging"
-fi
-chmod 2770 "$staging"
-chmod 660 "$staging"/*
-if [[ -e "$target" ]]; then
-  backups="$(dirname "$lectures")/lecture_backups"
-  mkdir -p "$backups"
-  mv "$target" "$backups/$lecture_id-$(date -u +%Y%m%dT%H%M%SZ)"
-  echo "Moved the previous $lecture_id to $backups."
-fi
-mv "$staging" "$target"
-trap - EXIT
-echo "Installed $target (inactive)."
-"""
-
-
 def load_remote_env(path: pathlib_.Path = REMOTE_ENV_FILE) -> dict[str, str]:
     """Read deploy/remote.env (KEY=value lines), with the process environment taking precedence."""
     values: dict[str, str] = {}
@@ -255,15 +80,22 @@ def load_remote_env(path: pathlib_.Path = REMOTE_ENV_FILE) -> dict[str, str]:
     return values
 
 
-def push_command(env: dict[str, str], target_dir: pathlib_.Path | None) -> list[str]:
-    """The command that runs the install script: local bash for --target-dir, else ssh."""
-    if target_dir is not None:
-        return ["bash", "-c"]
+def push_command(env: dict[str, str]) -> list[str]:
+    """The ssh command that reaches the server."""
     host = env.get("LECTURE_BOT_REMOTE_HOST")
     if not host:
         raise SystemExit("LECTURE_BOT_REMOTE_HOST is not set (deploy/remote.env).")
     user = env.get("LECTURE_BOT_REMOTE_USER")
     return ["ssh", *shlex_module.split(env.get("LECTURE_BOT_SSH_OPTS", "")), f"{user}@{host}" if user else host]
+
+
+def remote_command(env: dict[str, str], course: str, lecture_id: str, *, replace: bool, dry_run: bool) -> str:
+    """The handshake command to run on the server."""
+    root = env.get("LECTURE_BOT_REMOTE_ROOT", DEFAULT_REMOTE_ROOT)
+    words = [f"{root}/scripts/lecture-package", "check" if dry_run else "install", course, lecture_id]
+    if replace and not dry_run:
+        words.append("--replace")
+    return shlex_module.join(words)
 
 
 def push_lecture(
@@ -273,13 +105,9 @@ def push_lecture(
     replace: bool = False,
     dry_run: bool = False,
     instances_root: pathlib_.Path = DEFAULT_INSTANCES_ROOT,
-    target_dir: pathlib_.Path | None = None,
     env: dict[str, str] | None = None,
 ) -> int:
-    """Check a local lecture and install it, inactive, in the course's lectures folder.
-
-    target_dir installs into a local lectures folder instead of the server.
-    """
+    """Check a local lecture and send it to the instance's install (or, for dry_run, check) operation."""
     env = load_remote_env() if env is None else env
     lecture_dir = instances_root / course / "lectures" / lecture_id
     result = check_lecture(lecture_dir)
@@ -287,23 +115,15 @@ def push_lecture(
     if not result.ok:
         print("Not pushed: the check failed.", file=sys_module.stderr)
         return 1
-
-    if target_dir is not None:
-        lectures_dir = str(target_dir)
-    else:
-        root = env.get("LECTURE_BOT_REMOTE_INSTANCES_ROOT", DEFAULT_REMOTE_INSTANCES_ROOT)
-        lectures_dir = f"{root}/{course}/lectures"
-    script = remote_install_script(
-        lectures_dir,
-        lecture_id,
-        replace=replace,
-        group=env.get("LECTURE_BOT_REMOTE_APP_GROUP", "appops"),
-        dry_run=dry_run,
-    )
-    # The script runs as the command and reads the package archive on stdin.
-    runner = push_command(env, target_dir)
-    print(f"==> {' '.join(runner)}: {lectures_dir}/{lecture_id}", flush=True)
-    completed = subprocess_module.run([*runner, script], input=build_archive(lecture_dir, result.files))
+    archive = lecture_packages.build_archive(lecture_dir, result.files)
+    command = remote_command(env, course, lecture_id, replace=replace, dry_run=dry_run)
+    print(f"==> {command}", flush=True)
+    completed = subprocess_module.run([*push_command(env), command], input=archive, stdout=subprocess_module.PIPE)
+    output = completed.stdout.decode("utf-8", errors="replace").strip()
+    try:
+        print(j.dumps(j.loads(output), indent=2, ensure_ascii=False))
+    except ValueError:
+        print(output)
     return completed.returncode
 
 
@@ -315,13 +135,12 @@ def main(argv: list[str] | None = None) -> int:
     check_parser = sub.add_parser("check", help="Check a lecture folder.")
     check_parser.add_argument("lecture_dir", type=pathlib_.Path)
 
-    push_parser = sub.add_parser("push", help="Check and install a lecture, inactive, on the server.")
+    push_parser = sub.add_parser("push", help="Send a lecture to its instance, which installs it switched off.")
     push_parser.add_argument("course")
     push_parser.add_argument("lecture_id")
-    push_parser.add_argument("--replace", action="store_true", help="Replace an existing, inactive lecture.")
-    push_parser.add_argument("--dry-run", "-n", action="store_true", help="Show what would be installed.")
+    push_parser.add_argument("--replace", action="store_true", help="Replace a lecture that is switched off.")
+    push_parser.add_argument("--dry-run", "-n", action="store_true", help="Run the instance's check; install nothing.")
     push_parser.add_argument("--instances-root", type=pathlib_.Path, default=DEFAULT_INSTANCES_ROOT)
-    push_parser.add_argument("--target-dir", type=pathlib_.Path, help="Install into this local lectures folder instead.")
 
     args = parser.parse_args(argv)
     if args.command == "check":
@@ -334,7 +153,6 @@ def main(argv: list[str] | None = None) -> int:
         replace=args.replace,
         dry_run=args.dry_run,
         instances_root=args.instances_root.expanduser(),
-        target_dir=args.target_dir.expanduser() if args.target_dir else None,
     )
 
 
