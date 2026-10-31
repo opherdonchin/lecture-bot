@@ -57,11 +57,12 @@ def test_bootstrap_imports_expected_documents(db, repo_root):
     summary = bootstrap_archive(db, repo_root, version_key="2026-05-01")
 
     imported = summary["imported"]
-    assert len(imported) == 7
+    assert len(imported) == 8
     types_imported = {doc_id.split("_", 1)[1].rsplit("_", 1)[0] for doc_id in imported}
     expected_types = {
         "tutor_spec_contract",
         "backend_contract",
+        "lecture_package_contract",
         "tutor_generator_prompt",
         "tutor_spec",
         "tutor_artifact_schema",
@@ -76,12 +77,12 @@ def test_bootstrap_idempotent(db, repo_root):
     first = bootstrap_archive(db, repo_root, version_key="2026-05-01")
     second = bootstrap_archive(db, repo_root, version_key="2026-05-01")
 
-    assert len(first["imported"]) == 7
+    assert len(first["imported"]) == 8
     assert len(second["imported"]) == 0
-    assert len(second["skipped"]) == 7
+    assert len(second["skipped"]) == 8
 
     count = db.query(models.ArchiveDocumentModel).count()
-    assert count == 7
+    assert count == 8
 
 
 def test_bootstrap_all_documents_active(db, repo_root):
