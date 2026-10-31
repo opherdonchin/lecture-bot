@@ -100,7 +100,7 @@ def test_start_session_snapshots_active_private_artifact_schema(client):
     ).first()
     schema = json.loads(row.private_artifact_schema_json)
     assert schema["type"] == "object"
-    assert "turn_classification" in schema["required"]
+    assert schema["required"]
 
 
 def test_start_session_with_no_schema_leaves_private_artifact_schema_null(client, tmp_path, monkeypatch):

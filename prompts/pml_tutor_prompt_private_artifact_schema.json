@@ -1,166 +1,106 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "required": [
+    "student_message_assessment",
+    "turn_pedagogical_decision",
+    "route_tracking",
+    "help_calibration",
+    "self_check"
+  ],
   "properties": {
-    "turn_reading": {
+    "student_message_assessment": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "what_student_did",
+        "evidence_strength",
+        "evidence_independence"
+      ],
       "properties": {
-        "student_message_function": {
-          "type": "string",
-          "description": "What kind of message this was in context: content, procedure/meta, off-task, answer, question, request for answer, disagreement, etc."
-        },
-        "what_the_student_did_with_the_idea": {
-          "type": "string",
-          "description": "How the student engaged the idea: used it, explained it, repeated it, avoided it, or similar."
-        },
-        "independence_of_evidence": {
-          "type": "string",
-          "enum": [
-            "independent",
-            "partly_assisted",
-            "assisted",
-            "no_evaluable_evidence"
-          ],
-          "description": "How much of the student's performance was their own reasoning versus following tutor support."
+        "what_student_did": {
+          "type": "string"
         },
         "evidence_strength": {
-          "type": "string",
-          "enum": [
-            "none",
-            "weak",
-            "developing",
-            "solid",
-            "strong",
-            "robust"
-          ],
-          "description": "Per-turn overall strength of evidence actually shown in the student's message."
+          "type": "string"
         },
-        "response_alignment": {
-          "type": "string",
-          "description": "Whether and how the student's message responded to what was asked, including when it productively went elsewhere."
-        },
-        "error_status": {
-          "type": "string",
-          "enum": [
-            "none",
-            "meaningful_error",
-            "skipped_step",
-            "unclear"
-          ],
-          "description": "Whether the issue was a real misunderstanding, a skipped step, neither, or unclear."
-        },
-        "student_state": {
-          "type": "string",
-          "description": "Brief reading of how the student seems to be doing: engaged, impatient, tired, lost, frustrated, etc."
+        "evidence_independence": {
+          "type": "string"
         }
-      },
-      "required": [
-        "student_message_function",
-        "what_the_student_did_with_the_idea",
-        "independence_of_evidence",
-        "evidence_strength",
-        "response_alignment",
-        "error_status",
-        "student_state"
-      ]
+      }
     },
     "turn_pedagogical_decision": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "next_move",
+        "why_chosen"
+      ],
       "properties": {
-        "route_or_direction": {
-          "type": "string",
-          "description": "Route or local direction being followed on this turn."
+        "next_move": {
+          "type": "string"
+        },
+        "why_chosen": {
+          "type": "string"
+        }
+      }
+    },
+    "route_tracking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route_or_path",
+        "current_stop",
+        "student_steered"
+      ],
+      "properties": {
+        "route_or_path": {
+          "type": "string"
         },
         "current_stop": {
-          "type": "string",
-          "description": "Current stop or local conceptual position."
+          "type": "string"
         },
         "student_steered": {
-          "type": "boolean",
-          "description": "Whether the student determined the direction of this turn."
-        },
-        "interaction_mode": {
-          "type": "string",
-          "enum": [
-            "working_a_step",
-            "teaching",
-            "answering",
-            "unsticking",
-            "offering_a_way_on",
-            "exploring",
-            "landing"
-          ],
-          "description": "Primary interaction mode used on this turn."
-        },
-        "next_move": {
-          "type": "string",
-          "description": "What move the tutor chose to make next in this turn."
-        },
-        "why_this_move": {
-          "type": "string",
-          "description": "Why that move was chosen, in light of the student's message, route logic, time, and priorities."
-        },
-        "help_level": {
-          "type": "string",
-          "enum": [
-            "minimal_prompt",
-            "hint",
-            "framed_question",
-            "multiple_choice_support",
-            "partial_path_supplied",
-            "direct_explanation",
-            "direct_answer",
-            "landing_recap"
-          ],
-          "description": "How much help the tutor gave."
-        },
-        "why_this_help_level": {
-          "type": "string",
-          "description": "Why this amount of help was appropriate."
+          "type": "boolean"
         }
-      },
+      }
+    },
+    "help_calibration": {
+      "type": "object",
+      "additionalProperties": false,
       "required": [
-        "route_or_direction",
-        "current_stop",
-        "student_steered",
-        "interaction_mode",
-        "next_move",
-        "why_this_move",
-        "help_level",
-        "why_this_help_level"
-      ]
+        "help_given",
+        "why_this_much"
+      ],
+      "properties": {
+        "help_given": {
+          "type": "string"
+        },
+        "why_this_much": {
+          "type": "string"
+        }
+      }
     },
     "self_check": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "at_most_one_question",
+        "context_sufficient",
+        "no_completion_verdict"
+      ],
       "properties": {
         "at_most_one_question": {
           "type": "boolean"
         },
-        "context_sufficient_for_student": {
+        "context_sufficient": {
           "type": "boolean"
         },
-        "no_verdict_of_complete_understanding": {
+        "no_completion_verdict": {
           "type": "boolean"
-        },
-        "notes": {
-          "type": "string",
-          "description": "Brief note if any self-check item needed attention."
         }
-      },
-      "required": [
-        "at_most_one_question",
-        "context_sufficient_for_student",
-        "no_verdict_of_complete_understanding",
-        "notes"
-      ]
+      }
     }
-  },
-  "required": [
-    "turn_reading",
-    "turn_pedagogical_decision",
-    "self_check"
-  ]
+  }
 }
