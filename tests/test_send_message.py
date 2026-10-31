@@ -65,8 +65,18 @@ VALID_PRIVATE_ARTIFACT = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _fixed_private_artifact_schema(monkeypatch):
+    """Give sessions a schema of their own, so these tests don't depend on what was last generated."""
+    schema = {"type": "object", "required": sorted(VALID_PRIVATE_ARTIFACT), "properties": {}}
+    monkeypatch.setattr(
+        "app.prompt_loader.load_private_artifact_schema_json",
+        lambda template_name: j.dumps(schema),
+    )
+
+
 def _tagged(reply: dict) -> str:
-    """Write a reply dict in the tagged format of backend contract 0.6.1."""
+    """Write a reply dict in the tagged format of the backend contract."""
     rest = {key: value for key, value in reply.items() if key != "assistant_message"}
     return f"<assistant_message>\n{reply['assistant_message']}\n</assistant_message>\n{j.dumps(rest, ensure_ascii=False)}"
 
@@ -161,7 +171,7 @@ def test_send_message_banks_best_mastery_from_tutor_state(client):
     state = j.loads(row.state_json)
     assert state["mastery"]["T1"] == 70
     assert state["best_mastery"]["T1"] == 70
-    assert state["current_grade"] == 42.0
+    assert state["current_grade"] == 55.0
     assert "private_artifact" not in state
     assert "private_decision_trace" not in state
     artifact_row = db.query(models.PrivateArtifactLogModel).filter(
@@ -305,10 +315,10 @@ def test_send_message_fallback_on_openai_error(client):
     assert response.status_code == 200
     data = response.json()
     assert data["message"] == (
-        "The app cannot connect to the backend AI. "
-        "Please try again in a minute. "
+        "The tutor didn't manage to reply just now. "
+        "Please send your message again. "
         "If the problem persists, try again in half an hour. "
-        "If there is still no connection, please post the problem on Moodle."
+        "If it still doesn't work, please post the problem on Moodle."
     )
     assert data["session_active"] is True
 
@@ -418,7 +428,7 @@ def test_send_message_writes_dialogue_turn_audit_row(client):
     assert audit_row.turn_index == 1
     assert audit_row.prompt_template_name == "pml_tutor_prompt.md"
     assert audit_row.dialogue_model
-    assert "You are the tutor for one lecture" in audit_row.rendered_system_prompt
+    assert "You are the tutor" in audit_row.rendered_system_prompt
     assert audit_row.user_message == "What counts as data"
 
 

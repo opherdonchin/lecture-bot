@@ -26,6 +26,7 @@ def _write_fixture_lecture(lectures_dir, lecture_id: str, topic_count: int = 10)
                 "title": "Fixture Lecture",
                 "course": "Test Course",
                 "active": True,
+                "opening_messages": ["Opening for the first route.", "Opening for the second route."],
                 "topics": topics,
             }
         ),

@@ -36,14 +36,14 @@ This creates the desired grading geometry without requiring the tutor to expose 
 
 ## Calibrated session-credit grading
 
-The student-facing grade uses policy `ranked-target-saturation-v1`.
+The student-facing grade uses policy `ranked-target-saturation-v2`.
 
 Python ranks raw topic-mastery scores from highest to lowest, takes the top four,
 and applies:
 
 ```
 weights = [55, 25, 13, 7]
-targets = [90, 82, 74, 62]
+targets = [65, 60, 50, 40]
 grade = floor(sum(weight_i * min(raw_i / target_i, 1.0)))
 ```
 
@@ -101,10 +101,10 @@ These weights are fixed by policy.
 
 | Rank | Weight | Full-credit target | Max cumulative | Interpretation |
 | ---: | -----: | -----------------: | --------: | -------------- |
-| 1 | 55 | 90 | 55  | Strong foothold in one central lecture idea |
-| 2 | 25 | 82 | 80  | Meaningful early coverage across the lecture |
-| 3 | 13 | 74 | 93  | Solid grounding across the core lecture terrain |
-| 4 | 7 | 62 | 100 | Full lecture mastery for session purposes |
+| 1 | 55 | 65 | 55  | Strong foothold in one central lecture idea |
+| 2 | 25 | 60 | 80  | Meaningful early coverage across the lecture |
+| 3 | 13 | 50 | 93  | Solid grounding across the core lecture terrain |
+| 4 | 7 | 40 | 100 | Full lecture mastery for session purposes |
 
 Notes:
 
@@ -114,7 +114,7 @@ Notes:
 * **Max cumulative** = maximum cumulative grade available if the top *n* ranked topics meet their full-credit targets.
 * **Interpretation** = a readable lecture-wide description of what that cumulative ceiling means.
 * The weights apply to ranked topic mastery values, not to fixed topic identities.
-* The current backend implementation uses exactly these four ranked scoring slots: `[55, 25, 13, 7]`, with full-credit targets `[90, 82, 74, 62]`.
+* The current backend implementation uses exactly these four ranked scoring slots: `[55, 25, 13, 7]`, with full-credit targets `[65, 60, 50, 40]`.
 * The previous fifth-topic requirement made sessions longer than desired. The old fourth and fifth tail weights have been folded into the new fourth slot so a serious, cooperative student can reach full session success with four substantial topic engagements.
 * Lecture rubrics may contain more than four topics. Topics below the top four ranked mastery scores do not directly add to the numeric grade at that moment, but they can still matter pedagogically and can enter the top four if their demonstrated mastery becomes strong enough.
 * The sampled topic count may exceed the number of ranked scoring slots; sampled topics define candidate opportunity space, not a requirement to complete every sampled topic.

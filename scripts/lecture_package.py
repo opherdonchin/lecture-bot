@@ -58,6 +58,7 @@ class CheckResult:
     errors: list[str]
     sizes: dict[str, int]
     package_contract: str | None = None
+    openings: list[str] = dc.field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -91,6 +92,10 @@ def check_lecture(lecture_dir: pathlib_.Path) -> CheckResult:
     )
     if contract_problem:
         result.errors.append(contract_problem)
+
+    result.openings = config.get("opening_messages") or []
+    if not result.openings:
+        result.errors.append("lecture_config.json has no 'opening_messages'; the backend refuses to start a session.")
 
     rubric_topics = bot_engine.parse_rubric_topics(package["rubric"])
     if not rubric_topics:
@@ -162,6 +167,9 @@ def format_check(result: CheckResult) -> str:
         lines.append(f"  error: {error}")
     if result.package_contract:
         lines.append(f"Package contract: {result.package_contract}")
+    if result.openings:
+        lines.append("Opening messages (for the researcher to confirm, one per route):")
+        lines.extend(f"  {opening}" for opening in result.openings)
     if result.files:
         lines.append("Files to install:")
         lines.extend(f"  {name} ({result.sizes[name]:,} bytes)" for name in result.files)

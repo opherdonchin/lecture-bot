@@ -707,7 +707,7 @@ def test_save_generated_prompt_preview_can_activate(tmp_path, monkeypatch):
         "tutor_artifact_schema": tmp_path / "schema.json",
         "tutor_spec": tmp_path / "tutor_specification.md",
     }
-    monkeypatch.setattr(admin_documents, "CANONICAL_DOCUMENT_PATHS", paths)
+    monkeypatch.setattr(admin_documents, "canonical_document_paths", lambda: paths)
 
     result = admin_generation.save_generated_prompt_preview(
         db,
@@ -765,7 +765,7 @@ def test_activate_tutor_prompt_writes_canonical_files(tmp_path, monkeypatch):
         "tutor_artifact_schema": tmp_path / "schema.json",
         "tutor_spec": tmp_path / "tutor_specification.md",
     }
-    monkeypatch.setattr(admin_documents, "CANONICAL_DOCUMENT_PATHS", paths)
+    monkeypatch.setattr(admin_documents, "canonical_document_paths", lambda: paths)
 
     ok, message = admin_documents.activate_tutor_prompt(db, prompt.document_id)
 

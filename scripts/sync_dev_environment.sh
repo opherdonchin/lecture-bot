@@ -170,7 +170,6 @@ ordered_keys = [
     "MAX_DIALOGUE_CONTEXT_CHARS",
     "MAX_GRADING_CONTEXT_CHARS",
     "SAMPLED_TOPIC_COUNT",
-    "OPENING_TOPIC_CHOICE_COUNT",
 ]
 
 seen = set()

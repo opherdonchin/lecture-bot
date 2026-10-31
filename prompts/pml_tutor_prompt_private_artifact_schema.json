@@ -1,56 +1,48 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "turn_classification",
-    "evidence_assessment",
-    "next_move_arbitration",
+    "student_message_assessment",
+    "next_move",
+    "route_position",
+    "help_given",
     "self_check"
   ],
   "properties": {
-    "turn_classification": {
+    "student_message_assessment": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "student_move_type",
-        "has_evidence_of_understanding"
+        "message_type",
+        "what_student_did_with_idea",
+        "response_alignment",
+        "evidence_strength",
+        "evidence_independence",
+        "affect_or_state"
       ],
       "properties": {
-        "student_move_type": {
+        "message_type": {
           "type": "string",
+          "description": "What kind of message this was for tutoring purposes.",
           "enum": [
-            "content_answer",
-            "content_question",
-            "procedural_request",
-            "hidden_internals_or_answer_request",
+            "content",
+            "procedure",
             "off_task",
-            "desire_to_stop",
-            "other"
+            "mixed"
           ]
         },
-        "has_evidence_of_understanding": {
-          "type": "boolean"
+        "what_student_did_with_idea": {
+          "type": "string",
+          "description": "Brief account of whether the student used, explained, repeated, avoided, or otherwise worked with the idea."
         },
-        "engaged_topic_id": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Canonical topic ID if the student message provides evidence about a backend-supplied topic; otherwise null."
-        }
-      }
-    },
-    "evidence_assessment": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "evidence_strength",
-        "independence_level",
-        "evidence_basis"
-      ],
-      "properties": {
+        "response_alignment": {
+          "type": "string",
+          "description": "Whether and how the student's message responded to what was asked, including if it went somewhere useful instead."
+        },
         "evidence_strength": {
           "type": "string",
+          "description": "How strong the evidence in this turn was.",
           "enum": [
             "none",
             "weak",
@@ -60,122 +52,105 @@
             "robust"
           ]
         },
-        "independence_level": {
+        "evidence_independence": {
           "type": "string",
+          "description": "How independent the evidence was.",
           "enum": [
-            "independent",
             "assisted",
-            "mixed",
-            "unclear",
+            "partly_independent",
+            "independent",
             "not_applicable"
           ]
         },
-        "evidence_basis": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "criterion",
-              "distinction",
-              "explanation",
-              "application",
-              "interpretation",
-              "repair",
-              "ownership",
-              "synthesis",
-              "generic_or_copied",
-              "post_hint_repetition",
-              "nonresponsive_correctness",
-              "other"
-            ]
-          },
-          "uniqueItems": true
-        },
-        "brief_rationale": {
-          "type": "string"
+        "affect_or_state": {
+          "type": "string",
+          "description": "Observed engagement, impatience, tiredness, confusion, frustration, or other relevant student state."
         }
       }
     },
-    "next_move_arbitration": {
+    "next_move": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "selected_next_topic_id",
-        "selected_move_type",
-        "strongest_alternative_direction",
-        "followed_backend_guidance",
-        "override_reason"
+        "chosen_mode",
+        "move_description",
+        "why_chosen"
       ],
       "properties": {
-        "selected_next_topic_id": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Canonical topic ID selected for the next substantive content move, if any."
-        },
-        "selected_move_type": {
+        "chosen_mode": {
           "type": "string",
+          "description": "Interaction mode chosen for this turn.",
           "enum": [
-            "ordinary_probe",
-            "evidence_feedback",
-            "scaffolded_support",
-            "adaptive_challenge",
-            "topic_transition",
-            "procedural_support",
-            "redirection",
-            "lifecycle_closing",
-            "other"
+            "working_a_step",
+            "teaching",
+            "answering",
+            "unsticking",
+            "offering_a_way_on",
+            "exploring",
+            "landing"
           ]
         },
-        "strongest_alternative_direction": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "topic_id",
-            "source"
-          ],
-          "properties": {
-            "topic_id": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "description": "Canonical topic ID for the strongest alternative considered, if identifiable from backend guidance."
-            },
-            "source": {
-              "type": "string",
-              "enum": [
-                "explicit_topic_or_move_guidance",
-                "grade_impact_deltas_or_backend_strategic_guidance",
-                "optional_enrichment_after_full_credit",
-                "pedagogical_fallback",
-                "not_applicable"
-              ]
-            }
-          }
-        },
-        "followed_backend_guidance": {
+        "move_description": {
           "type": "string",
+          "description": "What the tutor chose to do next."
+        },
+        "why_chosen": {
+          "type": "string",
+          "description": "Why this move was chosen, including relation to the student's message, route, time, or evidence."
+        }
+      }
+    },
+    "route_position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route_or_focus",
+        "current_stop",
+        "student_steered"
+      ],
+      "properties": {
+        "route_or_focus": {
+          "type": "string",
+          "description": "Current route, route fragment, or student-chosen focus."
+        },
+        "current_stop": {
+          "type": "string",
+          "description": "Current stop or immediate conceptual location."
+        },
+        "student_steered": {
+          "type": "boolean",
+          "description": "Whether the student determined the direction of this turn."
+        }
+      }
+    },
+    "help_given": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "help_level",
+        "help_description",
+        "why_this_much"
+      ],
+      "properties": {
+        "help_level": {
+          "type": "string",
+          "description": "How much help the tutor gave.",
           "enum": [
-            "yes",
-            "no",
-            "not_applicable"
+            "none",
+            "minimal_nudge",
+            "hint",
+            "partial_path",
+            "full_explanation",
+            "full_answer"
           ]
         },
-        "override_reason": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Short bounded reason when deviating from the strongest available backend-indicated direction; otherwise null."
+        "help_description": {
+          "type": "string",
+          "description": "What help was actually given."
         },
-        "grade_relevant": {
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "description": "Optional marker for whether the selected move is still grade-driven; false may be used for optional enrichment after full session credit."
+        "why_this_much": {
+          "type": "string",
+          "description": "Why this amount of help was appropriate."
         }
       }
     },
@@ -183,19 +158,28 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "assistant_message_matches_move",
-        "avoids_completion_claim",
-        "keeps_private_content_out_of_student_text"
+        "at_most_one_question",
+        "student_has_needed_context",
+        "no_verdict_on_student_or_completion",
+        "no_above_developing_from_assisted_only",
+        "notes"
       ],
       "properties": {
-        "assistant_message_matches_move": {
+        "at_most_one_question": {
           "type": "boolean"
         },
-        "avoids_completion_claim": {
+        "student_has_needed_context": {
           "type": "boolean"
         },
-        "keeps_private_content_out_of_student_text": {
+        "no_verdict_on_student_or_completion": {
           "type": "boolean"
+        },
+        "no_above_developing_from_assisted_only": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Short note on any self-check concern, repair, or confirmation."
         }
       }
     }

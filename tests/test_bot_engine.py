@@ -113,6 +113,11 @@ def test_sample_session_topics_deterministic():
     assert result1 == result2
 
 
+def test_sample_session_topics_keeps_lecture_order():
+    result = bot_engine.sample_session_topics(TOPIC_DEFS, "session-abc", count=5)
+    assert result == sorted(result, key=lambda topic_id: int(topic_id[1:]))
+
+
 def test_sample_session_topics_count():
     result = bot_engine.sample_session_topics(TOPIC_DEFS, "session-abc", count=5)
     assert len(result) == 5
@@ -151,56 +156,13 @@ def test_sample_session_topics_fewer_than_count():
 # build_opening_message
 # ---------------------------------------------------------------------------
 
-def test_build_opening_message_includes_sampled_topic_labels(monkeypatch):
-    lecture_package = {
-        "lecture_id": "lecture_01",
-        "config": {"title": "Lecture 1"},
-        "rubric": SAMPLE_RUBRIC,
-        "topics": [
-            {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
-            {"topic_id": "T2", "label": "Purpose of statistics", "importance": "core"},
-            {"topic_id": "T3", "label": "Definition and structure of data", "importance": "important"},
-        ],
-    }
-    monkeypatch.setattr(
-        bot_engine.config_module,
-        "get_settings",
-        lambda: type("Settings", (), {"opening_topic_choice_count": 3})(),
-    )
-    message = bot_engine.build_opening_message(
-        lecture_package,
-        sampled_topic_ids=["T1", "T2", "T3"],
-    )
-    assert "Welcome to the review bot for Lecture 1." in message
-    assert "A few good places to start are:" in message
-    assert "- Reality–Data–Model distinction" in message
-    assert "- Purpose of statistics" in message
-    assert "- Definition and structure of data" in message
-    assert "Which would you like to begin with?" in message
-
-
-def test_build_opening_message_falls_back_without_resolved_sampled_topics(monkeypatch):
-    lecture_package = {
-        "lecture_id": "lecture_01",
-        "config": {"title": "Lecture 1"},
-        "rubric": SAMPLE_RUBRIC,
-        "topics": [
-            {"topic_id": "T1", "label": "Reality–Data–Model distinction", "importance": "core"},
-        ],
-    }
-    monkeypatch.setattr(
-        bot_engine.config_module,
-        "get_settings",
-        lambda: type("Settings", (), {"opening_topic_choice_count": 3})(),
-    )
-    message = bot_engine.build_opening_message(
-        lecture_package,
-        sampled_topic_ids=["T99"],
-    )
-    assert message == (
-        "Welcome to the review bot for Lecture 1. "
-        "We can start wherever feels most useful. "
-        "What topic from this lecture would you like to begin with?"
+def test_build_opening_message_picks_from_the_package_seeded_by_session():
+    openings = [f"Opening {i}" for i in range(5)]
+    lecture_package = {"lecture_id": "lecture_01", "config": {"opening_messages": openings}}
+    picks = {bot_engine.build_opening_message(lecture_package, f"session-{i}") for i in range(30)}
+    assert picks == set(openings)
+    assert bot_engine.build_opening_message(lecture_package, "session-a") == bot_engine.build_opening_message(
+        lecture_package, "session-a"
     )
 
 
@@ -245,55 +207,7 @@ def test_generate_report_fallback_uses_scannable_bullets(monkeypatch):
     assert "Next steps:" in result["report_text"]
     assert "Coverage:" in result["report_text"]
     assert "- Reality–Data–Model distinction, Purpose of statistics." in result["report_text"]
-    assert "- Not yet evidenced: Definition and structure of data." in result["report_text"]
-
-
-def test_rewrite_opening_topic_selection_rewrites_prefix_match():
-    lecture_package = {
-        "lecture_id": "lecture_03",
-        "config": {"title": "Lecture 3"},
-        "rubric": SAMPLE_RUBRIC,
-        "topics": [
-            {"topic_id": "T1", "label": "Reading posterior output in ArviZ", "importance": "core"},
-            {"topic_id": "T2", "label": "Why sample, and what a posterior draw is", "importance": "core"},
-            {"topic_id": "T3", "label": "Point estimation from the posterior", "importance": "core"},
-        ],
-    }
-    state = {
-        "topics_sampled": ["T1", "T2", "T3"],
-        "turn_count": 0,
-        "current_topic_id": None,
-    }
-    rewritten = bot_engine.rewrite_opening_topic_selection(
-        lecture_package=lecture_package,
-        state=state,
-        user_message="Why sample",
-    )
-    assert "Treat my message as a topic selection" in rewritten
-    assert "Why sample, and what a posterior draw is" in rewritten
-
-
-def test_rewrite_opening_topic_selection_leaves_nonopening_turn_alone():
-    lecture_package = {
-        "lecture_id": "lecture_03",
-        "config": {"title": "Lecture 3"},
-        "rubric": SAMPLE_RUBRIC,
-        "topics": [
-            {"topic_id": "T2", "label": "Why sample, and what a posterior draw is", "importance": "core"},
-        ],
-    }
-    state = {
-        "topics_sampled": ["T2"],
-        "turn_count": 1,
-        "current_topic_id": "T2",
-    }
-    original = "Why sample"
-    rewritten = bot_engine.rewrite_opening_topic_selection(
-        lecture_package=lecture_package,
-        state=state,
-        user_message=original,
-    )
-    assert rewritten == original
+    assert "- Not part of this session: Definition and structure of data." in result["report_text"]
 
 
 # ---------------------------------------------------------------------------
@@ -371,12 +285,12 @@ def test_compute_weighted_grade_floor():
 
 def test_compute_weighted_grade_below_target_partial():
     scores = [{"topic_id": f"T{i}", "score": 45} for i in range(1, 5)]
-    assert bot_engine.compute_weighted_grade(scores) == 54
+    assert bot_engine.compute_weighted_grade(scores) == 75
 
 
 def test_compute_weighted_grade_at_lowest_target_band():
-    scores = [{"topic_id": f"T{i}", "score": 62} for i in range(1, 5)]
-    assert bot_engine.compute_weighted_grade(scores) == 74
+    scores = [{"topic_id": f"T{i}", "score": 40} for i in range(1, 5)]
+    assert bot_engine.compute_weighted_grade(scores) == 67
 
 
 def test_compute_weighted_grade_raw_above_target_does_not_exceed_weight():
@@ -398,7 +312,7 @@ def test_compute_weighted_grade_takes_top_4():
         {"topic_id": "T4", "score": 20},
         {"topic_id": "T5", "score": 10},
     ]
-    assert bot_engine.compute_weighted_grade(scores) == 76
+    assert bot_engine.compute_weighted_grade(scores) == 93
 
 
 def test_compute_weighted_grade_ignores_fifth_rank_even_when_touched():
@@ -446,8 +360,8 @@ def test_compute_ranked_credit_state_below_target_status():
     credit_state = bot_engine.compute_ranked_credit_state({"T1": 50})
     row = credit_state["ranked_credit_state"][0]
     assert row["status"] == "below_target"
-    assert row["credit_completion"] == 0.5556
-    assert row["raw_mastery_gap_to_rank_target"] == 40
+    assert row["credit_completion"] == 0.7692
+    assert row["raw_mastery_gap_to_rank_target"] == 15
 
 
 def test_compute_ranked_credit_state_padding_and_full_credit_status():
@@ -466,7 +380,7 @@ def test_compute_ranked_credit_state_ranks_by_raw_mastery():
 
 
 def test_grade_impact_delta_reranking_satisfied_slot_can_be_positive():
-    best_mastery = {"T1": 89, "T2": 82, "T3": 74, "T4": 62}
+    best_mastery = {"T1": 64, "T2": 60, "T3": 50, "T4": 40}
     assert bot_engine.compute_weighted_grade([
         {"topic_id": topic_id, "score": score}
         for topic_id, score in best_mastery.items()
@@ -506,9 +420,9 @@ def test_grade_relevant_next_move_none_without_positive_delta():
 
 def test_grade_policy_snapshot_names_calibrated_policy():
     assert bot_engine.grade_policy_snapshot() == {
-        "policy_id": "ranked-target-saturation-v1",
+        "policy_id": "ranked-target-saturation-v2",
         "ranked_topic_weights": [55, 25, 13, 7],
-        "ranked_full_credit_targets": [90, 82, 74, 62],
+        "ranked_full_credit_targets": [65, 60, 50, 40],
     }
 
 
@@ -1336,14 +1250,65 @@ def test_pml_tutor_prompt_names_the_math_delimiters_the_chat_renders():
     prompt = prompt_loader.load_prompt_template(PML_PROMPT)
     chat_js = (pathlib_.Path(__file__).resolve().parents[1] / "app/static/chat.js").read_text(encoding="utf-8")
     assert '{ left: "\\\\(", right: "\\\\)", display: false }' in chat_js
-    assert "\\( ... \\) inline" in prompt
-    assert "never use $...$" in prompt
+    assert "\\(" in prompt
+    assert "$...$" in prompt
 
 
 def test_pml_tutor_prompt_handles_the_five_minute_warning():
     prompt = prompt_loader.load_prompt_template(PML_PROMPT)
-    for required in ("session_timing.closing_mode", "timeout_warning_sent", "minutes_remaining", "timing_reliable"):
+    for required in ("session_timing.closing_mode", "timeout_warning_sent", "minutes_remaining"):
         assert required in prompt, required
+
+
+def test_turn_reminder_is_the_prompts_final_section():
+    prompt = "Rules.\n\n## Turn reminder\n\n- One step.\n"
+    assert prompt_loader.turn_reminder(prompt) == "- One step."
+    assert prompt_loader.turn_reminder("Rules.\n") is None
+
+
+def test_turn_message_names_the_warning_turn_only_on_that_turn():
+    warning = {"closing_mode": True, "timeout_warning_sent": False, "minutes_remaining": 5}
+    assert "warning turn" in bot_engine._turn_message(None, None, warning)
+    assert "about 5 minutes" in bot_engine._turn_message(None, None, warning)
+    for timing in (None, {"closing_mode": False}, {"closing_mode": True, "timeout_warning_sent": True}):
+        assert "warning turn" not in bot_engine._turn_message(None, None, timing)
+
+
+def test_replace_topic_ids_uses_labels():
+    topic_defs = [{"topic_id": "T3", "label": "Moments from A"}]
+    assert bot_engine._replace_topic_ids("the key T3 step", topic_defs) == "the key Moments from A step"
+
+
+def test_turn_reminder_is_left_out_of_the_system_prompt_body():
+    prompt = "Rules.\n\n## Turn reminder\n\n- One step.\n"
+    assert prompt_loader.strip_turn_reminder(prompt) == "Rules."
+    assert prompt_loader.strip_turn_reminder("Rules.\n") == "Rules.\n"
+
+
+def test_pml_tutor_prompt_has_a_turn_reminder():
+    prompt = prompt_loader.load_prompt_template(PML_PROMPT)
+    assert prompt_loader.turn_reminder(prompt)
+
+
+def test_turn_message_comes_after_the_students_message():
+    with mock.patch("openai.OpenAI") as mock_openai, mock.patch.object(
+        prompt_loader, "turn_reminder", return_value="- One step."
+    ):
+        client = mock_openai.return_value
+        client.chat.completions.create.return_value.choices = [
+            mock.Mock(message=mock.Mock(content="<assistant_message>Hi</assistant_message>"))
+        ]
+        bot_engine.generate_reply(
+            lecture_package=_CACHING_LECTURE_PACKAGE,
+            recent_messages=[],
+            state={},
+            user_message="hello",
+        )
+    messages = client.chat.completions.create.call_args.kwargs["messages"]
+    assert messages[-2] == {"role": "user", "content": "hello"}
+    assert messages[-1]["role"] == "system"
+    assert "- One step." in messages[-1]["content"]
+    assert "<assistant_message>" in messages[-1]["content"]
 
 
 def test_pml_tutor_prompt_has_a_valid_private_artifact_schema():
@@ -1362,7 +1327,7 @@ def test_dialogue_prompt_uses_the_lecture_selected_tutor_prompt():
         topic_defs=_make_topic_defs_for_caching(),
         lecture_context=_make_lecture_context_for_caching(),
     )
-    assert prompt.startswith("You are the tutor for one lecture of a graduate course")
+    assert prompt.startswith("You are the tutor")
 
 def test_build_dialogue_context_logs_when_it_truncates(caplog):
     package = {
@@ -1421,7 +1386,7 @@ def test_a_prompt_for_another_contract_version_is_refused():
 
 
 def test_the_pml_prompt_declares_its_lecture_package_contract():
-    assert prompt_loader.declared_package_contract(prompt_loader.load_prompt_template(PML_PROMPT)) == "pml-brief-1"
+    assert prompt_loader.declared_package_contract(prompt_loader.load_prompt_template(PML_PROMPT)) == "pml-brief-2"
     assert prompt_loader.declared_package_contract("Backend contract: 0.6.1\n\nYou are a tutor.") is None
     assert prompt_loader.declared_package_contract("Lecture package contract: x-1\n\nYou are a tutor.") == "x-1"
 

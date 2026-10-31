@@ -47,7 +47,7 @@ def test_start_session_persists_opening_message(client):
     assert any(m.role == "assistant" for m in messages)
 
 
-def test_start_session_uses_sampled_topics_for_opening_message(client):
+def test_start_session_seeds_opening_message_by_session(client):
     with mock.patch("app.bot_engine.build_opening_message", return_value="Opening.") as mock_opening:
         response = client.post(
             "/start_session",
@@ -55,12 +55,19 @@ def test_start_session_uses_sampled_topics_for_opening_message(client):
         )
     assert response.status_code == 200, response.text
     session_id = response.json()["session_id"]
-    db = next(app.dependency_overrides[db_module.get_db]())
-    row = db.query(models.SessionStateModel).filter(
-        models.SessionStateModel.session_id == session_id
-    ).first()
-    state = json.loads(row.state_json)
-    assert mock_opening.call_args.kwargs["sampled_topic_ids"] == state["topics_sampled"]
+    assert mock_opening.call_args.args[1] == session_id
+
+
+def test_start_session_refuses_a_lecture_without_opening_messages(client):
+    config_path = config_module.get_settings().lectures_dir / "lecture_01" / "lecture_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    del config["opening_messages"]
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    response = client.post(
+        "/start_session",
+        json={"student_id": "student_001", "lecture_id": "lecture_01"},
+    )
+    assert response.status_code == 503
 
 
 def test_start_session_persists_state(client):
@@ -93,7 +100,7 @@ def test_start_session_snapshots_active_private_artifact_schema(client):
     ).first()
     schema = json.loads(row.private_artifact_schema_json)
     assert schema["type"] == "object"
-    assert "turn_classification" in schema["required"]
+    assert schema["required"]
 
 
 def test_start_session_with_no_schema_leaves_private_artifact_schema_null(client, tmp_path, monkeypatch):
@@ -431,13 +438,13 @@ def test_get_grade_inserts_grade_event(client):
     assert len(events) >= 1
     payload = json.loads(events[-1].payload_json)
     assert payload["grade_policy"] == {
-        "policy_id": "ranked-target-saturation-v1",
+        "policy_id": "ranked-target-saturation-v2",
         "ranked_topic_weights": [55, 25, 13, 7],
-        "ranked_full_credit_targets": [90, 82, 74, 62],
+        "ranked_full_credit_targets": [65, 60, 50, 40],
     }
     assert payload["session_credit_status"] == "in_progress"
     assert payload["ranked_credit_state"][0]["raw_mastery"] == 80
-    assert payload["ranked_credit_state"][0]["raw_mastery_gap_to_rank_target"] == 10
+    assert payload["ranked_credit_state"][0]["raw_mastery_gap_to_rank_target"] == 0
 
 
 def test_get_grade_does_not_call_generate_topic_scores(client):
@@ -618,9 +625,9 @@ def test_generate_report_inserts_report_event(client):
     assert len(events) >= 1
     payload = json.loads(events[-1].payload_json)
     assert payload["grade_policy"] == {
-        "policy_id": "ranked-target-saturation-v1",
+        "policy_id": "ranked-target-saturation-v2",
         "ranked_topic_weights": [55, 25, 13, 7],
-        "ranked_full_credit_targets": [90, 82, 74, 62],
+        "ranked_full_credit_targets": [65, 60, 50, 40],
     }
     assert payload["session_credit_status"] == "in_progress"
     assert "ranked_credit_state" in payload

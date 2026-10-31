@@ -14,9 +14,9 @@ import app.prompt_loader as prompt_loader
 
 _log = logging_.getLogger(__name__)
 
-_GRADE_POLICY_ID = "ranked-target-saturation-v1"
+_GRADE_POLICY_ID = "ranked-target-saturation-v2"
 _GRADE_WEIGHTS = [55, 25, 13, 7]
-_GRADE_FULL_CREDIT_TARGETS = [90, 82, 74, 62]
+_GRADE_FULL_CREDIT_TARGETS = [65, 60, 50, 40]
 _RUNTIME_CONTEXT_KEYS = ("bot_notes", "slides", "handout", "minutes")
 _TOPIC_SECTION_RE = re_.compile(r'^### (T\d+)(?:\.|\s+[—-])\s+(.+)$', re_.MULTILINE)
 _IMPORTANCE_RE = re_.compile(r'\*\*Importance:\*\*\s+(\w+)')
@@ -36,10 +36,10 @@ _TRUNCATED_PUNCTUATION = str.maketrans({
 })
 
 _FALLBACK_DIALOGUE_MESSAGE = (
-    "The app cannot connect to the backend AI. "
-    "Please try again in a minute. "
+    "The tutor didn't manage to reply just now. "
+    "Please send your message again. "
     "If the problem persists, try again in half an hour. "
-    "If there is still no connection, please post the problem on Moodle."
+    "If it still doesn't work, please post the problem on Moodle."
 )
 
 
@@ -108,12 +108,6 @@ def get_tutor_prompt_template(lecture_package: dict | None = None) -> str:
 # Public: opening message
 # ---------------------------------------------------------------------------
 
-def _format_opening_topic_choices(labels: list[str]) -> str:
-    if not labels:
-        return ""
-    return "\n".join(f"- {label}" for label in labels)
-
-
 def normalize_topic_defs(topic_defs: list[dict] | None) -> list[dict]:
     """Return canonical topic defs with duplicate topic IDs removed.
 
@@ -158,57 +152,6 @@ def _unique_topic_ids(topic_ids: list[str] | None) -> list[str]:
     return unique
 
 
-def _normalize_selection_text(text: str) -> str:
-    return _NON_ALNUM_RE.sub(" ", text.lower()).strip()
-
-
-def rewrite_opening_topic_selection(
-    *,
-    lecture_package: dict,
-    state: dict,
-    user_message: str,
-) -> str:
-    """Rewrite an opening-turn topic pick into explicit selection intent.
-
-    This prevents short menu replies like "Why sample" from being treated as
-    content answers to the topic itself.
-    """
-    if state.get("turn_count", 0) != 0:
-        return user_message
-    if state.get("current_topic_id") is not None:
-        return user_message
-
-    topic_defs = resolve_topic_defs(lecture_package)
-    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
-    sampled_labels = [
-        topic_id_to_label[topic_id]
-        for topic_id in _unique_topic_ids(state.get("topics_sampled", []))
-        if topic_id in topic_id_to_label
-    ]
-    normalized_user = _normalize_selection_text(user_message)
-    if not normalized_user:
-        return user_message
-
-    for label in sampled_labels:
-        normalized_label = _normalize_selection_text(label)
-        if not normalized_label:
-            continue
-        if normalized_user == normalized_label:
-            return (
-                f"I want to begin with the topic '{label}'. "
-                "Treat my message as a topic selection, not as a content answer. "
-                "Ask the first substantive question for that topic."
-            )
-        if len(normalized_user) >= 6 and normalized_label.startswith(normalized_user):
-            return (
-                f"I want to begin with the topic '{label}'. "
-                "Treat my message as a topic selection, not as a content answer. "
-                "Ask the first substantive question for that topic."
-            )
-
-    return user_message
-
-
 def resolve_topic_defs(lecture_package: dict) -> list[dict]:
     """Load canonical topic defs from lecture config or rubric."""
     return normalize_topic_defs(
@@ -216,32 +159,9 @@ def resolve_topic_defs(lecture_package: dict) -> list[dict]:
     )
 
 
-def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | None = None) -> str:
-    title = lecture_package["config"].get("title", lecture_package["lecture_id"])
-    topic_defs = resolve_topic_defs(lecture_package)
-    topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
-
-    settings = config_module.get_settings()
-    sampled_labels = [
-        topic_id_to_label[topic_id]
-        for topic_id in (sampled_topic_ids or [])[:settings.opening_topic_choice_count]
-        if topic_id in topic_id_to_label
-    ]
-    if sampled_labels:
-        topic_choices = _format_opening_topic_choices(sampled_labels)
-        return (
-            f"Welcome to the review bot for {title}. "
-            "We can start wherever feels most useful.\n"
-            "A few good places to start are:\n"
-            f"{topic_choices}\n\n"
-            "Which would you like to begin with?"
-        )
-
-    return (
-        f"Welcome to the review bot for {title}. "
-        "We can start wherever feels most useful. "
-        "What topic from this lecture would you like to begin with?"
-    )
+def build_opening_message(lecture_package: dict, session_id: str) -> str:
+    """Pick one of the lecture's openings, seeded by the session. Each opening starts one route."""
+    return random_.Random(session_id).choice(lecture_package["config"]["opening_messages"])
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +176,35 @@ def build_opening_message(lecture_package: dict, sampled_topic_ids: list[str] | 
 _TAGGED_MESSAGE_RE = re_.compile(r"<assistant_message>\s*(.*?)\s*<\\?/assistant_message>", re_.DOTALL)
 _STRAY_TAG_RE = re_.compile(r"<\\?/?assistant_message>")
 _STATE_OBJECT_START_RE = re_.compile(r'\{\s*"(?:updated_state|private_artifact)"')
+
+
+def _turn_message(
+    private_artifact_schema_json: str | None,
+    turn_reminder: str | None,
+    timing_context: dict | None,
+) -> str:
+    """Build what the tutor reads last: the prompt's turn reminder, any warning, its reply format.
+
+    The format is restated because tutor messages in the history are plain text.
+    """
+    json_object = (
+        '{"private_artifact": {...}, "updated_state": {...}}'
+        if private_artifact_schema_json
+        else '{"updated_state": {...}}'
+    )
+    reply_format = (
+        "Reply in the tagged format: the student's message between <assistant_message> and "
+        f"</assistant_message>, then the JSON object {json_object}. Never stop after the message, "
+        "even though earlier tutor messages above appear as plain text."
+    )
+    parts = [turn_reminder] if turn_reminder else []
+    if timing_context and timing_context.get("closing_mode") and not timing_context.get("timeout_warning_sent"):
+        parts.append(
+            "This is the warning turn: tell the student in one short sentence that about "
+            f"{timing_context.get('minutes_remaining')} minutes remain, and start landing."
+        )
+    parts.append(reply_format)
+    return "\n\n".join(parts)
 
 
 def _decode_state_object(text: str) -> dict:
@@ -324,11 +273,6 @@ def generate_reply(
     topic_defs = resolve_topic_defs(lecture_package)
     allowed_topic_ids = {t["topic_id"] for t in topic_defs}
     context = build_dialogue_context(lecture_package, settings.max_dialogue_context_chars)
-    normalized_user_message = rewrite_opening_topic_selection(
-        lecture_package=lecture_package,
-        state=state,
-        user_message=user_message,
-    )
     system_prompt = build_dialogue_system_prompt(
         lecture_package=lecture_package,
         state=state,
@@ -342,7 +286,19 @@ def generate_reply(
 
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(recent_messages)
-    messages.append({"role": "user", "content": normalized_user_message})
+    messages.append({"role": "user", "content": user_message})
+    messages.append(
+        {
+            "role": "system",
+            "content": _turn_message(
+                private_artifact_schema_json,
+                prompt_loader.turn_reminder(
+                    prompt_loader.load_prompt_template(get_tutor_prompt_template(lecture_package))
+                ),
+                timing_context,
+            ),
+        }
+    )
 
     try:
         client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
@@ -429,11 +385,12 @@ def parse_rubric_topics(rubric_markdown: str) -> list[dict]:
 
 
 def sample_session_topics(topic_defs: list[dict], session_id: str, count: int = 5) -> list[str]:
-    """Sample a deterministic subset of topic IDs seeded by session_id."""
+    """Sample a deterministic subset of topic IDs seeded by session_id, in lecture order."""
     topic_ids = _unique_topic_ids([t["topic_id"] for t in normalize_topic_defs(topic_defs)])
     rng = random_.Random(session_id)
     k = min(count, len(topic_ids))
-    return rng.sample(topic_ids, k)
+    sampled = set(rng.sample(topic_ids, k))
+    return [topic_id for topic_id in topic_ids if topic_id in sampled]
 
 
 
@@ -494,8 +451,8 @@ def build_dialogue_system_prompt(
 ) -> str:
     """Build the runtime system prompt around the committed markdown prompt."""
     prompt_template = get_tutor_prompt_template(lecture_package)
-    prompt_body = prompt_loader.strip_contract_declaration(
-        prompt_loader.load_prompt_template(prompt_template)
+    prompt_body = prompt_loader.strip_turn_reminder(
+        prompt_loader.strip_contract_declaration(prompt_loader.load_prompt_template(prompt_template))
     ).strip()
     topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
     sampled_topic_ids = _unique_topic_ids(state.get("topics_sampled", []))
@@ -592,6 +549,12 @@ def _normalize_malformed_math_text(text: str) -> str:
     return normalized.replace(_BELL_CHAR, "")
 
 
+def _replace_topic_ids(text: str, topic_defs: list[dict]) -> str:
+    """Replace internal topic IDs such as T1 with the topic's label."""
+    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
+    return _BARE_TOPIC_ID_RE.sub(lambda match: topic_id_to_label.get(match.group(1), "this topic"), text)
+
+
 def sanitize_assistant_message(
     assistant_message: str,
     *,
@@ -600,14 +563,8 @@ def sanitize_assistant_message(
     chat_language: str = language_policy.CHAT_LANGUAGE_ENGLISH,
 ) -> str:
     """Apply hard guardrails to the student-facing tutor message."""
-    topic_id_to_label = {topic["topic_id"]: topic["label"] for topic in topic_defs}
-
-    def replace_topic_id(match):
-        topic_id = match.group(1)
-        return topic_id_to_label.get(topic_id, "this topic")
-
     sanitized = _normalize_malformed_math_text(assistant_message)
-    sanitized = _BARE_TOPIC_ID_RE.sub(replace_topic_id, sanitized).strip()
+    sanitized = _replace_topic_ids(sanitized, topic_defs).strip()
     if not timing_context or not timing_context.get("timing_reliable", False):
         sanitized = _TIME_CLAIM_RE.sub("time left", sanitized)
     if not language_policy.chat_is_english_only(chat_language):
@@ -761,7 +718,7 @@ def compute_weighted_grade(topic_scores: list[dict]) -> int:
 
     Sorts scores descending, pads to the ranked grade slots with zeros,
     applies ranked weights and full-credit targets, and returns floor of the
-    saturated contribution sum for policy ranked-target-saturation-v1.
+    saturated contribution sum for policy ranked-target-saturation-v2.
     """
     return _calibrated_grade_from_scores([ts["score"] for ts in topic_scores])
 
@@ -1073,10 +1030,13 @@ def generate_report(
         f"Assessment: {explanation}\n"
         f"Stronger areas so far: {scored_summary}\n"
         f"Grader's evidence notes: {rationale_summary}\n"
-        f"Topics not yet evidenced: {missing_summary}\n\n"
+        f"Topics with no recorded evidence: {missing_summary}\n\n"
         "Raw topic scores are diagnostic depth from 0 to 100, not grade gaps.\n"
         "If the student reached full session credit, frame remaining headroom as optional enrichment, "
-        "not as work required for the grade.\n\n"
+        "not as work required for the grade.\n"
+        "A session follows one route through the lecture, so a topic with no recorded evidence was usually left out on purpose. "
+        "It is not a weakness. Under Coverage, call such a topic 'not part of this session', unless the conversation shows it was discussed. "
+        "Base Next steps only on what happened in this session. Name topics by their ideas, never by IDs such as T1.\n\n"
         "Rubric for reference:\n"
         f"{rubric_text}\n\n"
         "You will receive the student's messages on their own, followed by the full conversation.\n"
@@ -1106,11 +1066,7 @@ def generate_report(
     if session_credit_status == "full_credit_reached":
         fallback_next_step = "Full session credit was reached; any next work is optional enrichment."
     else:
-        fallback_next_step = (
-            f"Strengthen evidence in {missing_topics[0]}."
-            if missing_topics else
-            "Keep pushing for one more clean distinction, explanation, or application."
-        )
+        fallback_next_step = "Keep building on what this session established."
     fallback_report_text = (
         "Summary:\n"
         f"- {explanation or 'This session produced some usable evidence, but the picture is still incomplete.'}\n"
@@ -1122,7 +1078,7 @@ def generate_report(
         f"- {fallback_next_step}\n"
         "Coverage:\n"
         f"- Covered: {scored_summary}.\n"
-        f"- Not yet evidenced: {missing_summary}."
+        f"- Not part of this session: {missing_summary}."
     )
 
     try:
@@ -1139,7 +1095,7 @@ def generate_report(
         raw = response.choices[0].message.content
         parsed = j_.loads(raw)
         report_text = language_policy.ensure_english_text(
-            str(parsed["report_text"]),
+            _replace_topic_ids(str(parsed["report_text"]), resolve_topic_defs(lecture_package)),
             language_policy.ENGLISH_ONLY_REPORT_FALLBACK,
         )
     except openai_.AuthenticationError:

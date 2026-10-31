@@ -6,15 +6,16 @@ import pathlib
 import sqlalchemy.orm as sqlalchemy_orm
 
 import app.archive_helpers as helpers
+import app.config as config_module
 import app.models as models
+import app.prompt_loader as prompt_loader
 
 REPO_ROOT = pathlib.Path(__file__).parent.parent
 
-CANONICAL_DOCUMENT_PATHS = {
-    "tutor_prompt": REPO_ROOT / "prompts" / "tutor_prompt.md",
-    "tutor_artifact_schema": REPO_ROOT / "prompts" / "tutor_prompt_private_artifact_schema.json",
-    "tutor_spec": REPO_ROOT / "docs" / "tutor_specification.md",
-}
+
+def canonical_document_paths() -> dict[str, pathlib.Path]:
+    """Return the runtime files of this instance's tutor, from its configured prompt."""
+    return prompt_loader.tutor_document_paths(config_module.get_settings().tutor_prompt_template, REPO_ROOT)
 
 
 def doc_row(doc: models.ArchiveDocumentModel, db: sqlalchemy_orm.Session) -> dict:
@@ -197,9 +198,10 @@ def activate_tutor_prompt(
         return False, "Linked generated spec or schema document is missing."
 
     # Write canonical runtime files
-    CANONICAL_DOCUMENT_PATHS["tutor_prompt"].write_text(doc.content_text, encoding="utf-8")
-    CANONICAL_DOCUMENT_PATHS["tutor_artifact_schema"].write_text(schema_doc.content_text, encoding="utf-8")
-    CANONICAL_DOCUMENT_PATHS["tutor_spec"].write_text(spec_doc.content_text, encoding="utf-8")
+    paths = canonical_document_paths()
+    paths["tutor_prompt"].write_text(doc.content_text, encoding="utf-8")
+    paths["tutor_artifact_schema"].write_text(schema_doc.content_text, encoding="utf-8")
+    paths["tutor_spec"].write_text(spec_doc.content_text, encoding="utf-8")
 
     # Update active flag: deactivate others, activate this one
     db.query(models.ArchiveDocumentModel).filter(

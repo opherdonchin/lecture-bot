@@ -21,6 +21,7 @@ if str(REPO_ROOT) not in sys.path:
 import sqlalchemy.orm as sqlalchemy_orm
 
 import app.archive_helpers as helpers
+import app.config as config_module
 import app.db as db_module
 import app.models as models  # noqa: F401 — registers models with Base
 import app.prompt_loader as prompt_loader
@@ -54,8 +55,9 @@ def _build_import_items(
 ) -> list[dict]:
     docs_dir = repo_root / "docs"
     prompts_dir = repo_root / "prompts"
+    tutor_paths = prompt_loader.tutor_document_paths(config_module.get_settings().tutor_prompt_template, repo_root)
 
-    candidates = _package_contract_candidates(prompts_dir / "tutor_prompt.md", docs_dir) + [
+    candidates = _package_contract_candidates(tutor_paths["tutor_prompt"], docs_dir) + [
         {
             "document_type": "tutor_spec_contract",
             "source_path": docs_dir / "tutor_specification_contract.md",
@@ -73,17 +75,17 @@ def _build_import_items(
         },
         {
             "document_type": "tutor_spec",
-            "source_path": docs_dir / "tutor_specification.md",
+            "source_path": tutor_paths["tutor_spec"],
             "title": "Tutor Specification",
         },
         {
             "document_type": "tutor_artifact_schema",
-            "source_path": prompts_dir / "tutor_prompt_private_artifact_schema.json",
+            "source_path": tutor_paths["tutor_artifact_schema"],
             "title": "Tutor Private Artifact Schema",
         },
         {
             "document_type": "tutor_prompt",
-            "source_path": prompts_dir / "tutor_prompt.md",
+            "source_path": tutor_paths["tutor_prompt"],
             "title": "Tutor Prompt",
         },
         {
