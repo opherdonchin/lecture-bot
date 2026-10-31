@@ -89,6 +89,7 @@ Only if there are **no** conformance failures and **no** backend incompatibiliti
 That runtime tutor prompt must:
 
 - faithfully encode the pedagogical commitments of the tutor specification
+- carry over every specific rule, scenario, description of the students and piece of suggested wording from the specification's sections A through E; the tutor never sees the specification, so anything left out of the prompt is lost to it. Shorten only by removing repetition, never by dropping a rule or merging away its detail
 - conform to the Backend–Tutor Runtime Contract exactly
 - preserve the priority ordering established by the specification
 - preserve the role of evaluation exactly as specified

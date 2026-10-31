@@ -1,54 +1,29 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "turn_classification",
-    "evidence_assessment",
-    "next_move_arbitration",
-    "self_check"
-  ],
   "properties": {
-    "turn_classification": {
+    "turn_reading": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "student_move_type",
-        "has_evidence_of_understanding"
-      ],
       "properties": {
-        "student_move_type": {
+        "student_message_function": {
+          "type": "string",
+          "description": "What kind of message this was in context: content, procedure/meta, off-task, answer, question, request for answer, disagreement, etc."
+        },
+        "what_the_student_did_with_the_idea": {
+          "type": "string",
+          "description": "How the student engaged the idea: used it, explained it, repeated it, avoided it, or similar."
+        },
+        "independence_of_evidence": {
           "type": "string",
           "enum": [
-            "content_answer",
-            "content_question",
-            "procedural_request",
-            "hidden_internals_or_answer_request",
-            "off_task",
-            "desire_to_stop",
-            "other"
-          ]
-        },
-        "has_evidence_of_understanding": {
-          "type": "boolean"
-        },
-        "engaged_topic_id": {
-          "type": [
-            "string",
-            "null"
+            "independent",
+            "partly_assisted",
+            "assisted",
+            "no_evaluable_evidence"
           ],
-          "description": "Canonical topic ID if the student message provides evidence about a backend-supplied topic; otherwise null."
-        }
-      }
-    },
-    "evidence_assessment": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "evidence_strength",
-        "independence_level",
-        "evidence_basis"
-      ],
-      "properties": {
+          "description": "How much of the student's performance was their own reasoning versus following tutor support."
+        },
         "evidence_strength": {
           "type": "string",
           "enum": [
@@ -58,146 +33,134 @@
             "solid",
             "strong",
             "robust"
-          ]
+          ],
+          "description": "Per-turn overall strength of evidence actually shown in the student's message."
         },
-        "independence_level": {
+        "response_alignment": {
+          "type": "string",
+          "description": "Whether and how the student's message responded to what was asked, including when it productively went elsewhere."
+        },
+        "error_status": {
           "type": "string",
           "enum": [
-            "independent",
-            "assisted",
-            "mixed",
-            "unclear",
-            "not_applicable"
-          ]
+            "none",
+            "meaningful_error",
+            "skipped_step",
+            "unclear"
+          ],
+          "description": "Whether the issue was a real misunderstanding, a skipped step, neither, or unclear."
         },
-        "evidence_basis": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "criterion",
-              "distinction",
-              "explanation",
-              "application",
-              "interpretation",
-              "repair",
-              "ownership",
-              "synthesis",
-              "generic_or_copied",
-              "post_hint_repetition",
-              "nonresponsive_correctness",
-              "other"
-            ]
-          },
-          "uniqueItems": true
-        },
-        "brief_rationale": {
-          "type": "string"
+        "student_state": {
+          "type": "string",
+          "description": "Brief reading of how the student seems to be doing: engaged, impatient, tired, lost, frustrated, etc."
         }
-      }
+      },
+      "required": [
+        "student_message_function",
+        "what_the_student_did_with_the_idea",
+        "independence_of_evidence",
+        "evidence_strength",
+        "response_alignment",
+        "error_status",
+        "student_state"
+      ]
     },
-    "next_move_arbitration": {
+    "turn_pedagogical_decision": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "selected_next_topic_id",
-        "selected_move_type",
-        "strongest_alternative_direction",
-        "followed_backend_guidance",
-        "override_reason"
-      ],
       "properties": {
-        "selected_next_topic_id": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "Canonical topic ID selected for the next substantive content move, if any."
+        "route_or_direction": {
+          "type": "string",
+          "description": "Route or local direction being followed on this turn."
         },
-        "selected_move_type": {
+        "current_stop": {
+          "type": "string",
+          "description": "Current stop or local conceptual position."
+        },
+        "student_steered": {
+          "type": "boolean",
+          "description": "Whether the student determined the direction of this turn."
+        },
+        "interaction_mode": {
           "type": "string",
           "enum": [
-            "ordinary_probe",
-            "evidence_feedback",
-            "scaffolded_support",
-            "adaptive_challenge",
-            "topic_transition",
-            "procedural_support",
-            "redirection",
-            "lifecycle_closing",
-            "other"
-          ]
-        },
-        "strongest_alternative_direction": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "topic_id",
-            "source"
+            "working_a_step",
+            "teaching",
+            "answering",
+            "unsticking",
+            "offering_a_way_on",
+            "exploring",
+            "landing"
           ],
-          "properties": {
-            "topic_id": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "description": "Canonical topic ID for the strongest alternative considered, if identifiable from backend guidance."
-            },
-            "source": {
-              "type": "string",
-              "enum": [
-                "explicit_topic_or_move_guidance",
-                "grade_impact_deltas_or_backend_strategic_guidance",
-                "optional_enrichment_after_full_credit",
-                "pedagogical_fallback",
-                "not_applicable"
-              ]
-            }
-          }
+          "description": "Primary interaction mode used on this turn."
         },
-        "followed_backend_guidance": {
+        "next_move": {
+          "type": "string",
+          "description": "What move the tutor chose to make next in this turn."
+        },
+        "why_this_move": {
+          "type": "string",
+          "description": "Why that move was chosen, in light of the student's message, route logic, time, and priorities."
+        },
+        "help_level": {
           "type": "string",
           "enum": [
-            "yes",
-            "no",
-            "not_applicable"
-          ]
-        },
-        "override_reason": {
-          "type": [
-            "string",
-            "null"
+            "minimal_prompt",
+            "hint",
+            "framed_question",
+            "multiple_choice_support",
+            "partial_path_supplied",
+            "direct_explanation",
+            "direct_answer",
+            "landing_recap"
           ],
-          "description": "Short bounded reason when deviating from the strongest available backend-indicated direction; otherwise null."
+          "description": "How much help the tutor gave."
         },
-        "grade_relevant": {
-          "type": [
-            "boolean",
-            "null"
-          ],
-          "description": "Optional marker for whether the selected move is still grade-driven; false may be used for optional enrichment after full session credit."
+        "why_this_help_level": {
+          "type": "string",
+          "description": "Why this amount of help was appropriate."
         }
-      }
+      },
+      "required": [
+        "route_or_direction",
+        "current_stop",
+        "student_steered",
+        "interaction_mode",
+        "next_move",
+        "why_this_move",
+        "help_level",
+        "why_this_help_level"
+      ]
     },
     "self_check": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "assistant_message_matches_move",
-        "avoids_completion_claim",
-        "keeps_private_content_out_of_student_text"
-      ],
       "properties": {
-        "assistant_message_matches_move": {
+        "at_most_one_question": {
           "type": "boolean"
         },
-        "avoids_completion_claim": {
+        "context_sufficient_for_student": {
           "type": "boolean"
         },
-        "keeps_private_content_out_of_student_text": {
+        "no_verdict_of_complete_understanding": {
           "type": "boolean"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Brief note if any self-check item needed attention."
         }
-      }
+      },
+      "required": [
+        "at_most_one_question",
+        "context_sufficient_for_student",
+        "no_verdict_of_complete_understanding",
+        "notes"
+      ]
     }
-  }
+  },
+  "required": [
+    "turn_reading",
+    "turn_pedagogical_decision",
+    "self_check"
+  ]
 }
