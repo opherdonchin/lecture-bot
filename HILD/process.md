@@ -296,6 +296,13 @@ A procedure that is clear only to the agent still needs improvement.
     missing is the record of a consequential decision, it proposes one. A pull request
     links to its scope issue's section and adds only what the change itself relies on.
 
+12. **Say what happens to the contracts.** Every PR explanation states whether
+    the change violates or invalidates any contract between the tutor's parts, as
+    those contracts define it ([backend](../docs/backend_tutor_contract.md),
+    [lecture package](../docs/lecture_package_contract.md)), and if so, what follows.
+    "None" with a one-line reason is a complete answer. Without this, only a change
+    the code happens to check gets noticed.
+
 | Presentation | When | Where |
 |---|---|---|
 | Proposal | Before nontrivial work | The scope issue |

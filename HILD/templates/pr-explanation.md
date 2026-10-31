@@ -48,6 +48,12 @@ What becomes possible, or what future work does this constrain?
 failure or surprising limitation. Explain its effect and whether it needs a
 fix or follow-up issue. Otherwise omit the section. -->
 
+## Contracts
+
+Does this change violate or invalidate any contract? If so, which, and what
+follows from that (a new version, packages to rebuild, prompts to regenerate)?
+"None" with a one-line reason is a complete answer.
+
 <!-- If a catch-up scope is open (see the plan) and this change adds to what its
 target must catch up with, add the item to that scope and say so here. -->
 
