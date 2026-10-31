@@ -3,101 +3,130 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "turn_record",
+    "student_message_assessment",
+    "turn_pedagogical_decision",
+    "route_position",
+    "help_level",
     "self_check"
   ],
   "properties": {
-    "turn_record": {
+    "student_message_assessment": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "student_message_assessment",
-        "evidence_assessment",
-        "next_move",
-        "route_position",
-        "help_given"
+        "what_student_did",
+        "evidence_strength",
+        "evidence_independence"
       ],
       "properties": {
-        "student_message_assessment": {
+        "what_student_did": {
           "type": "string",
-          "description": "Brief private account of what the student's message did in the interaction."
+          "description": "Brief private account of what the student's message did: e.g. used an idea, explained it, repeated it, avoided it, answered or redirected."
         },
-        "evidence_assessment": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "strength",
-            "independence"
+        "evidence_strength": {
+          "type": "string",
+          "enum": [
+            "none",
+            "weak",
+            "developing",
+            "solid",
+            "strong",
+            "robust"
           ],
-          "properties": {
-            "strength": {
-              "type": "string",
-              "description": "Brief private judgment of how strong the evidence in the student's message was."
-            },
-            "independence": {
-              "type": "string",
-              "description": "Brief private judgment of how much of the evidence was the student's own reasoning versus scaffolded or assisted."
-            }
-          }
+          "description": "Private judgment of how strong the evidence in this turn was."
         },
+        "evidence_independence": {
+          "type": "string",
+          "enum": [
+            "assisted",
+            "mixed",
+            "independent"
+          ],
+          "description": "Whether the evidence depended mainly on tutor-supplied setup, method, or reasoning."
+        },
+        "response_fit": {
+          "type": "string",
+          "description": "Optional note on whether the student responded to what was asked or productively went elsewhere."
+        },
+        "salient_issue": {
+          "type": "string",
+          "description": "Optional note on a real misunderstanding, skipped step, affective state, or procedural/off-task issue that mattered this turn."
+        }
+      }
+    },
+    "turn_pedagogical_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "next_move",
+        "why_this_move"
+      ],
+      "properties": {
         "next_move": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "chosen_move",
-            "why"
-          ],
-          "properties": {
-            "chosen_move": {
-              "type": "string",
-              "description": "What pedagogical move the tutor chose next."
-            },
-            "why": {
-              "type": "string",
-              "description": "Why that move was chosen on this turn."
-            }
-          }
+          "type": "string",
+          "description": "What the tutor chose to do next on this turn."
         },
-        "route_position": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "route_or_focus",
-            "current_stop_or_local_goal",
-            "student_steered"
-          ],
-          "properties": {
-            "route_or_focus": {
-              "type": "string",
-              "description": "Current route, route fragment, or student-chosen focus."
-            },
-            "current_stop_or_local_goal": {
-              "type": "string",
-              "description": "Current stop on the route or immediate local goal."
-            },
-            "student_steered": {
-              "type": "boolean",
-              "description": "Whether the student steered the direction on this turn."
-            }
-          }
+        "why_this_move": {
+          "type": "string",
+          "description": "Why that move was chosen, in light of the student's message, route, time, and priorities."
         },
-        "help_given": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "amount",
-            "why_that_much"
+        "student_steered": {
+          "type": "boolean",
+          "description": "Whether the student set the direction for this turn."
+        }
+      }
+    },
+    "route_position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route_or_focus",
+        "current_stop"
+      ],
+      "properties": {
+        "route_or_focus": {
+          "type": "string",
+          "description": "Private description of the route being followed or the current student-chosen focus."
+        },
+        "current_stop": {
+          "type": "string",
+          "description": "Private description of the current stop or local target."
+        },
+        "movement": {
+          "type": "string",
+          "enum": [
+            "stayed",
+            "advanced",
+            "branched",
+            "landed"
           ],
-          "properties": {
-            "amount": {
-              "type": "string",
-              "description": "Brief description of how much help or scaffolding the tutor gave."
-            },
-            "why_that_much": {
-              "type": "string",
-              "description": "Why that amount of help was appropriate."
-            }
-          }
+          "description": "How the conversation moved relative to the route or focus."
+        }
+      }
+    },
+    "help_level": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "why_that_much"
+      ],
+      "properties": {
+        "amount": {
+          "type": "string",
+          "enum": [
+            "minimal_prompt",
+            "hint",
+            "structured_scaffold",
+            "direct_explanation",
+            "direct_answer",
+            "move_on_offer"
+          ],
+          "description": "How much help the tutor gave."
+        },
+        "why_that_much": {
+          "type": "string",
+          "description": "Why this amount of help was appropriate."
         }
       }
     },
@@ -106,21 +135,26 @@
       "additionalProperties": false,
       "required": [
         "at_most_one_question",
-        "context_sufficient",
-        "no_completion_or_student_verdict"
+        "student_has_needed_context",
+        "no_completion_or_student_verdict",
+        "no_above_developing_from_only_assisted_evidence"
       ],
       "properties": {
         "at_most_one_question": {
-          "type": "boolean",
-          "description": "Whether the outgoing student-facing message asks at most one question, counting an offer as a question."
+          "type": "boolean"
         },
-        "context_sufficient": {
-          "type": "boolean",
-          "description": "Whether the student has the context needed to answer within the recent conversation."
+        "student_has_needed_context": {
+          "type": "boolean"
         },
         "no_completion_or_student_verdict": {
-          "type": "boolean",
-          "description": "Whether the message avoids delivering a verdict on the student or on whether their understanding is complete."
+          "type": "boolean"
+        },
+        "no_above_developing_from_only_assisted_evidence": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional brief note if any self-check item was close, required care, or constrained the turn."
         }
       }
     }

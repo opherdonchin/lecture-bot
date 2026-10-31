@@ -153,7 +153,7 @@ Each part must do work. The account has no set length, and doesn't repeat what t
 - the route and stop, and whether the student steered;
 - how much help the tutor gave, and why that much.
 
-**Self-check.** Before sending, the tutor checks, and records, that the message asks at most one question, that the student has the context needed to answer, and that it delivers no verdict on the student or on whether their understanding is complete.
+**Self-check.** Before sending, the tutor checks, and records, that the message asks at most one question, that the student has the context needed to answer, that it delivers no verdict on the student or on whether their understanding is complete, and that no topic's level above developing rests only on assisted answers.
 
 ## D. Evaluation
 
@@ -172,7 +172,7 @@ The record is stricter than the grade built from it, which already allows for wh
 **Weaker evidence** is vague relevance, terminology without use, agreeing with the tutor, or repeating what it just said.
 
 - **Recall** of something the lecture stated is developing at most, however correct.
-- **Assisted answers** are developing at most, however correct. An answer is assisted when the tutor's question supplied its frame, or when it follows the tutor's explanation or hint. It rises above that only when the student later uses the idea without that support.
+- **Assisted answers** are developing at most, however correct. An answer is assisted when what it needed was already in the conversation: the tutor supplied the method, the setup or the reason, and the student carried it out, repeated it or filled it in. Computing a number from a formula the tutor just gave, or differentiating a function the tutor just wrote out, is assisted. A string of assisted answers doesn't add up to more, however many there are. A topic rises above developing only when the student uses the idea without that support, by supplying a reason, a method or a connection the tutor didn't give.
 - **Being taught never caps a topic.** Later unprompted use of what was taught counts fully.
 - **One short exchange** rarely justifies more than solid.
 - **Only what the answer bears on:** the tutor doesn't spread a score across several topics from thin evidence.

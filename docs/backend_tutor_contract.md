@@ -95,12 +95,16 @@ When `private_artifact_schema_json` exists for the session:
 <assistant_message>
 ...
 </assistant_message>
-{"updated_state": {}, "private_artifact": {}}
+{"private_artifact": {}, "updated_state": {}}
 ```
 
 The message carries LaTeX in its ordinary form, with single backslashes. The chat renders mathematics only between `\( ... \)` inline and `\[ ... \]` for display; it does not render `$...$`. The JSON object should contain no LaTeX or backslashes. The backend does not request a JSON response mode.
 
 **Why the message is outside JSON:** inside a JSON string every backslash must be escaped, and the model sometimes writes a garbled escape instead (`\u0018` for `\u2018`, `\b` for the start of `\beta`). The student then sees a control character in place of a symbol ([scope issue #31, PR E](https://github.com/opherdonchin/lecture-bot/issues/31#user-content-pr-e)).
+
+**Order of the JSON object:** `private_artifact` comes before `updated_state`, so that the tutor has written its private judgment of the turn before it sets any score.
+
+**Format reminder:** tutor messages in the recent history appear as plain text, without the tags or the JSON object, and the model sometimes copies that and stops after the message. So the backend adds a short system message after the student's latest message, restating the reply format.
 
 **Tolerant parsing:** the backend parses the reply as follows.
 - If the tags are missing, the message is the text before the JSON object.

@@ -178,6 +178,20 @@ _STRAY_TAG_RE = re_.compile(r"<\\?/?assistant_message>")
 _STATE_OBJECT_START_RE = re_.compile(r'\{\s*"(?:updated_state|private_artifact)"')
 
 
+def _format_reminder(private_artifact_schema_json: str | None) -> str:
+    """Restate the reply format after the history, whose tutor messages are plain text."""
+    json_object = (
+        '{"private_artifact": {...}, "updated_state": {...}}'
+        if private_artifact_schema_json
+        else '{"updated_state": {...}}'
+    )
+    return (
+        "Reply in the tagged format: the student's message between <assistant_message> and "
+        f"</assistant_message>, then the JSON object {json_object}. Never stop after the message, "
+        "even though earlier tutor messages above appear as plain text."
+    )
+
+
 def _decode_state_object(text: str) -> dict:
     """Decode the JSON object at the start of text, closing up to three missing braces."""
     decoder = j_.JSONDecoder()
@@ -258,6 +272,7 @@ def generate_reply(
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(recent_messages)
     messages.append({"role": "user", "content": user_message})
+    messages.append({"role": "system", "content": _format_reminder(private_artifact_schema_json)})
 
     try:
         client = openai_.OpenAI(api_key=settings.openai_api_key, timeout=30.0, max_retries=0)
