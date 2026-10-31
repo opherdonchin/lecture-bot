@@ -995,7 +995,7 @@ def generate_report(
         "not as work required for the grade.\n"
         "A session follows one route through the lecture, so a topic with no recorded evidence was usually left out on purpose. "
         "It is not a weakness. Under Coverage, call such a topic 'not part of this session', unless the conversation shows it was discussed. "
-        "Base Next steps only on what happened in this session.\n\n"
+        "Base Next steps only on what happened in this session. Name topics by their ideas, never by IDs such as T1.\n\n"
         "Rubric for reference:\n"
         f"{rubric_text}\n\n"
         "You will receive the student's messages on their own, followed by the full conversation.\n"
