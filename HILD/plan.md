@@ -39,22 +39,20 @@ is in Git and the [journal](journal/).
     - [scope issue #26](https://github.com/opherdonchin/lecture-bot/issues/26), chat language.
 - **Known limits:**
   - Score calibration is untested, because the simulated students answer too well.
-  - The best-four grade formula lets a student score well without reaching the load-bearing topics. It is out of scope until scoped next week if needed.
+  - The best-four grade formula stays for now; every route must reach at least four topics so that following one can't cap the grade.
 - **Wiki:** four concept pages and a scripts guide, all `draft`. Concept-tutor-json-replies needs updating for the tagged format.
 
 ## Next steps
 
 1. **Watch the first live PML sessions on `v0.6.1`:** fallbacks, control characters, scoring and the five-minute warning. Then review score calibration on real answers.
-2. **[Scope issue #39, PR B](https://github.com/opherdonchin/lecture-bot/issues/39#user-content-pr-b):** write `docs/pml_tutor_specification.md`, make the generation tooling take PML's files, generate PML's prompt and compare it in simulation with the hand-tuned one. This is the first run of the updated generator by a real model. Then install PML's archive.
-3. **Activate PML L02, [scope issue #40](https://github.com/opherdonchin/lecture-bot/issues/40):** L02 is [installed on the server, switched off](journal/2026-10-30.md#session-14--l02-pushed-not-yet-active). The researcher activates it in the admin page. Window 2026-10-28 to 11-04. The Moodle setup for L02 is still open.
-4. **[Scope issue #46](https://github.com/opherdonchin/lecture-bot/issues/46)** (approved): one handshake between course agents and an instance, over SSH now, for Lecture 3 onward. [PR #47](https://github.com/opherdonchin/lecture-bot/pull/47), then [PR #48](https://github.com/opherdonchin/lecture-bot/pull/48) and [PR #49](https://github.com/opherdonchin/lecture-bot/pull/49), are in review. Then a deploy, PML's recipe moved to its repository, and a fresh agent preparing Lecture 3.
-5. The researcher reviews the wiki page [Concept-tutor-json-replies](https://github.com/opherdonchin/lecture-bot/wiki/Concept-tutor-json-replies), updated for the tagged format and now `needs-review`.
-6. **[Scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20):** create `develop`; from then on, work merges there and `v0.7.0` is the next release.
-7. **Revise the wiki page [Concept-tutor-architecture](https://github.com/opherdonchin/lecture-bot/wiki/Concept-tutor-architecture)** (`needs-revision`) when the researcher returns to it: first ask whether the complication is in the system or in the description.
-8. **Server cleanup:** remove the old unit files and `legacy.env`.
+2. **[Scope issue #39, PR B](https://github.com/opherdonchin/lecture-bot/issues/39#user-content-pr-b), one PR:** the researcher reviews the drafted `docs/pml_tutor_specification.md`, then the backend, package contract, briefs, tooling and generated prompt follow, with simulations. **Launch:** L02 goes first with the new tutor, as soon as the tutor works and the researcher has tried it, after checking that no session is active. L03 follows once the transcript of Wednesday 2026-11-04's lecture exists.
+3. **[Scope issue #46](https://github.com/opherdonchin/lecture-bot/issues/46)** (approved): one handshake between course agents and an instance, over SSH now, for Lecture 3 onward. [PR #47](https://github.com/opherdonchin/lecture-bot/pull/47), then [PR #48](https://github.com/opherdonchin/lecture-bot/pull/48) and [PR #49](https://github.com/opherdonchin/lecture-bot/pull/49), are in review. Then a deploy, PML's recipe moved to its repository, and a fresh agent preparing Lecture 3.
+4. The researcher reviews the wiki page [Concept-tutor-json-replies](https://github.com/opherdonchin/lecture-bot/wiki/Concept-tutor-json-replies), updated for the tagged format and now `needs-review`.
+5. **[Scope issue #20](https://github.com/opherdonchin/lecture-bot/issues/20):** create `develop`; from then on, work merges there and `v0.7.0` is the next release.
+6. **Revise the wiki page [Concept-tutor-architecture](https://github.com/opherdonchin/lecture-bot/wiki/Concept-tutor-architecture)** (`needs-revision`) when the researcher returns to it: first ask whether the complication is in the system or in the description.
+7. **Server cleanup:** remove the old unit files and `legacy.env`.
 
 ## Open decisions
 
 - Whether to keep the tutor's message, rather than showing the fallback, when the retry still lacks a valid private note. The contract currently says fallback.
-- The grade formula: scope it next week if live sessions show the problem.
-- The PML Moodle grade-import setup (course ID, deadlines). The L01 submissions go to the [tutor assignment](https://moodle.bgu.ac.il/moodle/mod/assign/view.php?id=3454021); full credit before the lecture at 11:00 on Wednesday 2026-10-28, half credit before the final exam.
+- The PML Moodle grade-import setup (course ID, deadlines), which must also apply the researcher's rule for redoing a tutor after its deadline ([journal](journal/2026-10-31.md)). The L01 submissions go to the [tutor assignment](https://moodle.bgu.ac.il/moodle/mod/assign/view.php?id=3454021); full credit before the lecture at 11:00 on Wednesday 2026-10-28, half credit before the final exam.
