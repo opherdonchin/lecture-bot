@@ -3,82 +3,101 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "student_message_assessment",
-    "turn_pedagogical_decision",
-    "route_tracking",
-    "help_calibration",
+    "turn_record",
     "self_check"
   ],
   "properties": {
-    "student_message_assessment": {
+    "turn_record": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "what_student_did",
-        "evidence_strength",
-        "evidence_independence"
-      ],
-      "properties": {
-        "what_student_did": {
-          "type": "string"
-        },
-        "evidence_strength": {
-          "type": "string"
-        },
-        "evidence_independence": {
-          "type": "string"
-        }
-      }
-    },
-    "turn_pedagogical_decision": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
+        "student_message_assessment",
+        "evidence_assessment",
         "next_move",
-        "why_chosen"
+        "route_position",
+        "help_given"
       ],
       "properties": {
+        "student_message_assessment": {
+          "type": "string",
+          "description": "Brief private account of what the student's message did in the interaction."
+        },
+        "evidence_assessment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "strength",
+            "independence"
+          ],
+          "properties": {
+            "strength": {
+              "type": "string",
+              "description": "Brief private judgment of how strong the evidence in the student's message was."
+            },
+            "independence": {
+              "type": "string",
+              "description": "Brief private judgment of how much of the evidence was the student's own reasoning versus scaffolded or assisted."
+            }
+          }
+        },
         "next_move": {
-          "type": "string"
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chosen_move",
+            "why"
+          ],
+          "properties": {
+            "chosen_move": {
+              "type": "string",
+              "description": "What pedagogical move the tutor chose next."
+            },
+            "why": {
+              "type": "string",
+              "description": "Why that move was chosen on this turn."
+            }
+          }
         },
-        "why_chosen": {
-          "type": "string"
-        }
-      }
-    },
-    "route_tracking": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "route_or_path",
-        "current_stop",
-        "student_steered"
-      ],
-      "properties": {
-        "route_or_path": {
-          "type": "string"
+        "route_position": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "route_or_focus",
+            "current_stop_or_local_goal",
+            "student_steered"
+          ],
+          "properties": {
+            "route_or_focus": {
+              "type": "string",
+              "description": "Current route, route fragment, or student-chosen focus."
+            },
+            "current_stop_or_local_goal": {
+              "type": "string",
+              "description": "Current stop on the route or immediate local goal."
+            },
+            "student_steered": {
+              "type": "boolean",
+              "description": "Whether the student steered the direction on this turn."
+            }
+          }
         },
-        "current_stop": {
-          "type": "string"
-        },
-        "student_steered": {
-          "type": "boolean"
-        }
-      }
-    },
-    "help_calibration": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "help_given",
-        "why_this_much"
-      ],
-      "properties": {
         "help_given": {
-          "type": "string"
-        },
-        "why_this_much": {
-          "type": "string"
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "amount",
+            "why_that_much"
+          ],
+          "properties": {
+            "amount": {
+              "type": "string",
+              "description": "Brief description of how much help or scaffolding the tutor gave."
+            },
+            "why_that_much": {
+              "type": "string",
+              "description": "Why that amount of help was appropriate."
+            }
+          }
         }
       }
     },
@@ -88,17 +107,20 @@
       "required": [
         "at_most_one_question",
         "context_sufficient",
-        "no_completion_verdict"
+        "no_completion_or_student_verdict"
       ],
       "properties": {
         "at_most_one_question": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the outgoing student-facing message asks at most one question, counting an offer as a question."
         },
         "context_sufficient": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the student has the context needed to answer within the recent conversation."
         },
-        "no_completion_verdict": {
-          "type": "boolean"
+        "no_completion_or_student_verdict": {
+          "type": "boolean",
+          "description": "Whether the message avoids delivering a verdict on the student or on whether their understanding is complete."
         }
       }
     }

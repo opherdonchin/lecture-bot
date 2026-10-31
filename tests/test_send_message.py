@@ -315,10 +315,10 @@ def test_send_message_fallback_on_openai_error(client):
     assert response.status_code == 200
     data = response.json()
     assert data["message"] == (
-        "The app cannot connect to the backend AI. "
-        "Please try again in a minute. "
+        "The tutor didn't manage to reply just now. "
+        "Please send your message again. "
         "If the problem persists, try again in half an hour. "
-        "If there is still no connection, please post the problem on Moodle."
+        "If it still doesn't work, please post the problem on Moodle."
     )
     assert data["session_active"] is True
 
