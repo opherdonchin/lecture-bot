@@ -120,11 +120,60 @@ None.
     assert prompt_loader.declared_backend_contract(parsed["tutor_prompt"]) == "0.6.1"
 
 
+def test_build_user_message_includes_package_contract_only_when_given():
+    without = admin_generation._build_user_message("spec contract", "backend contract", "the spec")
+    with_contract = admin_generation._build_user_message(
+        "spec contract", "backend contract", "the spec", "the package contract"
+    )
+
+    assert "Lecture Package Contract" not in without
+    assert "# Lecture Package Contract\n\nthe package contract" in with_contract
+    assert with_contract.index("the package contract") < with_contract.index("the spec")
+
+
+def test_save_generated_prompt_links_active_package_contract_when_archive_has_one():
+    db = _session()
+    spec_contract, backend_contract, _generator = _make_active_generation_docs(db)
+    spec = _make_doc(db, "tutor_spec", "saved", linked={"tutor_spec_contract": spec_contract.document_id,
+                                                         "backend_contract": backend_contract.document_id})
+
+    without = admin_generation.save_generated_prompt_preview(db, spec.document_id, "prompt", '{"type":"object"}')
+    package_contract = _make_doc(db, "lecture_package_contract", "pml-brief-1", active=True, content="the contract")
+    with_contract = admin_generation.save_generated_prompt_preview(db, spec.document_id, "prompt", '{"type":"object"}')
+
+    def links_of(result):
+        doc = db.get(models.ArchiveDocumentModel, result["tutor_prompt_document_id"])
+        return helpers.parse_linked_documents(doc.linked_documents_json)
+
+    assert "lecture_package_contract" not in links_of(without)
+    assert links_of(with_contract)["lecture_package_contract"] == package_contract.document_id
+
+
+def test_generate_prompt_preview_sends_active_package_contract_to_the_model(monkeypatch):
+    db = _session()
+    spec_contract, backend_contract, _generator = _make_active_generation_docs(db)
+    spec = _make_doc(db, "tutor_spec", "saved", linked={"tutor_spec_contract": spec_contract.document_id,
+                                                         "backend_contract": backend_contract.document_id})
+    _make_doc(db, "lecture_package_contract", "pml-brief-1", active=True, content="the contract text")
+    sent = {}
+
+    def fake_call(_system_prompt, user_message):
+        sent["user_message"] = user_message
+        return "### Conformance failures\nNone.\n\n### Backend incompatibilities\nNone.\n\n### Recommended omissions\nNone."
+
+    monkeypatch.setattr(admin_generation, "_call_openai", fake_call)
+    admin_generation.generate_prompt_preview(db, spec.document_id)
+
+    assert "the contract text" in sent["user_message"]
+
+
 def test_generator_prompt_asks_for_the_current_contract():
     generator = pathlib.Path("prompts/tutor_generator_prompt.md").read_text(encoding="utf-8")
 
     assert "<assistant_message>" in generator
     assert "`Backend contract: `" in generator
+    assert "`Lecture package contract: `" in generator
+    assert "pml-brief-1" not in generator
     assert "JSON only" not in generator
     assert "JSON-only" not in generator
     # The version comes from the contract the generator is given, not from its own text.

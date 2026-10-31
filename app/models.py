@@ -16,12 +16,13 @@ DOCUMENT_TYPES: frozenset[str] = frozenset({
     "tutor_artifact_schema",
     "tutor_spec_contract",
     "backend_contract",
+    "lecture_package_contract",
     "tutor_generator_prompt",
     "spec_repair_prompt",
     "tutor_analysis_prompt",
 })
 
-CONTRACT_TYPES: frozenset[str] = frozenset({"tutor_spec_contract", "backend_contract"})
+CONTRACT_TYPES: frozenset[str] = frozenset({"tutor_spec_contract", "backend_contract", "lecture_package_contract"})
 
 
 class SessionModel(db_module.Base):

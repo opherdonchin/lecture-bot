@@ -361,3 +361,21 @@ def test_repository_backend_contract_declares_the_code_version(db):
     doc = _prompt_linked_to_active_backend_contract(db, contract_text)
     ok, reasons = helpers.is_activatable(doc, db)
     assert ok, reasons
+
+
+def test_is_activatable_rejects_prompt_linked_to_inactive_package_contract(db):
+    doc = _prompt_linked_to_active_backend_contract(
+        db, f"**Contract version: {prompt_loader.BACKEND_CONTRACT_VERSION}.**"
+    )
+    active = _make_doc(db, "lecture_package_contract", "pml-brief-2", active=True)
+    old = _make_doc(db, "lecture_package_contract", "pml-brief-1")
+    links = helpers.parse_linked_documents(doc.linked_documents_json)
+
+    doc.linked_documents_json = json.dumps({**links, "lecture_package_contract": old.document_id})
+    ok, reasons = helpers.is_activatable(doc, db)
+    assert not ok
+    assert any("linked lecture_package_contract" in r for r in reasons)
+
+    doc.linked_documents_json = json.dumps({**links, "lecture_package_contract": active.document_id})
+    ok, reasons = helpers.is_activatable(doc, db)
+    assert ok, reasons

@@ -215,6 +215,8 @@ The section must state the specification's position on each of the following:
 - **transport of private artifacts, schema for private artifacts, storage and persistence, validation, and visibility**: delegated to the backend/runtime contract unless explicitly overridden by a higher-level project decision outside the tutor specification.
 - **any B1, C1, or C2 subsection marked as delegated**.
 
+What a lecture package must supply is not part of a specification: each tutor prompt's [lecture package contract](lecture_package_contract.md) says it, and the generator reads that contract beside the specification. A specification may say what its pedagogy needs from lecture material; if a contract does not supply it, the generator reports the conflict.
+
 The section may list additional items. Anything not listed is assumed to be governed by the specification body for pedagogical matters and by the backend/runtime contract for runtime mechanics.
 
 ---

@@ -117,15 +117,7 @@ def is_activatable(
     if reasons:
         return False, reasons
 
-    for contract_type in ("tutor_spec_contract", "backend_contract"):
-        active_id = get_active_document_id(db, contract_type)
-        if active_id is None:
-            reasons.append(f"no active {contract_type} in archive")
-        elif links[contract_type] != active_id:
-            reasons.append(
-                f"linked {contract_type} ({links[contract_type]!r}) "
-                f"does not match active ({active_id!r})"
-            )
+    reasons.extend(contract_compatibility_reasons(doc, db))
 
     backend_contract = db.get(models.ArchiveDocumentModel, links["backend_contract"])
     if backend_contract is None:
