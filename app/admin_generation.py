@@ -690,11 +690,6 @@ def save_validated_prompt(
     if missing_error:
         return {"ok": False, "error": missing_error}
     assert active_docs is not None
-    declaration_reasons = helpers.prompt_declaration_reasons(
-        prompt_text, active_docs["lecture_package_contract"].content_text
-    )
-    if declaration_reasons:
-        return {"ok": False, "error": "; ".join(declaration_reasons)}
     version_key = _unique_version_key(db, "tutor_prompt")
     prompt_links = {
         "tutor_spec": active_docs["tutor_spec"].document_id,

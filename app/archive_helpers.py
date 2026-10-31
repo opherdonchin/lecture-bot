@@ -98,7 +98,15 @@ def contract_compatibility_reasons(
 
 
 def prompt_declaration_reasons(prompt_text: str, package_contract_text: str) -> list[str]:
-    """Return why a tutor prompt's declaration lines don't match the code and its package contract."""
+    """Return what is wrong with a tutor prompt's declaration lines, or an empty list.
+
+    A prompt starts by naming its contracts ("Backend contract: 0.6.1", then
+    "Lecture package contract: pml-brief-1"). The backend line must name the
+    version this code implements, and the package line must name the given
+    contract. Reads only the prompt's own text, so it catches a prompt that
+    links the right documents but says something else. Used before an uploaded
+    prompt reaches the model, and whenever is_activatable judges a prompt.
+    """
     reasons: list[str] = []
     declared_backend = prompt_loader.declared_backend_contract(prompt_text)
     if declared_backend != prompt_loader.BACKEND_CONTRACT_VERSION:

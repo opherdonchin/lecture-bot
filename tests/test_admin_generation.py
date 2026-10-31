@@ -247,13 +247,10 @@ def test_uploaded_prompt_refused_without_declarations(monkeypatch):
     monkeypatch.setattr(admin_generation, "_call_openai_messages", lambda _messages: "should not be called")
 
     validated = admin_generation.validate_prompt_against_active_spec(db, "You are a tutor.")
-    saved = admin_generation.save_validated_prompt(db, "You are a tutor.", "Uploaded Prompt")
 
     assert validated["ok"] is False
     assert any("backend contract" in failure for failure in validated["validation_failures"])
     assert any("lecture package contract" in failure for failure in validated["validation_failures"])
-    assert saved["ok"] is False
-    assert "backend contract" in saved["error"]
 
 
 def test_uploaded_prompt_refused_when_it_declares_another_package_contract():
@@ -261,10 +258,10 @@ def test_uploaded_prompt_refused_when_it_declares_another_package_contract():
     _active_spec_and_schema(db)
     prompt = _DECLARED_PROMPT.replace("pml-brief-1", "pml-brief-2")
 
-    saved = admin_generation.save_validated_prompt(db, prompt, "Uploaded Prompt")
+    validated = admin_generation.validate_prompt_against_active_spec(db, prompt)
 
-    assert saved["ok"] is False
-    assert "pml-brief-2" in saved["error"]
+    assert validated["ok"] is False
+    assert any("pml-brief-2" in failure for failure in validated["validation_failures"])
 
 
 def test_generator_prompt_asks_for_the_current_contract():
