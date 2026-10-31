@@ -1279,6 +1279,12 @@ def test_replace_topic_ids_uses_labels():
     assert bot_engine._replace_topic_ids("the key T3 step", topic_defs) == "the key Moments from A step"
 
 
+def test_turn_reminder_is_left_out_of_the_system_prompt_body():
+    prompt = "Rules.\n\n## Turn reminder\n\n- One step.\n"
+    assert prompt_loader.strip_turn_reminder(prompt) == "Rules."
+    assert prompt_loader.strip_turn_reminder("Rules.\n") == "Rules.\n"
+
+
 def test_pml_tutor_prompt_has_a_turn_reminder():
     prompt = prompt_loader.load_prompt_template(PML_PROMPT)
     assert prompt_loader.turn_reminder(prompt)

@@ -451,8 +451,8 @@ def build_dialogue_system_prompt(
 ) -> str:
     """Build the runtime system prompt around the committed markdown prompt."""
     prompt_template = get_tutor_prompt_template(lecture_package)
-    prompt_body = prompt_loader.strip_contract_declaration(
-        prompt_loader.load_prompt_template(prompt_template)
+    prompt_body = prompt_loader.strip_turn_reminder(
+        prompt_loader.strip_contract_declaration(prompt_loader.load_prompt_template(prompt_template))
     ).strip()
     topic_id_to_label = {t["topic_id"]: t["label"] for t in topic_defs}
     sampled_topic_ids = _unique_topic_ids(state.get("topics_sampled", []))

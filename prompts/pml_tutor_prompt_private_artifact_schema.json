@@ -1,12 +1,28 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "required": [
+    "turn_read",
+    "turn_decision",
+    "turn_checks"
+  ],
   "properties": {
-    "student_message_assessment": {
+    "turn_read": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "student_message_type",
+        "what_student_did_with_idea",
+        "independence_of_evidence",
+        "response_alignment",
+        "error_vs_skipped_step",
+        "student_state",
+        "route_position",
+        "student_steered"
+      ],
       "properties": {
-        "message_type": {
+        "student_message_type": {
           "type": "string",
           "enum": [
             "content",
@@ -18,42 +34,32 @@
         "what_student_did_with_idea": {
           "type": "string"
         },
-        "responsiveness": {
-          "type": "string",
-          "enum": [
-            "answered",
-            "did_not_answer_but_went_somewhere_good",
-            "did_not_answer_and_did_not_advance",
-            "not_applicable"
-          ]
-        },
-        "independence_of_work": {
-          "type": "string",
-          "enum": [
-            "independent",
-            "partly_assisted",
-            "assisted",
-            "not_applicable"
-          ]
-        },
-        "evidence_strength": {
+        "independence_of_evidence": {
           "type": "string",
           "enum": [
             "none",
-            "weak",
-            "developing",
-            "solid",
-            "strong",
-            "robust"
+            "weak_or_unclear",
+            "assisted",
+            "partly_independent",
+            "independent"
           ]
         },
-        "error_status": {
+        "response_alignment": {
           "type": "string",
           "enum": [
-            "no_material_error",
-            "material_error",
-            "skipped_step_only",
-            "unclear"
+            "answered_what_was_asked",
+            "did_not_answer_but_went_somewhere_good",
+            "did_not_answer_and_needs_redirection",
+            "not_applicable"
+          ]
+        },
+        "error_vs_skipped_step": {
+          "type": "string",
+          "enum": [
+            "real_error",
+            "skipped_step",
+            "both",
+            "neither_or_not_applicable"
           ]
         },
         "student_state": {
@@ -64,24 +70,40 @@
             "tired",
             "lost",
             "frustrated",
-            "distressed",
-            "unclear"
+            "mixed_or_unclear"
           ]
+        },
+        "route_position": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "route_name_or_status",
+            "current_stop_or_focus"
+          ],
+          "properties": {
+            "route_name_or_status": {
+              "type": "string"
+            },
+            "current_stop_or_focus": {
+              "type": "string"
+            }
+          }
+        },
+        "student_steered": {
+          "type": "boolean"
         }
-      },
-      "required": [
-        "message_type",
-        "what_student_did_with_idea",
-        "responsiveness",
-        "independence_of_work",
-        "evidence_strength",
-        "error_status",
-        "student_state"
-      ]
+      }
     },
-    "turn_pedagogical_decision": {
+    "turn_decision": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "interaction_mode",
+        "next_move",
+        "why_this_move",
+        "help_level",
+        "why_this_help_level"
+      ],
       "properties": {
         "interaction_mode": {
           "type": "string",
@@ -101,95 +123,50 @@
         "why_this_move": {
           "type": "string"
         },
-        "student_steered": {
-          "type": "boolean"
-        },
-        "help_level_given": {
+        "help_level": {
           "type": "string",
           "enum": [
-            "minimal_prompt",
+            "minimal_nudge",
             "hint",
             "multiple_choice",
             "one_piece_of_path",
-            "direct_explanation",
-            "full_answer",
-            "no_content_help"
+            "brief_explanation",
+            "full_answer_or_explanation",
+            "recap_or_landing"
           ]
         },
         "why_this_help_level": {
           "type": "string"
         }
-      },
-      "required": [
-        "interaction_mode",
-        "next_move",
-        "why_this_move",
-        "student_steered",
-        "help_level_given",
-        "why_this_help_level"
-      ]
+      }
     },
-    "route_position": {
+    "turn_checks": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {
-        "route_name_or_status": {
-          "type": "string"
-        },
-        "current_stop_or_focus": {
-          "type": "string"
-        },
-        "movement_status": {
-          "type": "string",
-          "enum": [
-            "staying_on_current_stop",
-            "moving_to_new_stop",
-            "student_started_mid_route",
-            "off_route_by_student_choice",
-            "beyond_lecture_or_route",
-            "landing"
-          ]
-        }
-      },
       "required": [
-        "route_name_or_status",
-        "current_stop_or_focus",
-        "movement_status"
-      ]
-    },
-    "self_check": {
-      "type": "object",
-      "additionalProperties": false,
+        "question_count_ok",
+        "context_sufficient",
+        "no_completion_verdict",
+        "no_above_developing_from_assisted_only",
+        "evidence_strength_summary"
+      ],
       "properties": {
-        "at_most_one_question": {
+        "question_count_ok": {
           "type": "boolean"
         },
-        "student_has_needed_context": {
+        "context_sufficient": {
           "type": "boolean"
         },
-        "no_verdict_on_student_or_completion": {
+        "no_completion_verdict": {
           "type": "boolean"
         },
-        "no_topic_above_developing_based_only_on_assisted_answers": {
+        "no_above_developing_from_assisted_only": {
           "type": "boolean"
         },
-        "issues_if_any": {
+        "evidence_strength_summary": {
           "type": "string"
         }
-      },
-      "required": [
-        "at_most_one_question",
-        "student_has_needed_context",
-        "no_verdict_on_student_or_completion",
-        "no_topic_above_developing_based_only_on_assisted_answers",
-        "issues_if_any"
-      ]
+      }
     }
-  },
-  "required": [
-    "student_message_assessment",
-    "turn_pedagogical_decision",
-    "route_position",
-    "self_check"
-  ]
+  }
 }

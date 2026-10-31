@@ -89,6 +89,12 @@ def turn_reminder(prompt_text: str) -> str | None:
     return reminder.strip() or None if heading else None
 
 
+def strip_turn_reminder(prompt_text: str) -> str:
+    """Return the prompt without its Turn reminder section, which the backend sends separately."""
+    body, heading, _ = prompt_text.rpartition(TURN_REMINDER_HEADING)
+    return body.rstrip() if heading else prompt_text
+
+
 def strip_contract_declaration(prompt_text: str) -> str:
     """Return the prompt without its contract declaration lines, as the model should see it."""
     without_backend = _CONTRACT_DECLARATION_RE.sub("", prompt_text, count=1)
