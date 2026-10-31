@@ -172,6 +172,20 @@ proposed change is linked to the original issue; the earlier approval does
 not automatically extend to it. External actions that cannot be recovered
 are not made safe merely by a provisional label.
 
+### Catch-up scopes
+
+**Process:** When a course or other target deliberately stays behind the current
+code, what it must catch up with is recorded as the code moves, rather than
+reconstructed later.
+
+**Implementation:** A *catch-up scope* is a scope issue that stays open and keeps
+changing. It lists what the target needs, and each pull request that adds to that
+list adds its item as part of its work and says so in its explanation. Adding an
+item records a fact and needs no new approval. The researcher approves the scope
+as usual, and starting the work still needs their go-ahead, as any
+implementation does. The scope closes when the target has caught up. The
+[plan](plan.md) names any that are open.
+
 ### Develop scopes through dialogue
 
 A scope agreement covers four questions: **goal** (what and why),
@@ -281,6 +295,13 @@ A procedure that is clear only to the agent still needs improvement.
     Where a record or explanation does not exist, the document says so; if what is
     missing is the record of a consequential decision, it proposes one. A pull request
     links to its scope issue's section and adds only what the change itself relies on.
+
+12. **Say what happens to the contracts.** Every PR explanation states whether
+    the change violates or invalidates any contract between the tutor's parts, as
+    those contracts define it ([backend](../docs/backend_tutor_contract.md),
+    [lecture package](../docs/lecture_package_contract.md)), and if so, what follows.
+    "None" with a one-line reason is a complete answer. Without this, only a change
+    the code happens to check gets noticed.
 
 | Presentation | When | Where |
 |---|---|---|

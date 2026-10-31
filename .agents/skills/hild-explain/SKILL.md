@@ -25,6 +25,9 @@ do not assume a stacked PR targets `main`). Explain what **currently exists**, n
 5. **What this rests on:** link the scope issue's section, add what this change itself relies on, and link each thing where the text mentions it ([the rule](../../../HILD/process.md#presentations) that a document stands alone).
 6. **Wiki pages:** inspect the configured understanding map when available; list relevant pages and their statuses, then propose new/updated pages. Essential concept explanations precede review; code pages describing the merge commit follow it. If no wiki is configured, say so plainly rather than inventing links or statuses.
 
+7. **Contracts:** check the change against each contract's *What invalidates* rule and state the result under *Contracts* ([the rule](../../../HILD/process.md#presentations)).
+8. **Catch-up scopes:** if the [plan](../../../HILD/plan.md) names an open [catch-up scope](../../../HILD/process.md#catch-up-scopes) and this change adds to what its target must catch up with, add the item to that scope and say so under *Consequences*.
+
 ## Check and publish
 
 - Render math in GitHub markdown or report that rendering was not checked. Verify links and line references.
